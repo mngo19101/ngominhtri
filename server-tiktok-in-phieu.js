@@ -506,6 +506,33 @@ wss.on('connection', (ws) => {
         return;
       }
 
+      // Người dùng chủ động bấm "Dừng xem Live" — ngắt hẳn kết nối TikTok hiện
+      // tại (nếu có) và báo cho MỌI thiết bị đang mở trang biết để cập nhật
+      // giao diện, khác với việc đóng tab (ws.on('close') ở trên) vốn chỉ ngắt
+      // khi không còn ai xem nữa.
+      if (data.type === 'STOP_TIKTOK') {
+        console.log(`[TikTok] Nhận yêu cầu DỪNG xem Live (đang xem: ${currentLiveUsername ? '@' + currentLiveUsername : 'không có'})`);
+        const stoppedUsername = currentLiveUsername;
+        if (tiktokConnection) {
+          shutdownTiktokConnection(tiktokConnection);
+          tiktokConnection = null;
+        }
+        currentLiveUsername = null;
+        commentHistory = [];
+        tiktokConnectionGeneration++; // vô hiệu hóa mọi sự kiện trễ còn sót lại
+
+        broadcastToBrowsers({
+          type: 'STATUS',
+          success: true,
+          stopped: true,
+          msg: stoppedUsername
+            ? `Đã dừng xem Live của: @${stoppedUsername}`
+            : 'Đã dừng xem Live.',
+          roomUsername: null
+        });
+        return;
+      }
+
       if (data.type === 'START_TIKTOK') {
         await connectorReady; // đợi module ESM nạp xong lần đầu (nếu chưa)
         const inputUrl = (data.username || '').trim();
