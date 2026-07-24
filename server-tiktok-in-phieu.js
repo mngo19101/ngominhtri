@@ -162,7 +162,10 @@ let printerSocket = null;
 const pendingPrintJobs = new Map();
 
 app.use(express.raw({ type: 'application/octet-stream', limit: '10mb' }));
-app.use(express.json());
+// Mặc định Express chỉ nhận tối đa 100KB cho body dạng JSON — quá nhỏ vì dữ
+// liệu lịch sử comment (customer_data, live_session_data) tích lũy theo thời
+// gian có thể lớn hơn nhiều. Tăng lên 50MB để tránh lỗi "413 Payload Too Large".
+app.use(express.json({ limit: '50mb' }));
 
 // Phục vụ luôn trang giao diện (thư mục public/) — để bạn mở web bằng
 // địa chỉ https://... thay vì mở file HTML trực tiếp trên máy (file://...).
