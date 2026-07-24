@@ -59,6 +59,7 @@ Bridge Server đang chạy tại cổng ...
 - Admin cấp trải nghiệm full tính năng theo số phút, giờ hoặc ngày tùy ý; tự khóa khi hết hạn.
 - Admin đặt mật khẩu mới cho tài khoản khách hàng và thu hồi toàn bộ phiên đăng nhập cũ.
 - Admin tìm nhanh tài khoản theo tên hoặc `@username` để cấp/nâng cấp gói.
+- Giao diện nền Strawberry Milk hồng pastel với họa tiết caro, nơ, hoa và trái tim.
 - Sao lưu/khôi phục dữ liệu JSON.
 - Nhật ký thao tác.
 - WebSocket xác thực và chỉ phát dữ liệu cho đúng tài khoản.

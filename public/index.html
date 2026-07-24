@@ -11,16 +11,16 @@
   @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
 
   :root{
-    --bg:#fdf1f8;
-    --card:rgba(255,255,255,.55);
-    --border:rgba(255,140,190,.35);
-    --teal:#ff5c8a;
-    --text:#4a2e46;
-    --muted:#9a7d9e;
-    --accent2:#a78bfa;
-    --accent3:#ffd166;
-    --glass:rgba(255,255,255,.55);
-    --glass-strong:rgba(255,255,255,.75);
+    --bg:#fff5fa;
+    --card:rgba(255,255,255,.72);
+    --border:rgba(245,118,169,.30);
+    --teal:#f54f91;
+    --text:#553047;
+    --muted:#9d758e;
+    --accent2:#bd8cf5;
+    --accent3:#ffc766;
+    --glass:rgba(255,255,255,.68);
+    --glass-strong:rgba(255,250,253,.90);
   }
   *{box-sizing:border-box;}
   html{ min-height:100%; }
@@ -31,14 +31,19 @@
     font-family:'IBM Plex Sans', sans-serif;
     background-color:var(--bg);
     background-image:
-      radial-gradient(circle at 12% 12%, rgba(255,214,150,.45), transparent 42%),
-      radial-gradient(circle at 88% 8%, rgba(167,139,250,.40), transparent 40%),
-      radial-gradient(circle at 92% 92%, rgba(255,92,138,.30), transparent 45%),
-      radial-gradient(circle at 8% 90%, rgba(126,224,213,.35), transparent 42%),
-      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cg fill='%23ffb6c1' fill-opacity='0.45'%3E%3Cpath d='M28 20c-4-8-16-8-16 2 0 8 16 18 16 18s16-10 16-18c0-10-12-10-16-2z'/%3E%3C/g%3E%3Cg fill='%23c4b5fd' fill-opacity='0.45'%3E%3Cpath d='M104 14l3 6.5 7 1-5 5 1.2 7-6.2-3.3-6.2 3.3 1.2-7-5-5 7-1z'/%3E%3C/g%3E%3Ccircle cx='55' cy='95' r='4' fill='%23ffd166' fill-opacity='0.5'/%3E%3Ccircle cx='125' cy='110' r='3' fill='%23ff5c8a' fill-opacity='0.4'/%3E%3Ccircle cx='18' cy='115' r='2.5' fill='%237ee0d5' fill-opacity='0.45'/%3E%3Ccircle cx='75' cy='45' r='2' fill='%23a78bfa' fill-opacity='0.4'/%3E%3C/svg%3E");
-    background-repeat:no-repeat,no-repeat,no-repeat,no-repeat,repeat;
-    background-size:60% 60%,55% 55%,55% 55%,55% 55%,140px 140px;
-    background-attachment:fixed,fixed,fixed,fixed,fixed;
+      radial-gradient(circle at 10% 8%, rgba(255,186,216,.72), transparent 34%),
+      radial-gradient(circle at 92% 10%, rgba(218,190,255,.58), transparent 32%),
+      radial-gradient(circle at 88% 92%, rgba(255,148,194,.38), transparent 36%),
+      radial-gradient(circle at 8% 92%, rgba(255,218,234,.76), transparent 34%),
+      linear-gradient(rgba(255,255,255,.48) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.48) 1px, transparent 1px),
+      linear-gradient(rgba(247,132,180,.055) 50%, transparent 50%),
+      linear-gradient(90deg, rgba(247,132,180,.055) 50%, transparent 50%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='190' height='190' viewBox='0 0 190 190'%3E%3Cg fill='none' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg transform='translate(26 24)' stroke='%23f56f9f' stroke-opacity='.28' stroke-width='2'%3E%3Cpath d='M16 9C8 1 1 5 4 13c2 5 7 7 12 5M16 9c8-8 15-4 12 4-2 5-7 7-12 5M16 9v16M10 23c4-4 8-4 12 0'/%3E%3Ccircle cx='16' cy='10' r='3' fill='%23fff5fa'/%3E%3C/g%3E%3Cg transform='translate(132 48)' fill='%23ffffff' fill-opacity='.58' stroke='%23c99df5' stroke-opacity='.28'%3E%3Ccircle cx='0' cy='-7' r='6'/%3E%3Ccircle cx='7' cy='0' r='6'/%3E%3Ccircle cx='0' cy='7' r='6'/%3E%3Ccircle cx='-7' cy='0' r='6'/%3E%3Ccircle cx='0' cy='0' r='4' fill='%23ffd47c' fill-opacity='.65' stroke='none'/%3E%3C/g%3E%3Cpath d='M55 138c-4-8-16-8-16 2 0 8 16 18 16 18s16-10 16-18c0-10-12-10-16-2z' fill='%23ff8db7' fill-opacity='.18' stroke='none'/%3E%3Ccircle cx='148' cy='142' r='3' fill='%23f56f9f' fill-opacity='.24' stroke='none'/%3E%3Ccircle cx='113' cy='105' r='2' fill='%23bd8cf5' fill-opacity='.22' stroke='none'/%3E%3C/g%3E%3C/svg%3E");
+    background-repeat:no-repeat,no-repeat,no-repeat,no-repeat,repeat,repeat,repeat,repeat,repeat;
+    background-size:58% 58%,54% 54%,58% 58%,54% 54%,34px 34px,34px 34px,68px 68px,68px 68px,190px 190px;
+    background-position:left top,right top,right bottom,left bottom,0 0,0 0,0 0,0 0,0 0;
+    background-attachment:fixed,fixed,fixed,fixed,fixed,fixed,fixed,fixed,fixed;
   }
   .container{
     max-width:1000px; margin:0 auto;
@@ -51,7 +56,7 @@
     border-radius:16px; padding:20px;
     backdrop-filter:blur(16px) saturate(160%);
     -webkit-backdrop-filter:blur(16px) saturate(160%);
-    box-shadow:0 8px 30px rgba(180,120,190,.15);
+    box-shadow:0 10px 34px rgba(210,104,156,.14), inset 0 1px 0 rgba(255,255,255,.72);
   }
   h2{ font-size:15px; margin-top:0; color:var(--teal); text-transform:uppercase; letter-spacing:1px; }
 
