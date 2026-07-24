@@ -176,16 +176,17 @@ app.post('/api/logout', requireAuth, (req, res) => {
 });
 
 // Lấy danh sách khách hàng/người đã thêm của tài khoản đang đăng nhập
+// Cấu trúc dữ liệu: object dạng { [uniqueId]: { nickname, uniqueId, avatar, items: [...] } }
 app.get('/api/customers', requireAuth, (req, res) => {
   const row = db.prepare('SELECT data FROM customer_data WHERE user_id = ?').get(req.userId);
-  res.json({ customers: row ? JSON.parse(row.data) : [] });
+  res.json({ customers: row ? JSON.parse(row.data) : {} });
 });
 
 // Lưu (ghi đè) danh sách khách hàng/người đã thêm của tài khoản đang đăng nhập
 app.post('/api/customers', requireAuth, (req, res) => {
   const { customers } = req.body || {};
-  if (!Array.isArray(customers)) {
-    return res.status(400).json({ error: 'Dữ liệu customers phải là một mảng (array).' });
+  if (typeof customers !== 'object' || customers === null || Array.isArray(customers)) {
+    return res.status(400).json({ error: 'Dữ liệu customers phải là một object.' });
   }
   const dataStr = JSON.stringify(customers);
   const now = Date.now();
@@ -193,7 +194,7 @@ app.post('/api/customers', requireAuth, (req, res) => {
     INSERT INTO customer_data (user_id, data, updated_at) VALUES (?, ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at
   `).run(req.userId, dataStr, now);
-  res.json({ ok: true, count: customers.length });
+  res.json({ ok: true, count: Object.keys(customers).length });
 });
 
 // Endpoint gửi lệnh in: chuyển tiếp dữ liệu ESC/POS (raw bytes) sang ESP32
