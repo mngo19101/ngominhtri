@@ -341,7 +341,8 @@
     <!-- FEED BÌNH LUẬN -->
     <div class="feed-panel">
       <div class="feed-panel-header">
-        <h2>Bình Luận Trực Tiếp</h2>
+        <h2>Bình Luận Trực Tiếp<span id="liveIdLabel" style="color:var(--muted); text-transform:none; letter-spacing:0; font-weight:600;"></span></h2>
+        <button class="btn-print" id="btnStopTikTok" style="display:none; border-color:#663; color:#e66;">⏹ Dừng xem Live</button>
       </div>
       <div class="feed-list" id="commentFeed">
         <div class="feed-placeholder" style="color:var(--muted); font-size:13px;">Đang chờ bình luận từ phiên Live...</div>
@@ -1210,6 +1211,15 @@
           if ($('#tiktokUsername') && !$('#tiktokUsername').value.trim()) {
             $('#tiktokUsername').value = data.roomUsername;
           }
+          updateLiveIdLabel(data.roomUsername);
+        } else if (data.stopped) {
+          // Server đã dừng hẳn phiên Live (do bấm nút "Dừng xem Live") —
+          // đồng bộ lại giao diện: bỏ ID đang xem, ẩn nút dừng, xoá feed.
+          currentSessionUsername = null;
+          currentSessionId = null;
+          updateLiveIdLabel(null);
+          const feed = $('#commentFeed');
+          if (feed) feed.innerHTML = '<div class="feed-placeholder" style="color:var(--muted); font-size:13px;">Đang chờ bình luận từ phiên Live...</div>';
         }
       } else if (data.type === 'COMMENT') {
         addCommentToFeed(data.comment, data.roomUsername);
@@ -1285,6 +1295,21 @@
     $('#statusBox').textContent = msg;
   }
 
+  // Cập nhật chữ "@id_tiktok" hiện ngay cạnh tiêu đề "Bình Luận Trực Tiếp" và
+  // hiện/ẩn nút "Dừng xem Live" tương ứng — cho biết ngay đang xem phòng nào
+  // mà không cần nhìn xuống ô Trạng thái bên dưới.
+  function updateLiveIdLabel(username) {
+    const label = $('#liveIdLabel');
+    const btnStop = $('#btnStopTikTok');
+    if (username) {
+      if (label) label.textContent = ` — @${username}`;
+      if (btnStop) btnStop.style.display = '';
+    } else {
+      if (label) label.textContent = '';
+      if (btnStop) btnStop.style.display = 'none';
+    }
+  }
+
   // Trích xuất username TikTok sạch từ link hoặc @tên (giống cách server xử lý),
   // dùng để lưu vào danh sách ID đã dùng cho gọn, không lưu nguyên link dài.
   function extractTiktokUsername(inputRaw) {
@@ -1312,6 +1337,13 @@
       rememberTiktokId(cleanUsername);
       startNewSession(cleanUsername); // mở 1 phiên lưu lịch sử mới cho lần kết nối này
     }
+  });
+
+  $('#btnStopTikTok').addEventListener('click', () => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) { alert('Chưa kết nối tới Bridge Server!'); return; }
+    if (!confirm('Dừng xem phiên Live hiện tại? Bình luận mới sẽ không được nhận nữa cho tới khi bấm "Kết Nối" lại.')) return;
+    setStatus('Đang gửi yêu cầu dừng xem Live...');
+    ws.send(JSON.stringify({ type: 'STOP_TIKTOK' }));
   });
 
   function addCommentToFeed(cmt, roomUsername) {
