@@ -547,6 +547,9 @@
       <span><b id="summaryItemCount">0</b> sản phẩm</span>
       <span>Tổng: <b id="summaryRevenue">0đ</b></span>
     </div>
+    <div class="field session-search-field">
+      <input id="customerSearchInput" type="search" autocomplete="off" placeholder="Tìm theo tên TikTok hoặc @ID TikTok...">
+    </div>
     <div class="field session-date-jump-field">
       <label>Lọc theo ngày</label>
       <div class="session-date-jump-row">
@@ -1260,10 +1263,16 @@
     // và tab Báo Cáo lọc dữ liệu theo ngày). Không chọn ngày nào ("") thì hiển thị
     // đầy đủ tất cả khách hàng như cũ.
     const selectedDate = $('#customerDateJump').value;
+    const searchText = ($('#customerSearchInput').value || '').trim().toLowerCase().replace(/^@/, '');
 
     // Với mỗi khách hàng, chỉ giữ lại các sản phẩm thuộc đúng ngày đã chọn (nếu có
     // chọn ngày); khách hàng không còn sản phẩm nào trong ngày đó thì ẩn luôn.
     const list = Object.values(customers)
+      .filter(cust => {
+        if (!searchText) return true;
+        return String(cust.nickname || '').toLowerCase().includes(searchText) ||
+          String(cust.uniqueId || '').toLowerCase().replace(/^@/, '').includes(searchText);
+      })
       .map(cust => {
         const items = selectedDate
           ? cust.items.filter(it => dateKeyLocal(it.time) === selectedDate)
@@ -1286,7 +1295,9 @@
     $('#summaryRevenue').textContent = formatTien(totalRevenue);
 
     if (list.length === 0) {
-      body.innerHTML = selectedDate
+      body.innerHTML = searchText
+        ? '<div class="empty-note">Không tìm thấy khách hàng theo tên hoặc ID TikTok đã nhập.</div>'
+        : selectedDate
         ? '<div class="empty-note">Không có khách hàng nào trong ngày đã chọn.</div>'
         : '<div class="empty-note">Chưa có khách hàng nào. Bấm "🖨️ In phiếu" ở 1 bình luận để thêm khách hàng + sản phẩm vào giỏ.</div>';
       return;
@@ -1340,6 +1351,7 @@
   // ngày đó (và cập nhật lại số liệu tổng kết ở trên). Bấm "Tất cả" để xoá lọc,
   // xem lại đầy đủ khách hàng như trước.
   $('#customerDateJump').addEventListener('change', () => renderCustomerList());
+  $('#customerSearchInput').addEventListener('input', () => renderCustomerList());
   $('#customerDateJumpClear').addEventListener('click', () => {
     $('#customerDateJump').value = '';
     renderCustomerList();

@@ -52,6 +52,7 @@ Bridge Server đang chạy tại cổng ...
 - Trạng thái đơn, thanh toán, in và lịch sử lỗi in.
 - Danh mục sản phẩm, giá, tồn kho và bí danh nhận diện comment.
 - Tìm kiếm/lọc/xuất Excel đơn hàng.
+- Tìm khách hàng tức thời theo tên TikTok hoặc `@ID TikTok`.
 - Cấu hình khổ giấy 58/80 mm, số bản và tên shop.
 - In thử, khóa lệnh in khi lệnh trước chưa hoàn tất.
 - Đổi mật khẩu và đăng xuất các thiết bị khác.
