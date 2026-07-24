@@ -1,0 +1,17 @@
+{
+  "name": "tiktok-print-bridge",
+  "version": "1.0.0",
+  "description": "Bridge server: nhận comment TikTok Live realtime va gui lenh in ESC/POS toi may in LAN qua TCP.",
+  "main": "a.js",
+  "scripts": {
+    "start": "node a.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ws": "^8.18.0",
+    "tiktok-live-connector": "^2.4.3"
+  }
+}
