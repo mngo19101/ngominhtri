@@ -771,16 +771,6 @@
   </div>
 </div>
 
-<!-- TAB V2: DANH MỤC SẢN PHẨM -->
-<div class="tab-view" id="viewProducts" style="display:none;">
-  <div class="management-page">
-    <div class="feed-panel-header"><h2>Danh Mục & Quy Tắc Nhận Sản Phẩm</h2>
-      <button class="btn-print" id="btnNewProduct">＋ Thêm sản phẩm</button></div>
-    <div class="menu-hint">Comment có mã hoặc bí danh sẽ tự nhận sản phẩm.</div>
-    <div id="productList" style="margin-top:12px;"><div class="empty-note">Chưa có sản phẩm.</div></div>
-  </div>
-</div>
-
 <!-- TAB: QUẢN TRỊ (chỉ tài khoản admin mới thấy được nội dung, tab cũng bị ẩn
      hoàn toàn với tài khoản thường ở phần JS bên dưới) -->
 <div class="tab-view" id="viewAdmin" style="display:none;">
@@ -916,9 +906,6 @@
   </button>
   <button class="nav-item" id="navShipping" data-tab="shipping">
     <span class="nav-icon">🚚</span><span class="nav-label-row"><span class="nav-label">Vận chuyển</span><span class="badge-count" id="shippingCountBadge">0</span></span>
-  </button>
-  <button class="nav-item" id="navProducts" data-tab="products">
-    <span class="nav-icon">🏷️</span><span class="nav-label">Sản phẩm</span>
   </button>
   <button class="nav-item" id="navMenu" data-tab="menu">
     <span class="nav-icon">☰</span>
@@ -1895,8 +1882,7 @@
           <button class="btn-mini track-spx">${o.externalTrackingCode ? 'Xem hành trình SPX' : 'Nhập mã SPX'}</button>
           <button class="btn-mini edit-shipment">${o.shippingCode ? 'Sửa thông tin' : 'Bổ sung & tạo phiếu'}</button>
           ${o.shippingCode ? `<button class="btn-mini export-label">In đơn (xuất ảnh)</button>
-          <select class="shipment-status-select">${SHIPPING_STATUS_CHOICES.map(k=>`<option value="${k}"${status===k?' selected':''}>${SHIPPING_STATUS_LABELS[k]}</option>`).join('')}</select>
-          <button class="btn-mini shipment-history">Hành trình</button>` : ''}
+          <select class="shipment-status-select">${SHIPPING_STATUS_CHOICES.map(k=>`<option value="${k}"${status===k?' selected':''}>${SHIPPING_STATUS_LABELS[k]}</option>`).join('')}</select>` : ''}
           ${status === 'delivery_failed' ? '<button class="btn-mini retry-shipment">Giao lại</button><button class="btn-mini return-shipment">Chuyển hoàn</button>' : ''}
         </div>`;
       card.querySelector('.edit-shipment').addEventListener('click', () => openShippingModal(o));
@@ -1910,7 +1896,6 @@
       });
       card.querySelector('.retry-shipment')?.addEventListener('click', () => changeShipmentStatus(o,'delivering','Yêu cầu giao lại'));
       card.querySelector('.return-shipment')?.addEventListener('click', () => changeShipmentStatus(o,'returning','Yêu cầu chuyển hoàn'));
-      card.querySelector('.shipment-history')?.addEventListener('click', () => showShipmentHistory(o));
       card.addEventListener('click', event => {
         if (!event.target.closest('button,select,a,input,textarea')) openSpxTrackingModal(o);
       });
@@ -1958,15 +1943,6 @@
     try {
       await apiFetch(`/api/shipments/${order.id}/status`, {method:'POST',body:JSON.stringify({status,note})});
       await Promise.all([loadShippingV2(),loadOrdersV2()]);
-    } catch(err){ alert(err.message); }
-  }
-
-  async function showShipmentHistory(order) {
-    try {
-      const data = await apiFetch(`/api/shipments/${order.id}/events`);
-      const lines = (data.events||[]).map(e =>
-        `${new Date(e.createdAt).toLocaleString('vi-VN')} — ${SHIPPING_STATUS_LABELS[e.status]||e.status||e.eventType}${e.location?' — '+e.location:''}${e.note?' — '+e.note:''}`);
-      alert(lines.length ? lines.join('\n') : 'Chưa có hành trình.');
     } catch(err){ alert(err.message); }
   }
 
@@ -2283,7 +2259,6 @@
   $('#btnRefreshOrders').addEventListener('click', loadOrdersV2);
   ['orderSearch','orderStatusFilter','orderDateFilter'].forEach(id => $('#'+id).addEventListener(id==='orderSearch'?'input':'change',renderOrdersV2));
   $('#btnExportOrders').addEventListener('click', exportOrdersV2);
-  $('#btnNewProduct').addEventListener('click',()=>openProductModal(null));
   $('#productModalClose').addEventListener('click',closeProductModal); $('#productModalCancel').addEventListener('click',closeProductModal);
   $('#btnSaveProduct').addEventListener('click',saveProductV2);
   $('#btnSaveSettings').addEventListener('click',saveSettingsV2);
@@ -2862,7 +2837,6 @@
     $('#viewReport').style.display = tab === 'report' ? '' : 'none';
     $('#viewOrders').style.display = tab === 'orders' ? '' : 'none';
     $('#viewShipping').style.display = tab === 'shipping' ? '' : 'none';
-    $('#viewProducts').style.display = tab === 'products' ? '' : 'none';
     $('#viewMenu').style.display = tab === 'menu' ? '' : 'none';
     $('#viewAdmin').style.display = tab === 'admin' ? '' : 'none';
     $('#navLive').classList.toggle('active', tab === 'live');
@@ -2871,7 +2845,6 @@
     $('#navReport').classList.toggle('active', tab === 'report');
     $('#navOrders').classList.toggle('active', tab === 'orders');
     $('#navShipping').classList.toggle('active', tab === 'shipping');
-    $('#navProducts').classList.toggle('active', tab === 'products');
     $('#navMenu').classList.toggle('active', tab === 'menu');
     $('#navAdmin').classList.toggle('active', tab === 'admin');
     if (tab === 'customers') renderCustomerList();
@@ -2879,7 +2852,6 @@
     if (tab === 'report') renderReport($('#reportDate').value || dateKeyLocal());
     if (tab === 'orders') loadOrdersV2();
     if (tab === 'shipping') loadShippingV2();
-    if (tab === 'products') loadProductsV2();
     if (tab === 'menu') loadMenuInfo();
     if (tab === 'admin') { loadAdminUsers(); loadLicenseLogs(); }
   }
@@ -2890,7 +2862,6 @@
   $('#navReport').addEventListener('click', () => switchTab('report'));
   $('#navOrders').addEventListener('click', () => switchTab('orders'));
   $('#navShipping').addEventListener('click', () => switchTab('shipping'));
-  $('#navProducts').addEventListener('click', () => switchTab('products'));
   $('#navMenu').addEventListener('click', () => switchTab('menu'));
   $('#navAdmin').addEventListener('click', () => switchTab('admin'));
   // ===== HẾT PHẦN KHÁCH HÀNG / GIỎ HÀNG =====
