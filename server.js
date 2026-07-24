@@ -225,6 +225,75 @@ ensureColumn('users', 'printer_token', 'TEXT');
 ensureColumn('sessions', 'device_name', 'TEXT');
 ensureColumn('sessions', 'user_agent', 'TEXT');
 ensureColumn('sessions', 'last_seen_at', 'INTEGER');
+
+// ====== TỰ DỌN COMMENT QUÁ HẠN ======
+// Quy tắc theo ngày lịch đúng yêu cầu:
+// - Comment ngày 25/07 được giữ đến hết 25/08.
+// - Từ 00:00 ngày 26/08 trở đi mới bị xóa.
+// Đơn hàng/giỏ khách đã chốt KHÔNG bị xóa theo tác vụ này.
+function addOneCalendarMonthEndOfDay(value) {
+  const source = new Date(value);
+  if (!Number.isFinite(source.getTime())) return null;
+  // Railway thường chạy UTC, nên tự quy đổi cố định UTC+7 để ngày xóa luôn
+  // đúng theo ngày Việt Nam, không phụ thuộc timezone của container.
+  const vietnam = new Date(source.getTime() + 7 * 60 * 60 * 1000);
+  const year = vietnam.getUTCFullYear();
+  const month = vietnam.getUTCMonth();
+  const day = vietnam.getUTCDate();
+  const lastDayOfTargetMonth = new Date(Date.UTC(year, month + 2, 0)).getUTCDate();
+  const targetDay = Math.min(day, lastDayOfTargetMonth);
+  // 23:59:59.999 giờ Việt Nam = 16:59:59.999 UTC.
+  return new Date(Date.UTC(year, month + 1, targetDay, 16, 59, 59, 999));
+}
+
+function isCommentExpired(receivedAt, now = new Date()) {
+  const expiry = addOneCalendarMonthEndOfDay(receivedAt);
+  return expiry ? now.getTime() > expiry.getTime() : false;
+}
+
+function cleanupExpiredComments(now = new Date()) {
+  const rows = db.prepare('SELECT user_id, data FROM live_session_data').all();
+  let removedComments = 0;
+  let removedSessions = 0;
+  let updatedUsers = 0;
+
+  for (const row of rows) {
+    let sessions;
+    try {
+      sessions = JSON.parse(row.data || '{}');
+    } catch (err) {
+      console.warn(`[Retention] Bỏ qua lịch sử lỗi JSON của user #${row.user_id}.`);
+      continue;
+    }
+    let changed = false;
+    for (const [sessionId, session] of Object.entries(sessions)) {
+      const original = Array.isArray(session.comments) ? session.comments : [];
+      const kept = original.filter(comment => !isCommentExpired(comment.receivedAt, now));
+      if (kept.length !== original.length) {
+        removedComments += original.length - kept.length;
+        session.comments = kept;
+        changed = true;
+      }
+      if (session.comments.length === 0) {
+        delete sessions[sessionId];
+        removedSessions++;
+        changed = true;
+      }
+    }
+    if (changed) {
+      db.prepare('UPDATE live_session_data SET data = ?, updated_at = ? WHERE user_id = ?')
+        .run(JSON.stringify(sessions), Date.now(), row.user_id);
+      updatedUsers++;
+    }
+  }
+
+  if (removedComments || removedSessions) {
+    console.log(`[Retention] Đã xóa ${removedComments} comment quá 1 tháng và ${removedSessions} phiên trống của ${updatedUsers} tài khoản.`);
+  } else {
+    console.log('[Retention] Không có comment quá hạn cần xóa.');
+  }
+  return { removedComments, removedSessions, updatedUsers, checkedAt: now.toISOString() };
+}
 function generatePrinterToken() {
   return crypto.randomBytes(5).toString('hex').toUpperCase(); // vd: "A1B2C3D4E5" - đủ ngắn để gõ vào firmware
 }
@@ -291,6 +360,7 @@ const LICENSE_DURATIONS_MS = {
 };
 const LICENSE_LABELS = {
   free: 'Miễn phí',
+  trial: 'Trải nghiệm',
   '1m': '1 tháng',
   '3m': '3 tháng',
   '6m': '6 tháng',
@@ -315,11 +385,11 @@ function getLicenseInfo(user) {
   const type = user.license_type || 'free';
 
   if (type === 'lifetime') {
-    return { type, label: LICENSE_LABELS.lifetime, canPrint: true, isExpired: false, expiresAt: null, daysLeft: null };
+    return { type, label: LICENSE_LABELS.lifetime, canPrint: true, canLive: true, isExpired: false, expiresAt: null, daysLeft: null, remainingMs: null };
   }
 
   if (type === 'free' || !user.license_expires_at) {
-    return { type: 'free', label: LICENSE_LABELS.free, canPrint: false, isExpired: false, expiresAt: null, daysLeft: null };
+    return { type: 'free', label: LICENSE_LABELS.free, canPrint: false, canLive: true, isExpired: false, expiresAt: null, daysLeft: null, remainingMs: null };
   }
 
   const isExpired = user.license_expires_at <= now;
@@ -328,9 +398,11 @@ function getLicenseInfo(user) {
     type,
     label: LICENSE_LABELS[type] || type,
     canPrint: !isExpired,
+    canLive: !isExpired,
     isExpired,
     expiresAt: user.license_expires_at,
     daysLeft,
+    remainingMs: isExpired ? 0 : user.license_expires_at - now,
   };
 }
 
@@ -519,6 +591,11 @@ app.get('/api/me', requireAuth, (req, res) => {
 // ====== API QUẢN TRỊ (ADMIN) ======
 // Tất cả route bên dưới đều yêu cầu đăng nhập VÀ tài khoản đó phải có is_admin = 1.
 
+// Cho phép admin chạy dọn ngay mà không cần chờ lịch tự động.
+app.post('/api/admin/cleanup-comments', requireAuth, requireAdmin, (req, res) => {
+  res.json({ ok: true, ...cleanupExpiredComments(new Date()) });
+});
+
 // Danh sách toàn bộ tài khoản trong hệ thống (không trả về password_hash/salt).
 app.get('/api/admin/users', requireAuth, requireAdmin, (req, res) => {
   const rows = db.prepare(
@@ -540,7 +617,8 @@ app.get('/api/admin/users', requireAuth, requireAdmin, (req, res) => {
   });
 });
 
-// Admin cấp / gia hạn gói cho 1 tài khoản. body: { type: 'free'|'1m'|'3m'|'6m'|'12m'|'lifetime' }
+// Admin cấp / gia hạn gói cho 1 tài khoản.
+// Gói trải nghiệm: { type:'trial', duration:15, unit:'minute'|'hour'|'day' }.
 // - 'lifetime': mở khóa in vĩnh viễn, không có hạn.
 // - '1m'/'3m'/'6m'/'12m': mở khóa in trong đúng số tháng tương ứng, đếm ngược
 //   từ NGÀY HẾT HẠN GÓI CŨ nếu gói cũ còn hạn (gia hạn cộng dồn), hoặc từ thời
@@ -549,18 +627,32 @@ app.get('/api/admin/users', requireAuth, requireAdmin, (req, res) => {
 //   đủ FREE_LIVE_SESSION_LIMIT phiên Live để dùng thử lại từ đầu).
 app.post('/api/admin/users/:id/license', requireAuth, requireAdmin, (req, res) => {
   const targetId = Number(req.params.id);
-  const { type } = req.body || {};
+  const { type, duration, unit } = req.body || {};
   const target = db.prepare('SELECT * FROM users WHERE id = ?').get(targetId);
   if (!target) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
 
-  const validTypes = ['free', '1m', '3m', '6m', '12m', 'lifetime'];
+  const validTypes = ['free', 'trial', '1m', '3m', '6m', '12m', 'lifetime'];
   if (!validTypes.includes(type)) {
     return res.status(400).json({ error: 'Loại gói không hợp lệ.' });
   }
 
   const now = Date.now();
   let expiresAt = null;
-  if (type === '1m' || type === '3m' || type === '6m' || type === '12m') {
+  let grantLabel = LICENSE_LABELS[type] || type;
+  if (type === 'trial') {
+    const amount = Number(duration);
+    const unitMs = { minute: 60 * 1000, hour: 60 * 60 * 1000, day: DAY_MS };
+    const unitLabels = { minute: 'phút', hour: 'giờ', day: 'ngày' };
+    if (!Number.isInteger(amount) || amount < 1 || amount > 10000 || !unitMs[unit]) {
+      return res.status(400).json({ error: 'Thời gian trải nghiệm không hợp lệ.' });
+    }
+    const durationMs = amount * unitMs[unit];
+    if (durationMs > 365 * DAY_MS) {
+      return res.status(400).json({ error: 'Gói trải nghiệm tối đa 365 ngày.' });
+    }
+    expiresAt = now + durationMs;
+    grantLabel = `Trải nghiệm ${amount} ${unitLabels[unit]}`;
+  } else if (type === '1m' || type === '3m' || type === '6m' || type === '12m') {
     const base = (target.license_expires_at && target.license_expires_at > now) ? target.license_expires_at : now;
     expiresAt = base + LICENSE_DURATIONS_MS[type];
   }
@@ -569,13 +661,14 @@ app.post('/api/admin/users/:id/license', requireAuth, requireAdmin, (req, res) =
     'UPDATE users SET license_type = ?, license_expires_at = ?, license_granted_at = ?, live_sessions_used = 0 WHERE id = ?'
   ).run(type, expiresAt, now, targetId);
 
-  console.log(`[License] ✅ Admin đã cấp gói "${LICENSE_LABELS[type] || type}" cho tài khoản @${target.username}.`);
+  console.log(`[License] ✅ Admin đã cấp gói "${grantLabel}" cho tài khoản @${target.username}.`);
 
   const updated = db.prepare('SELECT * FROM users WHERE id = ?').get(targetId);
   res.json({
     ok: true,
-    message: `Đã cấp gói "${LICENSE_LABELS[type] || type}" cho @${target.username}.`,
-    license: getLicenseInfo(updated)
+    message: `Đã cấp gói "${grantLabel}" cho @${target.username}.`,
+    license: getLicenseInfo(updated),
+    grantLabel
   });
 });
 
@@ -611,6 +704,34 @@ app.post('/api/admin/users/:id/unban', requireAuth, requireAdmin, (req, res) => 
   res.json({ ok: true, message: `Đã mở khóa tài khoản @${target.username}.` });
 });
 
+// Admin đặt mật khẩu mới cho tài khoản khách hàng. Tất cả phiên đăng nhập cũ
+// của khách bị thu hồi ngay để mật khẩu cũ không còn dùng tiếp được.
+app.post('/api/admin/users/:id/reset-password', requireAuth, requireAdmin, (req, res) => {
+  const targetId = Number(req.params.id);
+  const newPassword = String(req.body?.newPassword || '');
+  const target = db.prepare('SELECT * FROM users WHERE id = ?').get(targetId);
+  if (!target) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
+  if (target.is_admin) {
+    return res.status(403).json({ error: 'Không thể đổi mật khẩu của tài khoản admin khác tại đây.' });
+  }
+  if (newPassword.length < 8 || newPassword.length > 200) {
+    return res.status(400).json({ error: 'Mật khẩu mới phải có từ 8 đến 200 ký tự.' });
+  }
+  const salt = crypto.randomBytes(16).toString('hex');
+  db.prepare('UPDATE users SET password_hash = ?, salt = ? WHERE id = ?')
+    .run(hashPassword(newPassword, salt), salt, targetId);
+  const removedSessions = db.prepare('DELETE FROM sessions WHERE user_id = ?').run(targetId).changes;
+  addAudit(req.userId, 'admin.password_reset', 'user', String(targetId), {
+    username: target.username, removedSessions
+  });
+  console.log(`[Admin] Đã đặt mật khẩu mới cho @${target.username} và thu hồi ${removedSessions} phiên.`);
+  res.json({
+    ok: true,
+    message: `Đã đổi mật khẩu @${target.username} và đăng xuất ${removedSessions} thiết bị.`,
+    removedSessions
+  });
+});
+
 // Xóa vĩnh viễn 1 tài khoản + toàn bộ dữ liệu liên quan (khách hàng, ID
 // TikTok đã lưu, lịch sử phiên Live, các phiên đăng nhập).
 app.delete('/api/admin/users/:id', requireAuth, requireAdmin, (req, res) => {
@@ -620,14 +741,18 @@ app.delete('/api/admin/users/:id', requireAuth, requireAdmin, (req, res) => {
   if (target.id === req.userId) {
     return res.status(400).json({ error: 'Không thể tự xóa chính tài khoản admin đang đăng nhập.' });
   }
-  const deleteAll = db.transaction((id) => {
-    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(id);
-    db.prepare('DELETE FROM customer_data WHERE user_id = ?').run(id);
-    db.prepare('DELETE FROM saved_tiktok_ids WHERE user_id = ?').run(id);
-    db.prepare('DELETE FROM live_session_data WHERE user_id = ?').run(id);
-    db.prepare('DELETE FROM users WHERE id = ?').run(id);
-  });
-  deleteAll(targetId);
+  try {
+    db.exec('BEGIN IMMEDIATE');
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(targetId);
+    db.prepare('DELETE FROM customer_data WHERE user_id = ?').run(targetId);
+    db.prepare('DELETE FROM saved_tiktok_ids WHERE user_id = ?').run(targetId);
+    db.prepare('DELETE FROM live_session_data WHERE user_id = ?').run(targetId);
+    db.prepare('DELETE FROM users WHERE id = ?').run(targetId);
+    db.exec('COMMIT');
+  } catch (err) {
+    try { db.exec('ROLLBACK'); } catch (e) {}
+    throw err;
+  }
   res.json({ ok: true, message: `Đã xóa tài khoản @${target.username}.` });
 });
 
@@ -1126,6 +1251,7 @@ let tiktokConnection = null;
 // rồi nối lại gây giật cho những thiết bị khác đang xem.
 let currentLiveUsername = null;
 let currentLiveUserId = null;
+let liveAccessExpiryTimer = null;
 
 // Lưu tạm các comment gần đây nhất của phiên Live hiện tại (tối đa 200 dòng).
 // Khi 1 thiết bị mới mở trang/kết nối lại trong lúc đang live, server gửi
@@ -1176,6 +1302,39 @@ function shutdownTiktokConnection(conn) {
   try { conn.disconnect(); } catch (e) {}
 }
 
+function clearLiveAccessExpiry() {
+  if (liveAccessExpiryTimer) clearTimeout(liveAccessExpiryTimer);
+  liveAccessExpiryTimer = null;
+}
+
+function scheduleLiveAccessExpiry(userId, expiresAt) {
+  clearLiveAccessExpiry();
+  if (!expiresAt) return;
+  const check = () => {
+    if (currentLiveUserId !== userId) return;
+    const remaining = expiresAt - Date.now();
+    if (remaining > 0) {
+      liveAccessExpiryTimer = setTimeout(check, Math.min(remaining, 24 * 60 * 60 * 1000));
+      return;
+    }
+    const endedUsername = currentLiveUsername;
+    shutdownTiktokConnection(tiktokConnection);
+    tiktokConnection = null;
+    currentLiveUsername = null;
+    currentLiveUserId = null;
+    commentHistory = [];
+    currentSessionId = null;
+    tiktokConnectionGeneration++;
+    liveAccessExpiryTimer = null;
+    broadcastToBrowsers({
+      type: 'STATUS', success: false, locked: true, feature: 'live_view',
+      stopped: true,
+      msg: `Gói trải nghiệm của bạn đã hết hạn${endedUsername ? ` khi đang xem @${endedUsername}` : ''}.`
+    }, userId);
+  };
+  check();
+}
+
 wss.on('connection', (ws) => {
   ws.on('close', () => {
     if (ws.isPrinter) {
@@ -1198,6 +1357,7 @@ wss.on('connection', (ws) => {
     if (tiktokConnection) {
       shutdownTiktokConnection(tiktokConnection);
       tiktokConnection = null;
+      clearLiveAccessExpiry();
       currentLiveUsername = null;
       currentLiveUserId = null;
       commentHistory = [];
@@ -1320,6 +1480,7 @@ wss.on('connection', (ws) => {
           shutdownTiktokConnection(tiktokConnection);
           tiktokConnection = null;
         }
+        clearLiveAccessExpiry();
         currentLiveUsername = null;
         currentLiveUserId = null;
         commentHistory = [];
@@ -1362,6 +1523,14 @@ wss.on('connection', (ws) => {
         }
         const requestLicense = getLicenseInfo(requestUser);
         ws.browserUserId = requestUserId;
+        if (requestLicense.isExpired) {
+          const expiredMsg = `Gói "${requestLicense.label}" đã hết hạn. Vui lòng gia hạn để tiếp tục xem Live.`;
+          logLicenseLock(requestUser.username, 'live_view', expiredMsg);
+          return ws.send(JSON.stringify({
+            type: 'STATUS', success: false, locked: true,
+            feature: 'live_view', msg: expiredMsg
+          }));
+        }
         if (tiktokConnection && currentLiveUserId != null && currentLiveUserId !== requestUserId) {
           return ws.send(JSON.stringify({
             type: 'STATUS',
@@ -1442,6 +1611,7 @@ wss.on('connection', (ws) => {
           shutdownTiktokConnection(tiktokConnection);
           tiktokConnection = null;
         }
+        clearLiveAccessExpiry();
         currentLiveUsername = null;
         currentLiveUserId = null;
         commentHistory = [];
@@ -1486,6 +1656,7 @@ wss.on('connection', (ws) => {
           console.log(`[TikTok Success] ✅ Kết nối thành công! Room ID: ${state.roomId}`);
           currentLiveUsername = username; // đánh dấu đây là phiên Live đang mở, để mọi thiết bị mới đều đồng bộ theo
           currentLiveUserId = requestUserId;
+          scheduleLiveAccessExpiry(requestUserId, requestLicense.expiresAt);
           broadcastToBrowsers({
             type: 'STATUS',
             success: true,
@@ -1565,6 +1736,7 @@ wss.on('connection', (ws) => {
           if (myGeneration !== tiktokConnectionGeneration) return; // sự kiện trễ từ phiên Live cũ -> bỏ qua
           console.log(`[TikTok] Phiên Live đã kết thúc.`);
           const endedUserId = requestUserId;
+          clearLiveAccessExpiry();
           currentLiveUsername = null;
           currentLiveUserId = null;
           commentHistory = [];
@@ -1583,4 +1755,8 @@ const PORT = process.env.PORT || 8181;
 server.listen(PORT, () => {
   console.log(`Bridge Server đang chạy tại cổng ${PORT}`);
   console.log('✅ Sẵn sàng nhận lệnh kết nối TikTok Live!');
+  // Dọn ngay khi khởi động, sau đó kiểm tra lại mỗi 6 giờ.
+  cleanupExpiredComments(new Date());
+  const retentionTimer = setInterval(() => cleanupExpiredComments(new Date()), 6 * 60 * 60 * 1000);
+  retentionTimer.unref();
 });

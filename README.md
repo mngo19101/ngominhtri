@@ -56,10 +56,14 @@ Bridge Server đang chạy tại cổng ...
 - Cấu hình khổ giấy 58/80 mm, số bản và tên shop.
 - In thử, khóa lệnh in khi lệnh trước chưa hoàn tất.
 - Đổi mật khẩu và đăng xuất các thiết bị khác.
+- Admin cấp trải nghiệm full tính năng theo số phút, giờ hoặc ngày tùy ý; tự khóa khi hết hạn.
+- Admin đặt mật khẩu mới cho tài khoản khách hàng và thu hồi toàn bộ phiên đăng nhập cũ.
+- Admin tìm nhanh tài khoản theo tên hoặc `@username` để cấp/nâng cấp gói.
 - Sao lưu/khôi phục dữ liệu JSON.
 - Nhật ký thao tác.
 - WebSocket xác thực và chỉ phát dữ liệu cho đúng tài khoản.
 - Giữ nguyên đăng nhập, gói sử dụng, admin, lịch sử Live, báo cáo và ESP32.
+- Tự xóa comment lịch sử quá một tháng theo giờ Việt Nam: comment ngày 25/7 được giữ hết 25/8 và xóa từ 26/8; đơn hàng đã chốt không bị xóa.
 
 ## Lưu ý nâng cấp
 
