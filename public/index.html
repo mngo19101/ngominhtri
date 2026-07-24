@@ -422,6 +422,13 @@
       <span><b id="summaryItemCount">0</b> sản phẩm</span>
       <span>Tổng: <b id="summaryRevenue">0đ</b></span>
     </div>
+    <div class="field session-date-jump-field">
+      <label>Lọc theo ngày</label>
+      <div class="session-date-jump-row">
+        <input type="date" id="customerDateJump" class="date-input">
+        <button type="button" class="btn-mini" id="customerDateJumpClear">Tất cả</button>
+      </div>
+    </div>
     <div class="customer-list" id="customerListBody">
       <div class="empty-note">Chưa có khách hàng nào. Bấm "🖨️ In phiếu" ở 1 bình luận để thêm khách hàng + sản phẩm vào giỏ.</div>
     </div>
@@ -860,11 +867,27 @@
 
   function renderCustomerList() {
     const body = $('#customerListBody');
-    const list = Object.values(customers).sort((a, b) => {
-      const totalA = a.items.reduce((s, it) => s + it.price, 0);
-      const totalB = b.items.reduce((s, it) => s + it.price, 0);
-      return totalB - totalA;
-    });
+
+    // Lọc theo ngày đã chọn ở ô "Lọc theo ngày" (giống cách tab Lịch Sử Phiên Live
+    // và tab Báo Cáo lọc dữ liệu theo ngày). Không chọn ngày nào ("") thì hiển thị
+    // đầy đủ tất cả khách hàng như cũ.
+    const selectedDate = $('#customerDateJump').value;
+
+    // Với mỗi khách hàng, chỉ giữ lại các sản phẩm thuộc đúng ngày đã chọn (nếu có
+    // chọn ngày); khách hàng không còn sản phẩm nào trong ngày đó thì ẩn luôn.
+    const list = Object.values(customers)
+      .map(cust => {
+        const items = selectedDate
+          ? cust.items.filter(it => dateKeyLocal(it.time) === selectedDate)
+          : cust.items;
+        return { ...cust, items };
+      })
+      .filter(cust => cust.items.length > 0)
+      .sort((a, b) => {
+        const totalA = a.items.reduce((s, it) => s + it.price, 0);
+        const totalB = b.items.reduce((s, it) => s + it.price, 0);
+        return totalB - totalA;
+      });
 
     let totalItems = 0;
     let totalRevenue = 0;
@@ -875,7 +898,9 @@
     $('#summaryRevenue').textContent = formatTien(totalRevenue);
 
     if (list.length === 0) {
-      body.innerHTML = '<div class="empty-note">Chưa có khách hàng nào. Bấm "🖨️ In phiếu" ở 1 bình luận để thêm khách hàng + sản phẩm vào giỏ.</div>';
+      body.innerHTML = selectedDate
+        ? '<div class="empty-note">Không có khách hàng nào trong ngày đã chọn.</div>'
+        : '<div class="empty-note">Chưa có khách hàng nào. Bấm "🖨️ In phiếu" ở 1 bình luận để thêm khách hàng + sản phẩm vào giỏ.</div>';
       return;
     }
 
@@ -922,6 +947,15 @@
       body.appendChild(card);
     });
   }
+
+  // Chọn 1 ngày ở ô "Lọc theo ngày" -> chỉ hiện khách hàng/sản phẩm của đúng
+  // ngày đó (và cập nhật lại số liệu tổng kết ở trên). Bấm "Tất cả" để xoá lọc,
+  // xem lại đầy đủ khách hàng như trước.
+  $('#customerDateJump').addEventListener('change', () => renderCustomerList());
+  $('#customerDateJumpClear').addEventListener('click', () => {
+    $('#customerDateJump').value = '';
+    renderCustomerList();
+  });
 
   // ===== LỊCH SỬ PHIÊN LIVE (LƯU TOÀN BỘ COMMENT ĐỂ XEM LẠI / IN BÙ) =====
   // Cấu trúc: { sessionId: { username, startedAt, comments: [{id, nickname, uniqueId, avatar, comment, receivedAt, added}] } }
