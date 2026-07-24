@@ -2240,9 +2240,20 @@
 
     try {
       setPrinterStatus(`Đang gửi lệnh in comment của @${cmt.uniqueId}...`);
+      // QUAN TRỌNG: /print yêu cầu xác thực (requireAuth ở server) để biết
+      // đúng tài khoản nào đang bấm in, từ đó kiểm tra gói/hạn dùng. Phải gửi
+      // kèm header Authorization, nếu không server luôn trả lỗi "thiếu token"
+      // dù tài khoản đã đăng nhập và đã được cấp gói.
+      if (!authToken) {
+        setPrinterStatus('❌ Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.');
+        return;
+      }
       const res = await fetch(`${bridgeUrl}/print`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/octet-stream' },
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'Authorization': 'Bearer ' + authToken
+        },
         body: bytes
       });
 
