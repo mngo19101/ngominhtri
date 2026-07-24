@@ -152,6 +152,27 @@
   .btn-del-item:hover{ background:#ff4d6d; color:#fff; }
   .empty-note{ color:var(--muted); font-size:13px; text-align:center; padding:20px 0; }
 
+  /* ===== TRANG QUẢN TRỊ TÀI KHOẢN ===== */
+  .admin-user-card{
+    background:var(--glass); border:1px solid var(--border); border-radius:10px; padding:12px 14px;
+    display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  }
+  .admin-user-info{ display:flex; flex-direction:column; gap:4px; min-width:0; }
+  .admin-user-name{ font-weight:700; color:var(--text); font-size:14px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .admin-user-meta{ font-size:11px; color:var(--muted); font-family:'JetBrains Mono', monospace; }
+  .admin-badge{ font-size:10px; font-weight:800; border-radius:999px; padding:2px 8px; letter-spacing:.3px; }
+  .admin-badge.badge-admin{ background:rgba(167,139,250,.25); color:#7c3aed; border:1px solid rgba(167,139,250,.5); }
+  .admin-badge.badge-banned{ background:rgba(230,56,106,.15); color:#e6386a; border:1px solid rgba(230,56,106,.4); }
+  .admin-user-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  .btn-admin-action{
+    background:rgba(255,255,255,.6); border:1px solid var(--border); color:var(--text);
+    padding:7px 12px; border-radius:8px; font-weight:600; cursor:pointer; font-size:12px; transition:.15s;
+  }
+  .btn-admin-action:hover{ background:var(--teal); color:#fff; border-color:var(--teal); }
+  .btn-admin-action.danger{ border-color:rgba(230,102,102,.5); color:#e6386a; }
+  .btn-admin-action.danger:hover{ background:#e6386a; color:#fff; border-color:#e6386a; }
+
   /* ===== TRANG LỊCH SỬ PHIÊN LIVE ===== */
   .session-card{
     background:var(--glass); border:1px solid var(--border); border-radius:10px; padding:12px 14px;
@@ -512,6 +533,20 @@
   </div>
 </div>
 
+<!-- TAB: QUẢN TRỊ (chỉ tài khoản admin mới thấy được nội dung, tab cũng bị ẩn
+     hoàn toàn với tài khoản thường ở phần JS bên dưới) -->
+<div class="tab-view" id="viewAdmin" style="display:none;">
+  <div class="customers-page">
+    <h2>Quản Trị Tài Khoản</h2>
+    <div class="cust-summary">
+      <span>Tổng số tài khoản: <b id="adminUserCount">0</b></span>
+      <button class="btn-print" id="btnRefreshAdmin" style="width:auto;">🔄 Tải lại</button>
+    </div>
+    <div class="auth-error" id="adminError" style="margin-top:10px;"></div>
+    <div class="customer-list" id="adminUserList"></div>
+  </div>
+</div>
+
 <!-- THANH TAB DƯỚI CÙNG -->
 <div class="bottom-nav">
   <button class="nav-item active" id="navLive" data-tab="live">
@@ -579,9 +614,27 @@
     try { data = await res.json(); } catch (e) {}
 
     if (!res.ok) {
+      if (data && data.banned) {
+        // Tài khoản vừa bị admin khóa trong lúc đang dùng -> đăng xuất ngay
+        // tại thiết bị này, không đợi thao tác nào khác.
+        forceLogoutBanned(data.error);
+      }
       throw new Error((data && data.error) || `Lỗi server (mã ${res.status})`);
     }
     return data;
+  }
+
+  // Đăng xuất bắt buộc khi phát hiện tài khoản đã bị khóa (báo về từ server).
+  function forceLogoutBanned(message) {
+    if (ws) { try { ws.close(); } catch (e) {} ws = null; }
+    currentUser = null;
+    authToken = null;
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(TOKEN_KEY);
+    $('#appRoot').style.display = 'none';
+    $('#authScreen').style.display = 'flex';
+    setAuthTab('login');
+    $('#loginError').textContent = message || 'Tài khoản đã bị khóa.';
   }
 
   function setAuthTab(which) {
@@ -647,6 +700,8 @@
     openSessionIds.clear();
     localStorage.removeItem(SESSION_KEY);
     localStorage.removeItem(TOKEN_KEY);
+    isCurrentUserAdmin = false;
+    $('#navAdmin').style.display = 'none';
     $('#appRoot').style.display = 'none';
     $('#authScreen').style.display = 'flex';
     $('#loginUsername').value = '';
@@ -668,6 +723,7 @@
     await loadSavedTiktokIds();
     await loadSessions();
     renderSessionBadge();
+    await refreshAdminFlag();
     initWS();
   }
 
@@ -697,6 +753,7 @@
     await loadSavedTiktokIds();
     await loadSessions();
     renderSessionBadge();
+    await refreshAdminFlag();
     initWS();
     return true;
   }
@@ -1477,20 +1534,145 @@
     $('#viewCustomers').style.display = tab === 'customers' ? '' : 'none';
     $('#viewSessions').style.display = tab === 'sessions' ? '' : 'none';
     $('#viewReport').style.display = tab === 'report' ? '' : 'none';
+    $('#viewAdmin').style.display = tab === 'admin' ? '' : 'none';
     $('#navLive').classList.toggle('active', tab === 'live');
     $('#navCustomers').classList.toggle('active', tab === 'customers');
     $('#navSessions').classList.toggle('active', tab === 'sessions');
     $('#navReport').classList.toggle('active', tab === 'report');
+    $('#navAdmin').classList.toggle('active', tab === 'admin');
     if (tab === 'customers') renderCustomerList();
     if (tab === 'sessions') renderSessionList();
     if (tab === 'report') renderReport($('#reportDate').value || dateKeyLocal());
+    if (tab === 'admin') loadAdminUsers();
   }
 
   $('#navLive').addEventListener('click', () => switchTab('live'));
   $('#navCustomers').addEventListener('click', () => switchTab('customers'));
   $('#navSessions').addEventListener('click', () => switchTab('sessions'));
   $('#navReport').addEventListener('click', () => switchTab('report'));
+  $('#navAdmin').addEventListener('click', () => switchTab('admin'));
   // ===== HẾT PHẦN KHÁCH HÀNG / GIỎ HÀNG =====
+
+  // ===== PHẦN QUẢN TRỊ (chỉ tài khoản admin) =====
+  let isCurrentUserAdmin = false;
+
+  // Gọi sau khi đăng nhập/tự đăng nhập thành công để biết tài khoản hiện tại
+  // có phải admin không, từ đó hiện/ẩn tab "Quản trị" trên thanh điều hướng.
+  async function refreshAdminFlag() {
+    try {
+      const data = await apiFetch('/api/me');
+      isCurrentUserAdmin = !!data.isAdmin;
+    } catch (err) {
+      isCurrentUserAdmin = false;
+    }
+    $('#navAdmin').style.display = isCurrentUserAdmin ? '' : 'none';
+  }
+
+  async function loadAdminUsers() {
+    const listBox = $('#adminUserList');
+    const errBox = $('#adminError');
+    errBox.textContent = '';
+    try {
+      const data = await apiFetch('/api/admin/users');
+      renderAdminUsers(data.users || []);
+    } catch (err) {
+      listBox.innerHTML = '';
+      errBox.textContent = err.message;
+    }
+  }
+
+  function renderAdminUsers(users) {
+    const listBox = $('#adminUserList');
+    $('#adminUserCount').textContent = users.length;
+    if (!users.length) {
+      listBox.innerHTML = '<div class="empty-note">Chưa có tài khoản nào.</div>';
+      return;
+    }
+    listBox.innerHTML = '';
+    users.forEach(u => {
+      const card = document.createElement('div');
+      card.className = 'admin-user-card';
+      const createdStr = u.createdAt ? new Date(u.createdAt).toLocaleString('vi-VN') : '';
+      card.innerHTML = `
+        <div class="admin-user-info">
+          <div class="admin-user-name">
+            @${escapeHtml(u.username)}
+            ${u.isAdmin ? '<span class="admin-badge badge-admin">ADMIN</span>' : ''}
+            ${u.isBanned ? '<span class="admin-badge badge-banned">ĐÃ KHÓA</span>' : ''}
+          </div>
+          <div class="admin-user-meta">Tạo lúc: ${createdStr}${u.isBanned && u.bannedReason ? ' • Lý do: ' + escapeHtml(u.bannedReason) : ''}</div>
+        </div>
+        <div class="admin-user-actions"></div>
+      `;
+      const actions = card.querySelector('.admin-user-actions');
+
+      if (u.username === currentUser) {
+        const note = document.createElement('span');
+        note.className = 'admin-user-meta';
+        note.textContent = '(Tài khoản đang đăng nhập)';
+        actions.appendChild(note);
+      } else {
+        if (u.isBanned) {
+          const btnUnban = document.createElement('button');
+          btnUnban.className = 'btn-admin-action';
+          btnUnban.textContent = '🔓 Mở khóa';
+          btnUnban.addEventListener('click', () => adminUnbanUser(u.id, u.username));
+          actions.appendChild(btnUnban);
+        } else {
+          const btnBan = document.createElement('button');
+          btnBan.className = 'btn-admin-action danger';
+          btnBan.textContent = '🔒 Khóa tài khoản';
+          btnBan.addEventListener('click', () => adminBanUser(u.id, u.username));
+          actions.appendChild(btnBan);
+        }
+
+        const btnDel = document.createElement('button');
+        btnDel.className = 'btn-admin-action danger';
+        btnDel.textContent = '🗑️ Xóa tài khoản';
+        btnDel.addEventListener('click', () => adminDeleteUser(u.id, u.username));
+        actions.appendChild(btnDel);
+      }
+
+      listBox.appendChild(card);
+    });
+  }
+
+  async function adminBanUser(id, username) {
+    const reason = prompt(`Nhập lý do khóa tài khoản @${username} (có thể để trống):`, '');
+    if (reason === null) return; // bấm Hủy
+    try {
+      await apiFetch(`/api/admin/users/${id}/ban`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: reason || null })
+      });
+      await loadAdminUsers();
+    } catch (err) {
+      $('#adminError').textContent = err.message;
+    }
+  }
+
+  async function adminUnbanUser(id, username) {
+    if (!confirm(`Mở khóa lại tài khoản @${username}?`)) return;
+    try {
+      await apiFetch(`/api/admin/users/${id}/unban`, { method: 'POST' });
+      await loadAdminUsers();
+    } catch (err) {
+      $('#adminError').textContent = err.message;
+    }
+  }
+
+  async function adminDeleteUser(id, username) {
+    if (!confirm(`XÓA VĨNH VIỄN tài khoản @${username} cùng toàn bộ dữ liệu (khách hàng, lịch sử Live...)? Hành động này không thể hoàn tác.`)) return;
+    try {
+      await apiFetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+      await loadAdminUsers();
+    } catch (err) {
+      $('#adminError').textContent = err.message;
+    }
+  }
+
+  $('#btnRefreshAdmin').addEventListener('click', loadAdminUsers);
+  // ===== HẾT PHẦN QUẢN TRỊ =====
 
   function initWS() {
     // Hủy timer kết nối lại cũ (nếu có) để không bị chồng nhiều kết nối
