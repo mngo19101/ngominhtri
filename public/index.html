@@ -1001,6 +1001,7 @@
       <input id="spxTrackingCode" autocomplete="off" placeholder="Nhập mã vận đơn SPX">
       <button class="btn" id="btnLookupSpx" style="width:auto;">Tra cứu & lưu</button>
     </div>
+    <div class="order-meta" style="margin:-4px 0 10px;">Tự kiểm tra SPX mỗi 5 phút khi đơn chưa giao xong hoặc chưa hoàn xong.</div>
     <div class="auth-error" id="spxTrackingError"></div>
     <div class="spx-summary" id="spxTrackingSummary" style="display:none;">
       <b id="spxCurrentStatus">-</b>
@@ -1817,6 +1818,14 @@
       shipmentsV2 = data.shipments || [];
       renderShippingV2();
       renderReconcileV2();
+      if (trackingShipmentId && $('#spxTrackingModal').classList.contains('open')) {
+        const trackedOrder = shipmentsV2.find(order => order.id === trackingShipmentId);
+        if (trackedOrder) {
+          $('#spxTrackingCode').value = trackedOrder.externalTrackingCode || $('#spxTrackingCode').value;
+          renderSpxSummary(trackedOrder);
+          loadSpxJourney(trackingShipmentId);
+        }
+      }
     } catch (err) {
       console.error('Không tải được vận chuyển:', err);
     }
@@ -2195,6 +2204,9 @@
   $('#btnDownloadShippingLabel').addEventListener('click',downloadShippingLabel);
   $('#btnPrintShippingLabel').addEventListener('click',printShippingLabel);
   $('#btnSaveShippingSettings').addEventListener('click',saveShippingSettings);
+  setInterval(() => {
+    if (authToken && !document.hidden) loadShippingV2();
+  }, 60 * 1000);
 
   async function withButtonBusy(button, fn) {
     if (button.disabled) return;

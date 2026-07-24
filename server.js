@@ -1070,6 +1070,107 @@ async function fetchSpxTracking(trackingCode) {
   }
 }
 
+function saveSpxTrackingSuccess(userId, orderId, tracking, now, auditAction = null) {
+  const order = db.prepare(`SELECT shipping_status FROM orders
+    WHERE id = ? AND user_id = ? AND deleted_at IS NULL`).get(orderId, userId);
+  if (!order) return null;
+  const syncedShippingStatus = mapSpxToShippingStatus(tracking);
+  db.prepare(`INSERT INTO shipment_tracking
+    (order_id,user_id,carrier,tracking_code,current_status,current_location,
+     expected_delivery_at,expected_delivery_text,raw_data,last_checked_at,last_error,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,NULL,?)
+    ON CONFLICT(order_id) DO UPDATE SET carrier=excluded.carrier,
+      tracking_code=excluded.tracking_code,current_status=excluded.current_status,
+      current_location=excluded.current_location,
+      expected_delivery_at=excluded.expected_delivery_at,
+      expected_delivery_text=excluded.expected_delivery_text,
+      raw_data=excluded.raw_data,last_checked_at=excluded.last_checked_at,
+      last_error=NULL,updated_at=excluded.updated_at`)
+    .run(orderId, userId, 'SPX', tracking.trackingCode, tracking.currentStatus,
+      tracking.currentLocation || null, tracking.expectedDeliveryAt,
+      tracking.expectedDeliveryText || null, null, now, now);
+  if (syncedShippingStatus && syncedShippingStatus !== order.shipping_status) {
+    db.prepare(`UPDATE orders SET shipping_status = ?, shipping_updated_at = ?, updated_at = ?
+      WHERE id = ? AND user_id = ?`).run(syncedShippingStatus, now, now, orderId, userId);
+  }
+  db.prepare(`DELETE FROM shipment_events
+    WHERE user_id = ? AND order_id = ? AND event_type = 'spx_tracking'`).run(userId, orderId);
+  for (const event of tracking.journey.slice(0, 300)) {
+    addShipmentEvent(userId, orderId, 'spx_tracking', event.status,
+      event.note, event.location, event.createdAt);
+  }
+  if (!tracking.journey.length) {
+    addShipmentEvent(userId, orderId, 'spx_tracking', tracking.currentStatus,
+      tracking.currentStatus, tracking.currentLocation, now);
+  }
+  if (syncedShippingStatus && syncedShippingStatus !== order.shipping_status) {
+    addShipmentEvent(userId, orderId, 'carrier_status_sync', syncedShippingStatus,
+      'Tự đồng bộ theo trạng thái SPX', tracking.currentLocation, now);
+  }
+  if (auditAction) {
+    addAudit(userId, auditAction, 'order', orderId, {
+      trackingCode: tracking.trackingCode,
+      status: tracking.currentStatus,
+      syncedShippingStatus
+    });
+  }
+  return syncedShippingStatus;
+}
+
+function saveSpxTrackingError(userId, orderId, trackingCode, message, now) {
+  const existing = db.prepare(`SELECT tracking_code FROM shipment_tracking
+    WHERE order_id = ? AND user_id = ?`).get(orderId, userId);
+  if (existing && existing.tracking_code === trackingCode) {
+    db.prepare(`UPDATE shipment_tracking SET last_checked_at = ?, last_error = ?, updated_at = ?
+      WHERE order_id = ? AND user_id = ?`).run(now, message, now, orderId, userId);
+    return;
+  }
+  db.prepare(`INSERT INTO shipment_tracking
+    (order_id,user_id,carrier,tracking_code,current_status,current_location,
+     expected_delivery_at,expected_delivery_text,raw_data,last_checked_at,last_error,updated_at)
+    VALUES (?,?, 'SPX', ?,NULL,NULL,NULL,NULL,NULL,?,?,?)
+    ON CONFLICT(order_id) DO UPDATE SET carrier='SPX',
+      tracking_code=excluded.tracking_code,current_status=NULL,current_location=NULL,
+      expected_delivery_at=NULL,expected_delivery_text=NULL,raw_data=NULL,
+      last_checked_at=excluded.last_checked_at,last_error=excluded.last_error,
+      updated_at=excluded.updated_at`)
+    .run(orderId, userId, trackingCode, now, message, now);
+}
+
+let spxAutoRefreshRunning = false;
+async function refreshPendingSpxTracking() {
+  if (spxAutoRefreshRunning) return;
+  spxAutoRefreshRunning = true;
+  try {
+    const pending = db.prepare(`SELECT t.user_id, t.order_id, t.tracking_code
+      FROM shipment_tracking t
+      JOIN orders o ON o.id = t.order_id AND o.user_id = t.user_id
+      WHERE o.deleted_at IS NULL
+        AND o.shipping_status NOT IN ('delivered','returned','cancelled')
+        AND t.carrier = 'SPX' AND length(t.tracking_code) >= 6
+      ORDER BY COALESCE(t.last_checked_at, 0) ASC
+      LIMIT 500`).all();
+    for (const item of pending) {
+      const now = Date.now();
+      try {
+        const tracking = await fetchSpxTracking(item.tracking_code);
+        saveSpxTrackingSuccess(item.user_id, item.order_id, tracking, now);
+      } catch (err) {
+        const message = err?.name === 'AbortError'
+          ? 'SPX phản hồi quá chậm. Hệ thống sẽ tự thử lại.'
+          : err?.code === 'SPX_NOT_FOUND'
+            ? 'SPX chưa tìm thấy mã này.'
+            : 'Không kết nối được SPX. Hệ thống sẽ tự thử lại.';
+        saveSpxTrackingError(item.user_id, item.order_id, item.tracking_code, message, now);
+      }
+    }
+  } catch (err) {
+    console.error('[SPX Auto] Không thể cập nhật:', err?.message || err);
+  } finally {
+    spxAutoRefreshRunning = false;
+  }
+}
+
 function publicOrder(row) {
   if (!row) return null;
   return {
@@ -1267,44 +1368,9 @@ app.post('/api/shipments/:id/spx-track', requireAuth, async (req, res) => {
   const now = Date.now();
   try {
     const tracking = await fetchSpxTracking(trackingCode);
-    const syncedShippingStatus = mapSpxToShippingStatus(tracking);
-    db.prepare(`INSERT INTO shipment_tracking
-      (order_id,user_id,carrier,tracking_code,current_status,current_location,
-       expected_delivery_at,expected_delivery_text,raw_data,last_checked_at,last_error,updated_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,NULL,?)
-      ON CONFLICT(order_id) DO UPDATE SET carrier=excluded.carrier,
-        tracking_code=excluded.tracking_code,current_status=excluded.current_status,
-        current_location=excluded.current_location,
-        expected_delivery_at=excluded.expected_delivery_at,
-        expected_delivery_text=excluded.expected_delivery_text,
-        raw_data=excluded.raw_data,last_checked_at=excluded.last_checked_at,
-        last_error=NULL,updated_at=excluded.updated_at`)
-      .run(order.id, req.userId, 'SPX', tracking.trackingCode, tracking.currentStatus,
-        tracking.currentLocation || null, tracking.expectedDeliveryAt,
-        tracking.expectedDeliveryText || null, null, now, now);
-    if (syncedShippingStatus) {
-      db.prepare(`UPDATE orders SET shipping_status = ?, shipping_updated_at = ?, updated_at = ?
-        WHERE id = ? AND user_id = ?`)
-        .run(syncedShippingStatus, now, now, order.id, req.userId);
-    }
-    db.prepare(`DELETE FROM shipment_events
-      WHERE user_id = ? AND order_id = ? AND event_type = 'spx_tracking'`)
-      .run(req.userId, order.id);
-    for (const event of tracking.journey.slice(0, 300)) {
-      addShipmentEvent(req.userId, order.id, 'spx_tracking', event.status,
-        event.note, event.location, event.createdAt);
-    }
-    if (!tracking.journey.length) {
-      addShipmentEvent(req.userId, order.id, 'spx_tracking', tracking.currentStatus,
-        tracking.currentStatus, tracking.currentLocation, now);
-    }
-    if (syncedShippingStatus) {
-      addShipmentEvent(req.userId, order.id, 'carrier_status_sync', syncedShippingStatus,
-        'Tự đồng bộ theo trạng thái SPX', tracking.currentLocation, now);
-    }
-    addAudit(req.userId, 'shipment.spx_tracked', 'order', order.id, {
-      trackingCode: tracking.trackingCode, status: tracking.currentStatus, syncedShippingStatus
-    });
+    const syncedShippingStatus = saveSpxTrackingSuccess(
+      req.userId, order.id, tracking, now, 'shipment.spx_tracked'
+    );
     res.json({
       ok: true,
       tracking: {
@@ -1321,16 +1387,7 @@ app.post('/api/shipments/:id/spx-track', requireAuth, async (req, res) => {
       : err?.code === 'SPX_NOT_FOUND'
         ? 'SPX chưa tìm thấy mã này.'
         : 'Không kết nối được SPX. Hãy thử lại.';
-    db.prepare(`INSERT INTO shipment_tracking
-      (order_id,user_id,carrier,tracking_code,current_status,current_location,
-       expected_delivery_at,expected_delivery_text,raw_data,last_checked_at,last_error,updated_at)
-      VALUES (?,?, 'SPX', ?,NULL,NULL,NULL,NULL,NULL,?,?,?)
-      ON CONFLICT(order_id) DO UPDATE SET carrier='SPX',
-        tracking_code=excluded.tracking_code,current_status=NULL,current_location=NULL,
-        expected_delivery_at=NULL,expected_delivery_text=NULL,raw_data=NULL,
-        last_checked_at=excluded.last_checked_at,last_error=excluded.last_error,
-        updated_at=excluded.updated_at`)
-      .run(order.id, req.userId, trackingCode, now, message, now);
+    saveSpxTrackingError(req.userId, order.id, trackingCode, message, now);
     addAudit(req.userId, 'shipment.spx_track_failed', 'order', order.id, { trackingCode });
     res.status(err?.code === 'SPX_NOT_FOUND' ? 404 : 502).json({ error: message, saved: true });
   }
@@ -2270,4 +2327,8 @@ server.listen(PORT, () => {
   cleanupExpiredComments(new Date());
   const retentionTimer = setInterval(() => cleanupExpiredComments(new Date()), 6 * 60 * 60 * 1000);
   retentionTimer.unref();
+  // Mỗi 5 phút chỉ tra lại các mã SPX của đơn chưa giao xong/chưa hoàn xong.
+  const spxAutoRefreshTimer = setInterval(refreshPendingSpxTracking, 5 * 60 * 1000);
+  spxAutoRefreshTimer.unref();
+  console.log('[SPX Auto] Tự cập nhật đơn đang vận chuyển mỗi 5 phút.');
 });
