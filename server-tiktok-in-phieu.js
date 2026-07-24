@@ -120,9 +120,23 @@ const pendingPrintJobs = new Map();
 app.use(express.raw({ type: 'application/octet-stream', limit: '10mb' }));
 app.use(express.json());
 
+// Phục vụ luôn trang giao diện (thư mục public/) — để bạn mở web bằng
+// địa chỉ https://... thay vì mở file HTML trực tiếp trên máy (file://...).
+// Mở file:// khiến nhiều trình duyệt (đặc biệt Firefox) chặn hẳn các request
+// gọi API dù server đã cấu hình CORS đúng, vì đó là giới hạn bảo mật cố định
+// của trình duyệt đối với trang mở kiểu file://, không sửa được từ phía server.
+app.use(express.static(path.join(__dirname, 'public')));
+
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  // Trình duyệt gửi request "OPTIONS" dò trước (preflight) khi POST kèm JSON.
+  // Phải trả lời ngay ở đây (200/204), nếu không trình duyệt sẽ chặn request thật
+  // và báo lỗi kiểu "không kết nối được" dù server vẫn đang chạy bình thường.
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
   next();
 });
 
