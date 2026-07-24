@@ -147,6 +147,31 @@ ensureColumn('users', 'license_expires_at', 'INTEGER');
 ensureColumn('users', 'license_granted_at', 'INTEGER');
 ensureColumn('users', 'live_sessions_used', 'INTEGER NOT NULL DEFAULT 0');
 
+// ====== MÃ MÁY IN RIÊNG CHO TỪNG TÀI KHOẢN ======
+// Trước đây server chỉ có 1 PRINTER_TOKEN dùng chung cho MỌI tài khoản -> dù
+// ai bấm "in" thì lệnh cũng chỉ gửi tới đúng 1 chiếc ESP32 đang giữ kết nối
+// (kiểu "ai kết nối trước thì nhận hết lệnh in"). Để mỗi tài khoản có máy in
+// RIÊNG của mình, mỗi user cần 1 mã bí mật (printer_token) không trùng nhau:
+// - Nạp đúng mã này vào firmware ESP32 của tài khoản đó (thay cho PRINTER_TOKEN cũ).
+// - Server dùng mã này để biết ESP32 vừa kết nối là "thuộc về" user nào, và khi
+//   user đó bấm in, lệnh chỉ gửi tới đúng ESP32 đã đăng ký mã của họ.
+ensureColumn('users', 'printer_token', 'TEXT');
+function generatePrinterToken() {
+  return crypto.randomBytes(5).toString('hex').toUpperCase(); // vd: "A1B2C3D4E5" - đủ ngắn để gõ vào firmware
+}
+// Backfill: cấp mã máy in cho các tài khoản có sẵn từ trước (tạo trước khi có tính năng này).
+(function backfillPrinterTokens() {
+  const rows = db.prepare('SELECT id FROM users WHERE printer_token IS NULL OR printer_token = \'\'').all();
+  if (!rows.length) return;
+  const stmt = db.prepare('UPDATE users SET printer_token = ? WHERE id = ?');
+  for (const row of rows) {
+    let token;
+    do { token = generatePrinterToken(); } while (db.prepare('SELECT id FROM users WHERE printer_token = ?').get(token));
+    stmt.run(token, row.id);
+  }
+  console.log(`[Printer] Đã cấp Mã Máy In riêng cho ${rows.length} tài khoản có sẵn.`);
+})();
+
 // ====== TÀI KHOẢN ADMIN GỐC ======
 // Tạo (hoặc nâng cấp) 1 tài khoản admin từ biến môi trường ADMIN_USERNAME /
 // ADMIN_PASSWORD mỗi khi server khởi động, để luôn có ít nhất 1 admin quản lý
@@ -306,12 +331,12 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-// Token bí mật để server xác nhận đúng ESP32 của bạn khi nó kết nối vào.
-// Đặt trùng với PRINTER_TOKEN trong firmware ESP32.
-const PRINTER_TOKEN = process.env.PRINTER_TOKEN || 'doi-chuoi-bi-mat-nay-thanh-cua-ban';
-
-// Socket của ESP32 đang giữ kết nối (chỉ 1 thiết bị in tại 1 thời điểm)
-let printerSocket = null;
+// Mỗi tài khoản có 1 ESP32 (máy in) riêng, xác thực bằng printer_token riêng
+// của chính tài khoản đó (xem cột "printer_token" trong bảng users ở trên).
+// Map: userId -> ws (socket của ESP32 đang giữ kết nối cho tài khoản đó).
+// Nhờ dùng Map theo userId thay vì 1 biến duy nhất, lệnh in của tài khoản A
+// sẽ KHÔNG BAO GIỜ gửi nhầm sang ESP32 của tài khoản B.
+const printerSockets = new Map();
 
 // Các lệnh in đang chờ ESP32 phản hồi kết quả (map requestId -> { resolve, timer })
 const pendingPrintJobs = new Map();
@@ -359,9 +384,11 @@ app.post('/api/register', (req, res) => {
   }
   const salt = crypto.randomBytes(16).toString('hex');
   const passwordHash = hashPassword(password, salt);
+  let printerToken;
+  do { printerToken = generatePrinterToken(); } while (db.prepare('SELECT id FROM users WHERE printer_token = ?').get(printerToken));
   const info = db.prepare(
-    'INSERT INTO users (username, password_hash, salt, created_at) VALUES (?, ?, ?, ?)'
-  ).run(username, passwordHash, salt, Date.now());
+    'INSERT INTO users (username, password_hash, salt, created_at, printer_token) VALUES (?, ?, ?, ?, ?)'
+  ).run(username, passwordHash, salt, Date.now(), printerToken);
 
   const token = createSession(info.lastInsertRowid);
   res.json({ token, username });
@@ -409,7 +436,9 @@ app.get('/api/me', requireAuth, (req, res) => {
     createdAt: user.created_at,
     license,
     liveSessionsUsed: user.live_sessions_used || 0,
-    freeLiveSessionLimit: FREE_LIVE_SESSION_LIMIT
+    freeLiveSessionLimit: FREE_LIVE_SESSION_LIMIT,
+    printerToken: user.printer_token,
+    printerConnected: printerSockets.has(user.id)
   });
 });
 
@@ -612,8 +641,11 @@ app.post('/print', requireAuth, (req, res) => {
     return res.status(403).send('LOCKED:Tính năng in phiếu đang tạm khóa. Vui lòng mua gói để tiếp tục sử dụng.');
   }
 
+  // Lấy ĐÚNG máy in (ESP32) đã đăng ký cho riêng tài khoản này — không còn
+  // dùng chung 1 máy in cho mọi tài khoản như trước nữa.
+  const printerSocket = printerSockets.get(req.userId);
   if (!printerSocket || printerSocket.readyState !== WebSocket.OPEN) {
-    return res.status(503).send('Chưa có thiết bị in (ESP32) nào kết nối tới server. Kiểm tra ESP32 đã bật và có WiFi chưa.');
+    return res.status(503).send('Chưa có máy in (ESP32) của TÀI KHOẢN NÀY kết nối tới server. Vào Menu tài khoản để xem "Mã Máy In" và kiểm tra ESP32 đã bật, có WiFi, đã nhập đúng mã đó chưa.');
   }
   if (!req.body || !req.body.length) {
     return res.status(400).send('Thiếu dữ liệu in.');
@@ -705,9 +737,9 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     if (ws.isPrinter) {
-      if (printerSocket === ws) {
-        printerSocket = null;
-        console.log('[Printer] ESP32 đã ngắt kết nối.');
+      if (ws.printerUserId != null && printerSockets.get(ws.printerUserId) === ws) {
+        printerSockets.delete(ws.printerUserId);
+        console.log(`[Printer] ESP32 của @${ws.printerUsername || ('#' + ws.printerUserId)} đã ngắt kết nối.`);
       }
       return; // ESP32 ngắt kết nối thì không đụng gì tới phiên TikTok của trình duyệt
     }
@@ -733,16 +765,24 @@ wss.on('connection', (ws) => {
     try {
       const data = JSON.parse(message);
 
-      // ESP32 tự giới thiệu khi vừa kết nối
+      // ESP32 tự giới thiệu khi vừa kết nối — xác thực bằng printer_token
+      // RIÊNG của tài khoản (mỗi tài khoản 1 mã khác nhau, xem trong Menu tài
+      // khoản), để biết ESP32 này thuộc về ai và chỉ gửi lệnh in của đúng
+      // tài khoản đó tới nó.
       if (data.type === 'hello' && data.role === 'printer') {
-        if (data.token !== PRINTER_TOKEN) {
-          console.warn('[Printer] Một thiết bị cố kết nối với token sai, đã từ chối.');
+        const printerUser = data.token
+          ? db.prepare('SELECT id, username FROM users WHERE printer_token = ?').get(data.token)
+          : null;
+        if (!printerUser) {
+          console.warn('[Printer] Một thiết bị cố kết nối với Mã Máy In không hợp lệ, đã từ chối.');
           ws.close();
           return;
         }
         ws.isPrinter = true;
-        printerSocket = ws;
-        console.log('[Printer] ✅ ESP32 đã kết nối, sẵn sàng nhận lệnh in.');
+        ws.printerUserId = printerUser.id;
+        ws.printerUsername = printerUser.username;
+        printerSockets.set(printerUser.id, ws);
+        console.log(`[Printer] ✅ ESP32 của @${printerUser.username} đã kết nối, sẵn sàng nhận lệnh in.`);
         return;
       }
 
