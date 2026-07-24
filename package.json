@@ -4,7 +4,7 @@
   "description": "Bridge server: nhận comment TikTok Live realtime va gui lenh in ESC/POS toi may in LAN qua TCP.",
   "main": "a.js",
   "scripts": {
-    "start": "node a.js"
+    "start": "node server-tiktok-in-phieu.js"
   },
   "engines": {
     "node": ">=20.0.0"
