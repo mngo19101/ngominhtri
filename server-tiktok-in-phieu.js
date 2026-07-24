@@ -116,6 +116,43 @@ db.exec(`
   );
 `);
 
+// Thêm cột mới vào bảng cũ một cách an toàn (không lỗi nếu cột đã tồn tại rồi,
+// để những ai đã chạy server này từ trước không bị mất database khi cập nhật code).
+function ensureColumn(table, column, definitionSql) {
+  const existingCols = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!existingCols.some(c => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definitionSql}`);
+    console.log(`✅ Đã thêm cột "${column}" vào bảng "${table}".`);
+  }
+}
+ensureColumn('users', 'is_admin', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('users', 'is_locked', 'INTEGER NOT NULL DEFAULT 0');
+
+// ====== TÀI KHOẢN ADMIN ======
+// Đặt 2 biến môi trường ADMIN_USERNAME và ADMIN_PASSWORD trên Railway để tự
+// động tạo (hoặc cấp quyền cho) 1 tài khoản admin mỗi khi server khởi động.
+// Đây là cách duy nhất để có tài khoản admin đầu tiên, vì không có tài khoản
+// admin nào thì sẽ không ai gọi được các API /api/admin/* để tạo thêm admin khác.
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+if (ADMIN_USERNAME && ADMIN_PASSWORD) {
+  const existingAdmin = db.prepare('SELECT * FROM users WHERE username = ?').get(ADMIN_USERNAME);
+  if (!existingAdmin) {
+    const salt = crypto.randomBytes(16).toString('hex');
+    const passwordHash = hashPassword(ADMIN_PASSWORD, salt);
+    db.prepare(
+      'INSERT INTO users (username, password_hash, salt, created_at, is_admin, is_locked) VALUES (?, ?, ?, ?, 1, 0)'
+    ).run(ADMIN_USERNAME, passwordHash, salt, Date.now());
+    console.log(`✅ Đã tạo tài khoản admin: ${ADMIN_USERNAME}`);
+  } else if (!existingAdmin.is_admin || existingAdmin.is_locked) {
+    db.prepare('UPDATE users SET is_admin = 1, is_locked = 0 WHERE id = ?').run(existingAdmin.id);
+    console.log(`✅ Đã cấp quyền admin (và mở khóa) cho tài khoản: ${ADMIN_USERNAME}`);
+  }
+} else {
+  console.warn('⚠️  Chưa đặt ADMIN_USERNAME / ADMIN_PASSWORD -> chưa có tài khoản admin nào.');
+  console.warn('⚠️  Vào Railway → Variables → thêm 2 biến này rồi deploy lại để tạo tài khoản admin.');
+}
+
 const SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000; // Phiên đăng nhập: 90 ngày
 
 function hashPassword(password, salt) {
@@ -150,8 +187,31 @@ function requireAuth(req, res, next) {
   if (!userId) {
     return res.status(401).json({ error: 'Thiếu token đăng nhập hoặc phiên đã hết hạn, vui lòng đăng nhập lại.' });
   }
+
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+  if (!user) {
+    db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+    return res.status(401).json({ error: 'Tài khoản không tồn tại, vui lòng đăng nhập lại.' });
+  }
+  // Tài khoản bị admin khóa trong lúc đang có phiên đăng nhập -> hủy luôn
+  // phiên đó và chặn request, để việc khóa có hiệu lực ngay lập tức chứ
+  // không phải đợi tới lần đăng nhập tiếp theo.
+  if (user.is_locked) {
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(user.id);
+    return res.status(403).json({ error: 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.', locked: true });
+  }
+
   req.userId = userId;
   req.sessionToken = token;
+  req.isAdmin = !!user.is_admin;
+  next();
+}
+
+// Middleware phân quyền: chỉ tài khoản admin mới được đi tiếp (dùng sau requireAuth).
+function requireAdmin(req, res, next) {
+  if (!req.isAdmin) {
+    return res.status(403).json({ error: 'Bạn không có quyền quản trị viên.' });
+  }
   next();
 }
 
@@ -217,7 +277,7 @@ app.post('/api/register', (req, res) => {
   ).run(username, passwordHash, salt, Date.now());
 
   const token = createSession(info.lastInsertRowid);
-  res.json({ token, username });
+  res.json({ token, username, isAdmin: false });
 });
 
 // Đăng nhập
@@ -234,8 +294,12 @@ app.post('/api/login', (req, res) => {
   if (passwordHash !== user.password_hash) {
     return res.status(401).json({ error: 'Sai username hoặc password.' });
   }
+  // Tài khoản đã bị admin khóa -> không cho đăng nhập, dù đúng mật khẩu.
+  if (user.is_locked) {
+    return res.status(403).json({ error: 'Tài khoản đã bị khóa. Vui lòng liên hệ quản trị viên.', locked: true });
+  }
   const token = createSession(user.id);
-  res.json({ token, username: user.username });
+  res.json({ token, username: user.username, isAdmin: !!user.is_admin });
 });
 
 // Đăng xuất
@@ -309,6 +373,67 @@ app.post('/api/sessions', requireAuth, (req, res) => {
     ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at
   `).run(req.userId, dataStr, now);
   res.json({ ok: true, count: Object.keys(sessions).length });
+});
+
+// ====== API QUẢN TRỊ TÀI KHOẢN (chỉ admin gọi được) ======
+
+// Danh sách toàn bộ tài khoản trong hệ thống (không trả về password_hash/salt)
+app.get('/api/admin/users', requireAuth, requireAdmin, (req, res) => {
+  const rows = db.prepare(
+    'SELECT id, username, created_at, is_admin, is_locked FROM users ORDER BY created_at ASC'
+  ).all();
+  res.json({
+    users: rows.map(u => ({
+      id: u.id,
+      username: u.username,
+      createdAt: u.created_at,
+      isAdmin: !!u.is_admin,
+      isLocked: !!u.is_locked,
+    }))
+  });
+});
+
+// Khóa 1 tài khoản: không cho đăng nhập nữa + hủy ngay phiên đang đăng nhập
+// (nếu người đó đang mở app sẵn) để việc khóa có hiệu lực tức thì.
+app.post('/api/admin/users/:id/lock', requireAuth, requireAdmin, (req, res) => {
+  const targetId = Number(req.params.id);
+  if (targetId === req.userId) {
+    return res.status(400).json({ error: 'Không thể tự khóa chính tài khoản đang đăng nhập.' });
+  }
+  const target = db.prepare('SELECT id FROM users WHERE id = ?').get(targetId);
+  if (!target) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
+
+  db.prepare('UPDATE users SET is_locked = 1 WHERE id = ?').run(targetId);
+  db.prepare('DELETE FROM sessions WHERE user_id = ?').run(targetId);
+  res.json({ ok: true });
+});
+
+// Mở khóa lại 1 tài khoản đã bị khóa trước đó.
+app.post('/api/admin/users/:id/unlock', requireAuth, requireAdmin, (req, res) => {
+  const targetId = Number(req.params.id);
+  const target = db.prepare('SELECT id FROM users WHERE id = ?').get(targetId);
+  if (!target) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
+
+  db.prepare('UPDATE users SET is_locked = 0 WHERE id = ?').run(targetId);
+  res.json({ ok: true });
+});
+
+// Xóa vĩnh viễn 1 tài khoản + toàn bộ dữ liệu liên quan (khách hàng, lịch sử
+// phiên Live, danh sách ID TikTok đã lưu). Hành động này không thể hoàn tác.
+app.delete('/api/admin/users/:id', requireAuth, requireAdmin, (req, res) => {
+  const targetId = Number(req.params.id);
+  if (targetId === req.userId) {
+    return res.status(400).json({ error: 'Không thể tự xóa chính tài khoản đang đăng nhập.' });
+  }
+  const target = db.prepare('SELECT id FROM users WHERE id = ?').get(targetId);
+  if (!target) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
+
+  db.prepare('DELETE FROM sessions WHERE user_id = ?').run(targetId);
+  db.prepare('DELETE FROM customer_data WHERE user_id = ?').run(targetId);
+  db.prepare('DELETE FROM saved_tiktok_ids WHERE user_id = ?').run(targetId);
+  db.prepare('DELETE FROM live_session_data WHERE user_id = ?').run(targetId);
+  db.prepare('DELETE FROM users WHERE id = ?').run(targetId);
+  res.json({ ok: true });
 });
 
 // Endpoint gửi lệnh in: chuyển tiếp dữ liệu ESC/POS (raw bytes) sang ESP32
