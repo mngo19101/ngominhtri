@@ -2122,8 +2122,10 @@
     if (!username) { alert('Vui lòng nhập tên hoặc dán link TikTok Live'); return; }
     if (!ws || ws.readyState !== WebSocket.OPEN) { alert('Chưa kết nối tới Bridge Server!'); return; }
 
+    if (!authToken) { alert('Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.'); return; }
+
     setStatus(`Đang gửi yêu cầu kết nối TikTok...`);
-    ws.send(JSON.stringify({ type: 'START_TIKTOK', username }));
+    ws.send(JSON.stringify({ type: 'START_TIKTOK', username, token: authToken }));
 
     const cleanUsername = extractTiktokUsername(username);
     if (cleanUsername) {
