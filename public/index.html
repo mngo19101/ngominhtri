@@ -395,6 +395,7 @@
 (() => {
   const $ = (s) => document.querySelector(s);
   let ws = null;
+  let wsReconnectTimer = null; // id của setTimeout đang chờ để kết nối lại WS
   let currentUser = null; // tên tài khoản đang đăng nhập
   let authToken = null;   // token phiên đăng nhập, lấy từ Bridge Server
 
@@ -859,6 +860,11 @@
   // ===== HẾT PHẦN KHÁCH HÀNG / GIỎ HÀNG =====
 
   function initWS() {
+    // Hủy timer kết nối lại cũ (nếu có) để không bị chồng nhiều kết nối
+    if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+    // Đóng socket cũ (nếu có) trước khi mở cái mới
+    if (ws) { try { ws.onclose = null; ws.close(); } catch (e) {} ws = null; }
+
     const raw = $('#bridgeUrl').value.trim();
     const useSecure = raw.startsWith('https://');
     const bridgeHost = raw.replace('http://', '').replace('https://', '').split('/')[0];
@@ -880,13 +886,42 @@
 
     ws.onclose = () => {
       setStatus('Ngắt kết nối Bridge Server. Đang kết nối lại...');
-      setTimeout(initWS, 3000);
+      scheduleWsReconnect();
     };
 
     ws.onerror = () => {
       setStatus('Lỗi kết nối WebSocket tới Bridge Server.');
     };
   }
+
+  function scheduleWsReconnect() {
+    if (wsReconnectTimer) return; // đã có 1 lần hẹn giờ kết nối lại, khỏi tạo thêm
+    wsReconnectTimer = setTimeout(() => {
+      wsReconnectTimer = null;
+      initWS();
+    }, 3000);
+  }
+
+  // Kiểm tra socket còn sống hay không; nếu chết thì kết nối lại ngay
+  function ensureWsAlive() {
+    if (!currentUser) return; // chưa đăng nhập thì thôi
+    if (!ws || (ws.readyState !== WebSocket.OPEN && ws.readyState !== WebSocket.CONNECTING)) {
+      initWS();
+    }
+  }
+
+  // ===== TỰ KẾT NỐI LẠI KHI QUAY LẠI TAB / MỞ LẠI MÀN HÌNH / CÓ MẠNG LẠI =====
+  // Trên di động, khi thoát app/khóa màn hình, trình duyệt có thể "đóng băng"
+  // hoặc ngắt WebSocket ngầm mà không bắn ra sự kiện onclose, khiến vòng lặp
+  // tự kết nối lại phía trên không được kích hoạt. Các sự kiện dưới đây đảm
+  // bảo mỗi khi người dùng quay lại trang, ta chủ động kiểm tra và nối lại.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') ensureWsAlive();
+  });
+  window.addEventListener('focus', ensureWsAlive);
+  window.addEventListener('pageshow', ensureWsAlive);
+  window.addEventListener('online', ensureWsAlive);
+  // ===== HẾT PHẦN TỰ KẾT NỐI LẠI =====
 
   function setStatus(msg) {
     $('#statusBox').textContent = msg;
