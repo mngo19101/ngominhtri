@@ -946,25 +946,25 @@
       </div>
       <div class="session-comment-text">${escapeHtml(c.comment || '')}</div>
       <div class="session-comment-actions">
-        <button class="btn-mini btn-print-history${c.added ? ' added' : ''}">${c.added ? '✔ Đã in / thêm đơn' : '🖨️ In phiếu + Thêm đơn'}</button>
+        <button class="btn-mini btn-print-history">🖨️ ${c.added ? 'In thêm lần nữa' : 'In phiếu + Thêm đơn'}</button>
+        <span class="added-note" style="display:${c.added ? '' : 'none'}; color:var(--teal); font-size:11.5px; font-weight:600; align-self:center;">✔ Đã in / thêm đơn</span>
       </div>
     `;
 
-    if (!c.added) {
-      row.querySelector('.btn-print-history').addEventListener('click', () => {
-        printComment(c);
-        addToCart(c);
-        c.added = true;
-        scheduleSaveSessions();
-        // Chỉ cập nhật lại đúng nút này, KHÔNG render lại toàn bộ danh sách —
-        // tránh làm sập các thẻ đang mở / mất vị trí cuộn của người dùng.
-        const btn = row.querySelector('.btn-print-history');
-        btn.textContent = '✔ Đã in / thêm đơn';
-        btn.classList.add('added');
-        const clone = btn.cloneNode(true); // gỡ listener cũ bằng cách thay bằng node mới, gọn hơn removeEventListener
-        btn.parentNode.replaceChild(clone, btn);
-      });
-    }
+    row.querySelector('.btn-print-history').addEventListener('click', (e) => {
+      printComment(c);
+      addToCart(c);
+      c.added = true;
+      scheduleSaveSessions();
+      // Chỉ cập nhật lại đúng dòng này, KHÔNG render lại toàn bộ danh sách —
+      // tránh làm sập các thẻ đang mở / mất vị trí cuộn của người dùng.
+      // Nút vẫn giữ nguyên có thể bấm tiếp để in thêm lần nữa (VD khách mua
+      // thêm sản phẩm khác trong cùng 1 bình luận, hoặc lỡ tay hủy phiếu in trước).
+      const btn = e.currentTarget;
+      btn.textContent = '🖨️ In thêm lần nữa';
+      const note = row.querySelector('.added-note');
+      if (note) note.style.display = '';
+    });
 
     return row;
   }
@@ -1420,12 +1420,9 @@
     const row = document.querySelector(`.session-comment-item[data-comment-id="${commentId}"]`);
     if (row) {
       const btn = row.querySelector('.btn-print-history');
-      if (btn && !btn.classList.contains('added')) {
-        btn.textContent = '✔ Đã in / thêm đơn';
-        btn.classList.add('added');
-        const clone = btn.cloneNode(true);
-        btn.parentNode.replaceChild(clone, btn);
-      }
+      if (btn) btn.textContent = '🖨️ In thêm lần nữa';
+      const note = row.querySelector('.added-note');
+      if (note) note.style.display = '';
     }
   }
 
