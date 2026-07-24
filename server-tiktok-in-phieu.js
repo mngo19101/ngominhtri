@@ -137,6 +137,16 @@ ensureColumn('users', 'is_banned', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('users', 'banned_reason', 'TEXT');
 ensureColumn('users', 'banned_at', 'INTEGER');
 
+// ====== CỘT PHỤC VỤ TÍNH NĂNG KEY / GÓI IN PHIẾU ======
+// license_type: 'free' (mặc định, tài khoản mới đăng ký) | '1m' | '3m' | '6m' | '12m' | 'lifetime'
+// license_expires_at: mốc thời gian (ms) hết hạn gói, NULL nếu là 'free' hoặc 'lifetime'
+// license_granted_at: lần gần nhất admin cấp/gia hạn gói (để hiển thị lịch sử)
+// live_sessions_used: số phiên Live tài khoản "free" đã bấm kết nối (tối đa FREE_LIVE_SESSION_LIMIT)
+ensureColumn('users', 'license_type', "TEXT NOT NULL DEFAULT 'free'");
+ensureColumn('users', 'license_expires_at', 'INTEGER');
+ensureColumn('users', 'license_granted_at', 'INTEGER');
+ensureColumn('users', 'live_sessions_used', 'INTEGER NOT NULL DEFAULT 0');
+
 // ====== TÀI KHOẢN ADMIN GỐC ======
 // Tạo (hoặc nâng cấp) 1 tài khoản admin từ biến môi trường ADMIN_USERNAME /
 // ADMIN_PASSWORD mỗi khi server khởi động, để luôn có ít nhất 1 admin quản lý
@@ -170,6 +180,65 @@ ensureColumn('users', 'banned_at', 'INTEGER');
 })();
 
 const SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000; // Phiên đăng nhập: 90 ngày
+
+// ====== HỆ THỐNG KEY / GÓI IN PHIẾU ======
+// Tài khoản vừa đăng ký (gói "free") chỉ được xem tối đa FREE_LIVE_SESSION_LIMIT
+// phiên Live (mỗi lần bấm "Kết Nối" tính là 1 phiên) và KHÔNG được dùng tính
+// năng in. Admin cấp gói theo tháng (hoặc vĩnh viễn) để mở khóa tính năng in
+// và bỏ giới hạn số phiên Live.
+const FREE_LIVE_SESSION_LIMIT = 3;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const LICENSE_DURATIONS_MS = {
+  '1m': 30 * DAY_MS,
+  '3m': 90 * DAY_MS,
+  '6m': 180 * DAY_MS,
+  '12m': 365 * DAY_MS,
+};
+const LICENSE_LABELS = {
+  free: 'Miễn phí',
+  '1m': '1 tháng',
+  '3m': '3 tháng',
+  '6m': '6 tháng',
+  '12m': '12 tháng',
+  lifetime: 'Vĩnh viễn',
+};
+
+// Ghi lại (trong bộ nhớ) các lần 1 tài khoản bị chặn vì chưa có gói/hết gói,
+// để admin có thể xem "nhật ký" ai đang bị khóa tính năng mà chưa nâng cấp.
+// Không cần bền vững qua mỗi lần restart server nên không lưu xuống DB.
+const LICENSE_LOG_LIMIT = 300;
+const licenseLockLogs = [];
+function logLicenseLock(username, feature, message) {
+  licenseLockLogs.push({ username, feature, message, at: Date.now() });
+  if (licenseLockLogs.length > LICENSE_LOG_LIMIT) licenseLockLogs.shift();
+  console.log(`[License] 🔒 @${username} bị chặn tính năng "${feature}": ${message}`);
+}
+
+// Tính trạng thái gói hiện tại của 1 user (đọc trực tiếp từ row DB của bảng users).
+function getLicenseInfo(user) {
+  const now = Date.now();
+  const type = user.license_type || 'free';
+
+  if (type === 'lifetime') {
+    return { type, label: LICENSE_LABELS.lifetime, canPrint: true, isExpired: false, expiresAt: null, daysLeft: null };
+  }
+
+  if (type === 'free' || !user.license_expires_at) {
+    return { type: 'free', label: LICENSE_LABELS.free, canPrint: false, isExpired: false, expiresAt: null, daysLeft: null };
+  }
+
+  const isExpired = user.license_expires_at <= now;
+  const daysLeft = isExpired ? 0 : Math.ceil((user.license_expires_at - now) / DAY_MS);
+  return {
+    type,
+    label: LICENSE_LABELS[type] || type,
+    canPrint: !isExpired,
+    isExpired,
+    expiresAt: user.license_expires_at,
+    daysLeft,
+  };
+}
 
 function hashPassword(password, salt) {
   return crypto.scryptSync(password, salt, 64).toString('hex');
@@ -331,8 +400,17 @@ app.post('/api/logout', requireAuth, (req, res) => {
 // Thông tin tài khoản đang đăng nhập (dùng để frontend biết có phải admin
 // không, từ đó quyết định có hiện tab "Quản trị" hay không).
 app.get('/api/me', requireAuth, (req, res) => {
-  const user = db.prepare('SELECT id, username, is_admin, created_at FROM users WHERE id = ?').get(req.userId);
-  res.json({ id: user.id, username: user.username, isAdmin: !!user.is_admin, createdAt: user.created_at });
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.userId);
+  const license = getLicenseInfo(user);
+  res.json({
+    id: user.id,
+    username: user.username,
+    isAdmin: !!user.is_admin,
+    createdAt: user.created_at,
+    license,
+    liveSessionsUsed: user.live_sessions_used || 0,
+    freeLiveSessionLimit: FREE_LIVE_SESSION_LIMIT
+  });
 });
 
 // ====== API QUẢN TRỊ (ADMIN) ======
@@ -341,7 +419,7 @@ app.get('/api/me', requireAuth, (req, res) => {
 // Danh sách toàn bộ tài khoản trong hệ thống (không trả về password_hash/salt).
 app.get('/api/admin/users', requireAuth, requireAdmin, (req, res) => {
   const rows = db.prepare(
-    'SELECT id, username, created_at, is_admin, is_banned, banned_reason, banned_at FROM users ORDER BY id ASC'
+    'SELECT * FROM users ORDER BY id ASC'
   ).all();
   res.json({
     users: rows.map(u => ({
@@ -351,9 +429,57 @@ app.get('/api/admin/users', requireAuth, requireAdmin, (req, res) => {
       isAdmin: !!u.is_admin,
       isBanned: !!u.is_banned,
       bannedReason: u.banned_reason || null,
-      bannedAt: u.banned_at || null
+      bannedAt: u.banned_at || null,
+      license: getLicenseInfo(u),
+      liveSessionsUsed: u.live_sessions_used || 0,
+      freeLiveSessionLimit: FREE_LIVE_SESSION_LIMIT
     }))
   });
+});
+
+// Admin cấp / gia hạn gói cho 1 tài khoản. body: { type: 'free'|'1m'|'3m'|'6m'|'12m'|'lifetime' }
+// - 'lifetime': mở khóa in vĩnh viễn, không có hạn.
+// - '1m'/'3m'/'6m'/'12m': mở khóa in trong đúng số tháng tương ứng, đếm ngược
+//   từ NGÀY HẾT HẠN GÓI CŨ nếu gói cũ còn hạn (gia hạn cộng dồn), hoặc từ thời
+//   điểm hiện tại nếu gói cũ đã hết hạn / chưa từng có gói.
+// - 'free': thu hồi gói, đưa tài khoản về lại trạng thái miễn phí (và cấp lại
+//   đủ FREE_LIVE_SESSION_LIMIT phiên Live để dùng thử lại từ đầu).
+app.post('/api/admin/users/:id/license', requireAuth, requireAdmin, (req, res) => {
+  const targetId = Number(req.params.id);
+  const { type } = req.body || {};
+  const target = db.prepare('SELECT * FROM users WHERE id = ?').get(targetId);
+  if (!target) return res.status(404).json({ error: 'Không tìm thấy tài khoản.' });
+
+  const validTypes = ['free', '1m', '3m', '6m', '12m', 'lifetime'];
+  if (!validTypes.includes(type)) {
+    return res.status(400).json({ error: 'Loại gói không hợp lệ.' });
+  }
+
+  const now = Date.now();
+  let expiresAt = null;
+  if (type === '1m' || type === '3m' || type === '6m' || type === '12m') {
+    const base = (target.license_expires_at && target.license_expires_at > now) ? target.license_expires_at : now;
+    expiresAt = base + LICENSE_DURATIONS_MS[type];
+  }
+
+  db.prepare(
+    'UPDATE users SET license_type = ?, license_expires_at = ?, license_granted_at = ?, live_sessions_used = 0 WHERE id = ?'
+  ).run(type, expiresAt, now, targetId);
+
+  console.log(`[License] ✅ Admin đã cấp gói "${LICENSE_LABELS[type] || type}" cho tài khoản @${target.username}.`);
+
+  const updated = db.prepare('SELECT * FROM users WHERE id = ?').get(targetId);
+  res.json({
+    ok: true,
+    message: `Đã cấp gói "${LICENSE_LABELS[type] || type}" cho @${target.username}.`,
+    license: getLicenseInfo(updated)
+  });
+});
+
+// Nhật ký các lần tài khoản (bất kỳ) bị chặn tính năng in / xem live vì chưa
+// có gói hoặc đã hết hạn — giúp admin biết ai đang cần được tư vấn mua gói.
+app.get('/api/admin/license-logs', requireAuth, requireAdmin, (req, res) => {
+  res.json({ logs: licenseLockLogs.slice(-100).reverse() });
 });
 
 // Khóa 1 tài khoản (báo tài khoản đó đã bị khóa + kick mọi phiên đang đăng
@@ -471,7 +597,21 @@ app.post('/api/sessions', requireAuth, (req, res) => {
 
 // Endpoint gửi lệnh in: chuyển tiếp dữ liệu ESC/POS (raw bytes) sang ESP32
 // đang giữ kết nối WebSocket. ESP32 sẽ tự mở TCP tới máy in trong LAN của nó.
-app.post('/print', (req, res) => {
+app.post('/print', requireAuth, (req, res) => {
+  // Kiểm tra gói license: tài khoản "free" (chưa từng được admin cấp gói) hoặc
+  // gói đã hết hạn thì KHÔNG được dùng tính năng in — báo lỗi dạng "LOCKED:"
+  // để giao diện nhận biết và bật lên khung "tạm khóa tính năng, vui lòng mua gói".
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.userId);
+  const license = user ? getLicenseInfo(user) : null;
+  if (!license || !license.canPrint) {
+    logLicenseLock(
+      user ? user.username : `#${req.userId}`,
+      'print',
+      license && license.isExpired ? `Gói "${license.label}" đã hết hạn.` : 'Tài khoản chưa có gói in phiếu.'
+    );
+    return res.status(403).send('LOCKED:Tính năng in phiếu đang tạm khóa. Vui lòng mua gói để tiếp tục sử dụng.');
+  }
+
   if (!printerSocket || printerSocket.readyState !== WebSocket.OPEN) {
     return res.status(503).send('Chưa có thiết bị in (ESP32) nào kết nối tới server. Kiểm tra ESP32 đã bật và có WiFi chưa.');
   }
@@ -693,6 +833,28 @@ wss.on('connection', (ws) => {
 
       if (data.type === 'START_TIKTOK') {
         await connectorReady; // đợi module ESM nạp xong lần đầu (nếu chưa)
+
+        // Xác thực tài khoản trước khi cho xem Live — cần biết đây là tài
+        // khoản nào để áp đúng giới hạn (free: tối đa FREE_LIVE_SESSION_LIMIT
+        // phiên; đã có gói: không giới hạn).
+        const requestUserId = getUserIdFromToken(data.token);
+        if (!requestUserId) {
+          return ws.send(JSON.stringify({
+            type: 'STATUS',
+            success: false,
+            msg: 'Phiên đăng nhập đã hết hạn hoặc chưa đăng nhập, vui lòng đăng nhập lại.'
+          }));
+        }
+        const requestUser = db.prepare('SELECT * FROM users WHERE id = ?').get(requestUserId);
+        if (!requestUser || requestUser.is_banned) {
+          return ws.send(JSON.stringify({
+            type: 'STATUS',
+            success: false,
+            msg: 'Tài khoản không hợp lệ hoặc đã bị khóa.'
+          }));
+        }
+        const requestLicense = getLicenseInfo(requestUser);
+
         const inputUrl = (data.username || '').trim();
         let username = inputUrl;
 
@@ -733,6 +895,31 @@ wss.on('connection', (ws) => {
             ws.send(JSON.stringify({ type: 'HISTORY', roomUsername: username, comments: commentHistory }));
           }
           return;
+        }
+
+        // ====== GIỚI HẠN SỐ PHIÊN LIVE CHO TÀI KHOẢN "FREE" ======
+        // Chỉ tài khoản chưa từng được admin cấp gói (hoặc gói đã hết hạn) mới
+        // bị đếm số lần bấm "Kết Nối" vào 1 phiên Live MỚI (khác phiên đang mở
+        // sẵn — trường hợp đó đã return ở nhánh phía trên, không tính vào đây).
+        // Tài khoản đang có gói còn hạn (1/3/6/12 tháng hoặc vĩnh viễn) được
+        // xem Live không giới hạn số phiên.
+        if (requestLicense.type === 'free' && (requestUser.live_sessions_used || 0) >= FREE_LIVE_SESSION_LIMIT) {
+          logLicenseLock(
+            requestUser.username,
+            'live_view',
+            `Đã dùng hết ${FREE_LIVE_SESSION_LIMIT} phiên Live miễn phí.`
+          );
+          return ws.send(JSON.stringify({
+            type: 'STATUS',
+            success: false,
+            locked: true,
+            feature: 'live_view',
+            msg: `Tài khoản của bạn đã dùng hết ${FREE_LIVE_SESSION_LIMIT} phiên Live miễn phí. Vui lòng mua gói để tiếp tục sử dụng.`
+          }));
+        }
+        if (requestLicense.type === 'free') {
+          db.prepare('UPDATE users SET live_sessions_used = live_sessions_used + 1 WHERE id = ?').run(requestUserId);
+          console.log(`[License] @${requestUser.username} đã dùng ${(requestUser.live_sessions_used || 0) + 1}/${FREE_LIVE_SESSION_LIMIT} phiên Live miễn phí.`);
         }
 
         if (tiktokConnection) {
