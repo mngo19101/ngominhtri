@@ -331,6 +331,29 @@ app.post('/print', (req, res) => {
 });
 
 let tiktokConnection = null;
+// Username của phiên Live đang mở hiện tại (null nếu chưa kết nối gì).
+// Dùng để: (1) mọi thiết bị mới mở trang có thể hỏi lại trạng thái hiện tại,
+// (2) tránh việc 2 thiết bị cùng bấm kết nối 1 username giống nhau làm ngắt
+// rồi nối lại gây giật cho những thiết bị khác đang xem.
+let currentLiveUsername = null;
+
+// Lưu tạm các comment gần đây nhất của phiên Live hiện tại (tối đa 200 dòng).
+// Khi 1 thiết bị mới mở trang/kết nối lại trong lúc đang live, server gửi
+// nguyên lịch sử này cho nó để đồng bộ ngay, không phải chờ có comment mới.
+let commentHistory = [];
+const COMMENT_HISTORY_LIMIT = 200;
+
+// Gửi 1 message tới TẤT CẢ trình duyệt đang mở trang (bỏ qua socket của ESP32),
+// để mọi thiết bị (laptop, điện thoại...) luôn thấy cùng 1 luồng dữ liệu.
+function broadcastToBrowsers(msgObj) {
+  const payload = JSON.stringify(msgObj);
+  wss.clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN && !client.isPrinter) {
+      client.send(payload);
+    }
+  });
+}
+
 // "Thế hệ" (generation) của kết nối TikTok hiện tại. Mỗi lần bắt đầu 1 phiên
 // Live mới (kể cả kết nối lại cùng 1 ID), số này tăng lên 1. Các listener
 // (chat, streamEnd, connect...) của phiên CŨ đều tự kiểm tra "mình có còn là
@@ -350,6 +373,27 @@ function shutdownTiktokConnection(conn) {
 }
 
 wss.on('connection', (ws) => {
+  // Thiết bị (trình duyệt) vừa mở kết nối. Nếu đang có 1 phiên Live đang chạy,
+  // gửi ngay trạng thái hiện tại + toàn bộ lịch sử comment gần đây cho thiết bị
+  // này, để nó đồng bộ ngay lập tức mà không cần đợi comment mới hay phải tự
+  // bấm "Kết Nối" lại. An toàn với cả ESP32: firmware ESP32 chỉ xử lý message
+  // có type "print", các type khác (STATUS/HISTORY) nó tự bỏ qua.
+  if (currentLiveUsername) {
+    ws.send(JSON.stringify({
+      type: 'STATUS',
+      success: true,
+      msg: `Đã kết nối thành công Live của: @${currentLiveUsername}`,
+      roomUsername: currentLiveUsername
+    }));
+    if (commentHistory.length) {
+      ws.send(JSON.stringify({
+        type: 'HISTORY',
+        roomUsername: currentLiveUsername,
+        comments: commentHistory
+      }));
+    }
+  }
+
   ws.on('close', () => {
     if (ws.isPrinter) {
       if (printerSocket === ws) {
@@ -358,9 +402,20 @@ wss.on('connection', (ws) => {
       }
       return; // ESP32 ngắt kết nối thì không đụng gì tới phiên TikTok của trình duyệt
     }
+    // Nhiều thiết bị (laptop, điện thoại...) có thể cùng xem 1 phiên Live.
+    // Chỉ thực sự ngắt kết nối TikTok khi KHÔNG CÒN thiết bị trình duyệt nào
+    // đang mở trang nữa — tránh việc 1 thiết bị đóng tab làm mất live của
+    // các thiết bị khác đang xem.
+    const conNguoiXemKhac = Array.from(wss.clients).some(
+      (client) => client !== ws && client.readyState === WebSocket.OPEN && !client.isPrinter
+    );
+    if (conNguoiXemKhac) return;
+
     if (tiktokConnection) {
       shutdownTiktokConnection(tiktokConnection);
       tiktokConnection = null;
+      currentLiveUsername = null;
+      commentHistory = [];
     }
     tiktokConnectionGeneration++; // vô hiệu hóa mọi sự kiện cũ còn sót lại của trình duyệt này
   });
@@ -415,10 +470,30 @@ wss.on('connection', (ws) => {
         console.log(`[TikTok] Nhận yêu cầu: ${inputUrl}`);
         console.log(`[TikTok] Đã trích xuất Username: @${username}`);
 
+        // Nếu đúng phiên Live này đang chạy sẵn rồi (do 1 thiết bị khác đã kết
+        // nối trước đó), không cần ngắt/nối lại — chỉ đồng bộ trạng thái + lịch
+        // sử cho riêng thiết bị vừa bấm, để không làm gián đoạn các thiết bị
+        // khác đang xem cùng phiên Live đó.
+        if (tiktokConnection && currentLiveUsername && currentLiveUsername.toLowerCase() === username.toLowerCase()) {
+          console.log(`[TikTok] @${username} đã đang kết nối sẵn -> chỉ đồng bộ lại, không nối lại.`);
+          ws.send(JSON.stringify({
+            type: 'STATUS',
+            success: true,
+            msg: `Đã kết nối thành công Live của: @${username}`,
+            roomUsername: username
+          }));
+          if (commentHistory.length) {
+            ws.send(JSON.stringify({ type: 'HISTORY', roomUsername: username, comments: commentHistory }));
+          }
+          return;
+        }
+
         if (tiktokConnection) {
           shutdownTiktokConnection(tiktokConnection);
           tiktokConnection = null;
         }
+        currentLiveUsername = null;
+        commentHistory = [];
         tiktokConnectionGeneration++;
         const myGeneration = tiktokConnectionGeneration; // "chứng minh thư" của phiên kết nối này
 
@@ -454,11 +529,13 @@ wss.on('connection', (ws) => {
         tiktokConnection.connect().then(state => {
           if (myGeneration !== tiktokConnectionGeneration) return; // đã có phiên mới hơn thay thế, bỏ qua kết quả trễ này
           console.log(`[TikTok Success] ✅ Kết nối thành công! Room ID: ${state.roomId}`);
-          ws.send(JSON.stringify({ 
-            type: 'STATUS', 
-            success: true, 
-            msg: `Đã kết nối thành công Live của: @${username}` 
-          }));
+          currentLiveUsername = username; // đánh dấu đây là phiên Live đang mở, để mọi thiết bị mới đều đồng bộ theo
+          broadcastToBrowsers({
+            type: 'STATUS',
+            success: true,
+            msg: `Đã kết nối thành công Live của: @${username}`,
+            roomUsername: username
+          });
         }).catch(err => {
           if (myGeneration !== tiktokConnectionGeneration) return; // đã có phiên mới hơn thay thế, bỏ qua lỗi trễ này
           console.error(`[TikTok Error] ❌ Lỗi kết nối:`, err.message || err);
@@ -466,11 +543,7 @@ wss.on('connection', (ws) => {
           if (err.toString().includes('LIVE_NOT_FOUND') || err.toString().includes('offline')) {
             userMsg = `Tài khoản @${username} hiện KHÔNG PHÁT LIVE.`;
           }
-          ws.send(JSON.stringify({ 
-            type: 'STATUS', 
-            success: false, 
-            msg: userMsg
-          }));
+          broadcastToBrowsers({ type: 'STATUS', success: false, msg: userMsg });
         });
 
         let debugLogged = 0;
@@ -510,22 +583,30 @@ wss.on('connection', (ws) => {
             '';
 
           console.log(`[Comment] @${uniqueId}: ${commentText}`);
-          ws.send(JSON.stringify({
+          const commentObj = {
+            nickname,
+            uniqueId,
+            comment: commentText,
+            avatar,
+            receivedAt: new Date().toISOString() // mốc thời gian thống nhất, để mọi thiết bị hiện đúng cùng 1 giờ nhận
+          };
+
+          commentHistory.push(commentObj);
+          if (commentHistory.length > COMMENT_HISTORY_LIMIT) commentHistory.shift();
+
+          broadcastToBrowsers({
             type: 'COMMENT',
             roomUsername: username, // ID phòng Live mà comment này thuộc về, để trình duyệt tự đối chiếu thêm 1 lớp nữa
-            comment: {
-              nickname,      // Tên hiển thị
-              uniqueId,      // ID TikTok (@username)
-              comment: commentText, // Nội dung comment
-              avatar
-            }
-          }));
+            comment: commentObj
+          });
         });
 
         tiktokConnection.on('streamEnd', () => {
           if (myGeneration !== tiktokConnectionGeneration) return; // sự kiện trễ từ phiên Live cũ -> bỏ qua
           console.log(`[TikTok] Phiên Live đã kết thúc.`);
-          ws.send(JSON.stringify({ type: 'STATUS', success: false, msg: 'Phiên Live đã kết thúc.' }));
+          currentLiveUsername = null;
+          commentHistory = [];
+          broadcastToBrowsers({ type: 'STATUS', success: false, msg: 'Phiên Live đã kết thúc.' });
         });
       }
     } catch (e) {
