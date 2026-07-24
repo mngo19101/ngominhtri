@@ -1,4 +1,4 @@
-# TikTok Live Print & Order Manager v2.9.2
+# TikTok Live Print & Order Manager v2.9.4
 
 Bộ mã này chạy trực tiếp trên Railway và phục vụ giao diện tại:
 
@@ -44,13 +44,15 @@ Sau khi upload, chọn **Redeploy**. Server tự tạo/migrate bảng SQLite, kh
 Bridge Server đang chạy tại cổng ...
 ```
 
-## Tính năng v2.9.2
+## Tính năng v2.9.4
 
 - Tab **Vận chuyển** riêng, dùng chung đơn đã chốt.
 - Chỉ nhập mã vận đơn SPX: hệ thống tự tra cứu trạng thái, vị trí hiện tại, hành trình và ngày giao dự kiến, rồi lưu vào đúng đơn.
 - Tự đồng bộ “Khách chưa nhận”, “Khách đã nhận” hoặc “Hoàn trả” theo trạng thái SPX; tiền COD vẫn được đối soát riêng để tránh ghi nhận nhầm.
 - Máy chủ tự kiểm tra lại SPX mỗi 5 phút cho đơn chưa hoàn tất; đơn đã giao, đã hoàn hoặc đã hủy sẽ tự dừng kiểm tra. Trang đang mở đọc dữ liệu mới mỗi phút.
 - Không đọc bất kỳ con số nào trong comment thành giá tiền. Giá chỉ lấy từ danh mục sản phẩm hoặc được nhập/chỉnh tại đơn.
+- Comment vẫn được thêm vào khách hàng và giỏ hàng, nhưng các giá cũ từng đọc nhầm từ nội dung comment sẽ hiện **Chưa nhập giá**; không xóa comment hay khách hàng.
+- Mỗi thẻ trong tab **Vận chuyển** có nút **Xóa đơn** và hộp xác nhận trước khi xóa.
 - Đơn chưa giao chỉ cộng vào **Tạm tính**. Chỉ khi vận chuyển chuyển sang **Đã giao** mới ghi nhận **Doanh thu**, theo đúng ngày giao thành công.
 - Đã bỏ tab **Sản phẩm** khỏi thanh điều hướng; dữ liệu sản phẩm cũ vẫn được giữ an toàn trong database.
 - Đã bỏ nút **Hành trình** cũ trong Vận chuyển; chỉ giữ **Xem hành trình SPX**.

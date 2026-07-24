@@ -1400,11 +1400,13 @@
     if (badge) badge.textContent = count;
   }
 
-  function cartItemAmount(item) {
-    const linkedOrder = item.orderId ? ordersV2.find(order => order.id === item.orderId) : null;
-    if (linkedOrder) return Math.max(0, Number(linkedOrder.total) || 0);
-    return item.priceSource === 'unset' ? 0 : Math.max(0, Number(item.price) || 0);
-  }
+function cartItemAmount(item) {
+  const linkedOrder = item.orderId ? ordersV2.find(order => order.id === item.orderId) : null;
+  if (linkedOrder) return Math.max(0, Number(linkedOrder.total) || 0);
+  return item.priceSource === 'order'
+    ? Math.max(0, Number(item.price) || 0)
+    : 0;
+}
 
   function renderCustomerList() {
     const body = $('#customerListBody');
@@ -1884,6 +1886,7 @@
           ${o.shippingCode ? `<button class="btn-mini export-label">In đơn (xuất ảnh)</button>
           <select class="shipment-status-select">${SHIPPING_STATUS_CHOICES.map(k=>`<option value="${k}"${status===k?' selected':''}>${SHIPPING_STATUS_LABELS[k]}</option>`).join('')}</select>` : ''}
           ${status === 'delivery_failed' ? '<button class="btn-mini retry-shipment">Giao lại</button><button class="btn-mini return-shipment">Chuyển hoàn</button>' : ''}
+          <button class="btn-mini danger-text delete-shipment">Xóa đơn</button>
         </div>`;
       card.querySelector('.edit-shipment').addEventListener('click', () => openShippingModal(o));
       card.querySelector('.track-spx').addEventListener('click', () => openSpxTrackingModal(o));
@@ -1896,6 +1899,15 @@
       });
       card.querySelector('.retry-shipment')?.addEventListener('click', () => changeShipmentStatus(o,'delivering','Yêu cầu giao lại'));
       card.querySelector('.return-shipment')?.addEventListener('click', () => changeShipmentStatus(o,'returning','Yêu cầu chuyển hoàn'));
+      card.querySelector('.delete-shipment').addEventListener('click', async () => {
+        if (!confirm(`Xóa đơn vận chuyển của @${o.customerId}?`)) return;
+        try {
+          await apiFetch(`/api/orders/${o.id}`, {method:'DELETE'});
+          await Promise.all([loadShippingV2(), loadOrdersV2()]);
+        } catch(err) {
+          alert(err.message);
+        }
+      });
       card.addEventListener('click', event => {
         if (!event.target.closest('button,select,a,input,textarea')) openSpxTrackingModal(o);
       });
