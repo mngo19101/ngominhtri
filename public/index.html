@@ -503,20 +503,6 @@
           <span class="stat-value" id="repRevenueMonth">0đ</span>
         </div>
       </div>
-      <div class="stat-card">
-        <div class="stat-icon">👥</div>
-        <div class="stat-info">
-          <span class="stat-label">Khách hàng</span>
-          <span class="stat-value" id="repCustomersMonth">0</span>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon">🧾</div>
-        <div class="stat-info">
-          <span class="stat-label">Số đơn (comment đã in)</span>
-          <span class="stat-value" id="repOrdersMonth">0</span>
-        </div>
-      </div>
     </div>
 
     <h2 class="report-section-title">Doanh Thu Theo Ngày</h2>
@@ -1425,8 +1411,6 @@
     const month = stats[selectedMonth] || { revenue: 0, orders: 0, customerSet: new Set() };
 
     $('#repRevenueMonth').textContent = formatTien(month.revenue);
-    $('#repCustomersMonth').textContent = month.customerSet.size;
-    $('#repOrdersMonth').textContent = month.orders;
   }
 
   function renderReport(selectedDate) {
