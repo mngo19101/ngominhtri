@@ -49,6 +49,22 @@
     padding:8px; background:#000; border-radius:6px; color:#aaa; min-height:36px; word-break:break-word;
   }
 
+  .saved-id-list{ display:flex; flex-wrap:wrap; gap:6px; margin:-4px 0 12px; }
+  .saved-id-chip{
+    display:flex; align-items:center; gap:6px;
+    background:#262626; border:1px solid var(--border); border-radius:999px;
+    padding:5px 6px 5px 12px; font-size:12px; color:#ddd; cursor:pointer; transition:.15s;
+  }
+  .saved-id-chip:hover{ border-color:var(--teal); color:#fff; }
+  .saved-id-chip.active{ border-color:var(--teal); background:rgba(34,168,148,.15); color:#fff; }
+  .saved-id-chip .chip-id{ font-family:'JetBrains Mono', monospace; }
+  .saved-id-chip .chip-del{
+    background:none; border:none; color:var(--muted); cursor:pointer;
+    width:18px; height:18px; border-radius:50%; font-size:13px; line-height:1;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .saved-id-chip .chip-del:hover{ background:#e66; color:#000; }
+
   .feed-list{
     display:flex; flex-direction:column; gap:10px;
     max-height:calc(100vh - 220px); overflow-y:auto; padding-right:5px;
@@ -278,6 +294,8 @@
         <input id="tiktokUsername" type="text" placeholder="Dán link hoặc nhập @username">
       </div>
 
+      <div class="saved-id-list" id="savedIdList"></div>
+
       <button class="btn" id="btnConnectTikTok">Kết Nối TikTok Live</button>
 
       <div class="status" id="statusBox">Trạng thái: Chưa kết nối</div>
@@ -490,6 +508,7 @@
 
     await loadCustomers();
     renderCustomerBadge();
+    await loadSavedTiktokIds();
     initWS();
   }
 
@@ -516,10 +535,84 @@
     $('#authScreen').style.display = 'none';
     $('#appRoot').style.display = 'block';
     renderCustomerBadge();
+    await loadSavedTiktokIds();
     initWS();
     return true;
   }
   // ===== HẾT PHẦN TÀI KHOẢN =====
+
+  // ===== DANH SÁCH ID TIKTOK LIVE ĐÃ LƯU (chọn nhanh, không cần gõ lại) =====
+  // Cấu trúc: [{ id: 'username', addedAt: number }, ...], mới dùng gần đây nhất ở đầu danh sách
+  let savedTiktokIds = [];
+
+  async function loadSavedTiktokIds() {
+    try {
+      const data = await apiFetch('/api/tiktok-ids', { method: 'GET' });
+      savedTiktokIds = (data && data.tiktokIds) || [];
+    } catch (err) {
+      console.error('Không tải được danh sách ID TikTok đã lưu:', err);
+      savedTiktokIds = [];
+    }
+    renderSavedTiktokIds();
+  }
+
+  async function saveTiktokIdsToServer() {
+    try {
+      await apiFetch('/api/tiktok-ids', {
+        method: 'POST',
+        body: JSON.stringify({ tiktokIds: savedTiktokIds })
+      });
+    } catch (err) {
+      console.error('Không lưu được danh sách ID TikTok lên Bridge Server:', err);
+    }
+  }
+
+  // Thêm 1 username vào đầu danh sách (đưa lên trước nếu đã có sẵn), rồi lưu lên server
+  function rememberTiktokId(username) {
+    const clean = (username || '').trim();
+    if (!clean) return;
+    savedTiktokIds = savedTiktokIds.filter(item => item.id.toLowerCase() !== clean.toLowerCase());
+    savedTiktokIds.unshift({ id: clean, addedAt: Date.now() });
+    renderSavedTiktokIds();
+    saveTiktokIdsToServer();
+  }
+
+  function removeTiktokId(username) {
+    savedTiktokIds = savedTiktokIds.filter(item => item.id !== username);
+    renderSavedTiktokIds();
+    saveTiktokIdsToServer();
+  }
+
+  function renderSavedTiktokIds() {
+    const box = $('#savedIdList');
+    if (!box) return;
+    box.innerHTML = '';
+
+    const currentValue = $('#tiktokUsername').value.trim().replace('@', '');
+
+    savedTiktokIds.forEach(item => {
+      const chip = document.createElement('div');
+      chip.className = 'saved-id-chip' + (item.id.toLowerCase() === currentValue.toLowerCase() ? ' active' : '');
+      chip.innerHTML = `
+        <span class="chip-id">@${escapeHtml(item.id)}</span>
+        <button class="chip-del" title="Xóa khỏi danh sách">✕</button>
+      `;
+
+      // Bấm vào chip = điền + kết nối luôn tới ID này, khỏi phải gõ tay
+      chip.addEventListener('click', () => {
+        $('#tiktokUsername').value = item.id;
+        $('#btnConnectTikTok').click();
+      });
+
+      chip.querySelector('.chip-del').addEventListener('click', (e) => {
+        e.stopPropagation(); // để không kích hoạt luôn việc kết nối khi chỉ muốn xóa
+        removeTiktokId(item.id);
+      });
+
+      box.appendChild(chip);
+    });
+  }
+  // ===== HẾT PHẦN DANH SÁCH ID TIKTOK =====
 
   // ===== QUẢN LÝ KHÁCH HÀNG / GIỎ HÀNG =====
   // Cấu trúc: { uniqueId: { nickname, uniqueId, avatar, items: [{id, comment, price, time}] } }
@@ -799,6 +892,19 @@
     $('#statusBox').textContent = msg;
   }
 
+  // Trích xuất username TikTok sạch từ link hoặc @tên (giống cách server xử lý),
+  // dùng để lưu vào danh sách ID đã dùng cho gọn, không lưu nguyên link dài.
+  function extractTiktokUsername(inputRaw) {
+    let username = (inputRaw || '').trim();
+    if (username.includes('tiktok.com/')) {
+      const match = username.match(/@([^/?#\s]+)/);
+      if (match) username = match[1];
+    } else {
+      username = username.replace('@', '').trim();
+    }
+    return username.replace(/\/+$/, '').trim();
+  }
+
   $('#btnConnectTikTok').addEventListener('click', () => {
     const username = $('#tiktokUsername').value.trim();
     if (!username) { alert('Vui lòng nhập tên hoặc dán link TikTok Live'); return; }
@@ -806,6 +912,12 @@
 
     setStatus(`Đang gửi yêu cầu kết nối TikTok...`);
     ws.send(JSON.stringify({ type: 'START_TIKTOK', username }));
+
+    const cleanUsername = extractTiktokUsername(username);
+    if (cleanUsername) {
+      $('#tiktokUsername').value = cleanUsername;
+      rememberTiktokId(cleanUsername);
+    }
   });
 
   function addCommentToFeed(cmt) {
