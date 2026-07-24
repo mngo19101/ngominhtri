@@ -725,6 +725,17 @@
   </div>
 </div>
 
+<!-- MODAL: CHƯA KẾT NỐI MÁY IN (ESP32) -->
+<div class="locked-overlay" id="printerDisconnectedOverlay">
+  <div class="locked-modal">
+    <div class="icon">🖨️</div>
+    <h3>Chưa kết nối máy in</h3>
+    <p id="printerDisconnectedMsg">Thiết bị ESP32 chưa kết nối với máy in. Vui lòng kiểm tra lại hoặc liên hệ admin.</p>
+    <button class="btn" id="printerDisconnectedGoMenu">Xem thông tin mã máy in</button>
+    <button class="btn-secondary" id="printerDisconnectedClose">Đóng</button>
+  </div>
+</div>
+
 <script>
 (() => {
   const $ = (s) => document.querySelector(s);
@@ -1779,6 +1790,20 @@
     switchTab('menu');
   });
 
+  // ===== MODAL: CHƯA KẾT NỐI MÁY IN (ESP32) =====
+  function showPrinterDisconnectedModal(msg) {
+    $('#printerDisconnectedMsg').textContent = msg || 'Thiết bị ESP32 chưa kết nối với máy in. Vui lòng kiểm tra lại hoặc liên hệ admin.';
+    $('#printerDisconnectedOverlay').classList.add('open');
+  }
+  function hidePrinterDisconnectedModal() {
+    $('#printerDisconnectedOverlay').classList.remove('open');
+  }
+  $('#printerDisconnectedClose').addEventListener('click', hidePrinterDisconnectedModal);
+  $('#printerDisconnectedGoMenu').addEventListener('click', () => {
+    hidePrinterDisconnectedModal();
+    switchTab('menu');
+  });
+
   // ===== PHẦN QUẢN TRỊ (chỉ tài khoản admin) =====
   let isCurrentUserAdmin = false;
 
@@ -2268,6 +2293,23 @@
         setPrinterStatus('❌ Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.');
         return;
       }
+
+      // Tài khoản đã mua gói (canPrint = true) nhưng chưa có ESP32 nào kết
+      // nối bằng mã máy in của tài khoản này -> chặn in ngay từ phía client
+      // và hiện khung thông báo, thay vì gửi lệnh in rồi thất bại âm thầm.
+      try {
+        const me = await apiFetch('/api/me');
+        const lic = me.license || {};
+        if (lic.canPrint && !me.printerConnected) {
+          setPrinterStatus('🖨️ Chưa kết nối ESP32 với máy in.');
+          showPrinterDisconnectedModal('Tài khoản của bạn đã có gói in, nhưng chưa có ESP32 nào kết nối với máy in. Vui lòng kiểm tra lại thiết bị hoặc liên hệ admin.');
+          return;
+        }
+      } catch (checkErr) {
+        // Nếu không kiểm tra được trạng thái (vd. mất mạng), vẫn tiếp tục thử
+        // gửi lệnh in như bình thường và để phần xử lý lỗi bên dưới lo tiếp.
+      }
+
       const res = await fetch(`${bridgeUrl}/print`, {
         method: 'POST',
         headers: {
@@ -2287,6 +2329,11 @@
         const lockedMsg = text.slice('LOCKED:'.length).trim();
         setPrinterStatus(`🔒 ${lockedMsg}`);
         showLockedModal(lockedMsg);
+      } else if (/esp32|máy in.*(chưa kết nối|không kết nối)|not connected/i.test(text)) {
+        // Server báo ESP32 chưa kết nối (dù tài khoản đã có gói) -> hiện
+        // khung thông báo riêng thay vì chỉ ghi lỗi âm thầm trong status box.
+        setPrinterStatus(`🖨️ ${text}`);
+        showPrinterDisconnectedModal(text || 'Thiết bị ESP32 chưa kết nối với máy in. Vui lòng kiểm tra lại hoặc liên hệ admin.');
       } else {
         setPrinterStatus(`❌ ${text}`);
       }
