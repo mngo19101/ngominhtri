@@ -70,6 +70,13 @@ db.exec(`
     updated_at INTEGER NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
+
+  CREATE TABLE IF NOT EXISTS saved_tiktok_ids (
+    user_id INTEGER PRIMARY KEY,
+    data TEXT NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
 `);
 
 const SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000; // Phiên đăng nhập: 90 ngày
@@ -209,6 +216,28 @@ app.post('/api/customers', requireAuth, (req, res) => {
     ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at
   `).run(req.userId, dataStr, now);
   res.json({ ok: true, count: Object.keys(customers).length });
+});
+
+// Lấy danh sách ID TikTok Live đã từng kết nối (để hiện lại, chọn nhanh)
+// Cấu trúc dữ liệu: mảng [{ id: 'username', addedAt: number }, ...], mới nhất ở đầu
+app.get('/api/tiktok-ids', requireAuth, (req, res) => {
+  const row = db.prepare('SELECT data FROM saved_tiktok_ids WHERE user_id = ?').get(req.userId);
+  res.json({ tiktokIds: row ? JSON.parse(row.data) : [] });
+});
+
+// Lưu (ghi đè) danh sách ID TikTok Live đã từng kết nối
+app.post('/api/tiktok-ids', requireAuth, (req, res) => {
+  const { tiktokIds } = req.body || {};
+  if (!Array.isArray(tiktokIds)) {
+    return res.status(400).json({ error: 'Dữ liệu tiktokIds phải là một mảng (array).' });
+  }
+  const dataStr = JSON.stringify(tiktokIds);
+  const now = Date.now();
+  db.prepare(`
+    INSERT INTO saved_tiktok_ids (user_id, data, updated_at) VALUES (?, ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at
+  `).run(req.userId, dataStr, now);
+  res.json({ ok: true, count: tiktokIds.length });
 });
 
 // Endpoint gửi lệnh in: chuyển tiếp dữ liệu ESC/POS (raw bytes) sang ESP32
