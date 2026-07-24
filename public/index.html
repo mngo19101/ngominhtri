@@ -639,6 +639,22 @@
 
     <div class="menu-card">
       <div class="menu-row">
+        <span class="k">Mã Máy In riêng của bạn</span>
+        <span class="v mono" id="menuPrinterToken">-</span>
+      </div>
+      <div class="menu-row">
+        <span class="k">Trạng thái máy in</span>
+        <span class="v" id="menuPrinterConnected">-</span>
+      </div>
+      <div class="menu-hint">
+        Mỗi tài khoản có 1 Mã Máy In riêng, KHÔNG trùng với ai khác. Nạp đúng mã này vào firmware ESP32 của bạn
+        (thay cho PRINTER_TOKEN) thì lệnh in của bạn sẽ chỉ gửi tới đúng máy in của bạn, không lẫn sang tài khoản khác.
+        Không chia sẻ mã này cho người khác.
+      </div>
+    </div>
+
+    <div class="menu-card">
+      <div class="menu-row">
         <span class="k">Gói / Key hiện tại</span>
         <span class="v"><span class="license-pill" id="menuLicensePill">-</span></span>
       </div>
@@ -1703,6 +1719,8 @@
     $('#menuUsername').textContent = '@' + data.username;
     $('#menuCreatedAt').textContent = data.createdAt ? new Date(data.createdAt).toLocaleString('vi-VN') : '-';
     $('#menuAdminFlag').textContent = data.isAdmin ? 'Quản trị viên' : 'Người dùng';
+    $('#menuPrinterToken').textContent = data.printerToken || '-';
+    $('#menuPrinterConnected').textContent = data.printerConnected ? '✅ Đã kết nối' : '⚠️ Chưa có ESP32 nào kết nối bằng mã này';
 
     const lic = data.license || { type: 'free', label: 'Miễn phí', canPrint: false, isExpired: false, daysLeft: null };
     const pill = $('#menuLicensePill');
