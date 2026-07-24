@@ -2,28 +2,40 @@ const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
 const net = require('net');
-const tiktokLib = require('tiktok-live-connector');
+// tiktok-live-connector la ESM-only tu 1 so ban gan day, nen phai dung import() dong
+// thay vi require(). Ta nap no bat dong bo va bao mot Promise "connectorReady" de
+// cac noi khac cho toi khi nao class ket noi da san sang moi dung.
+let ConnectorClass = null;
+let isV2 = false;
+let _resolveConnectorReady;
+const connectorReady = new Promise((resolve) => { _resolveConnectorReady = resolve; });
 
-// tiktok-live-connector v1.x export "WebcastPushConnection".
-// tiktok-live-connector v2.x export "TikTokLiveConnection" (API cũng khác đôi chút).
-// Dò nhiều khả năng để tương thích cả 2 nhánh version.
-let ConnectorClass =
-  tiktokLib.WebcastPushConnection ||
-  tiktokLib.TikTokLiveConnection ||
-  tiktokLib.default?.WebcastPushConnection ||
-  tiktokLib.default?.TikTokLiveConnection ||
-  (typeof tiktokLib.default === 'function' ? tiktokLib.default : null) ||
-  (typeof tiktokLib === 'function' ? tiktokLib : null);
+(async () => {
+  const tiktokLib = await import('tiktok-live-connector');
 
-const isV2 = !!(tiktokLib.TikTokLiveConnection || tiktokLib.default?.TikTokLiveConnection);
+  // tiktok-live-connector v1.x export "WebcastPushConnection".
+  // tiktok-live-connector v2.x export "TikTokLiveConnection" (API cũng khác đôi chút).
+  // Dò nhiều khả năng để tương thích cả 2 nhánh version.
+  ConnectorClass =
+    tiktokLib.WebcastPushConnection ||
+    tiktokLib.TikTokLiveConnection ||
+    tiktokLib.default?.WebcastPushConnection ||
+    tiktokLib.default?.TikTokLiveConnection ||
+    (typeof tiktokLib.default === 'function' ? tiktokLib.default : null) ||
+    (typeof tiktokLib === 'function' ? tiktokLib : null);
 
-if (!ConnectorClass) {
-  console.error('❌ Không tìm thấy class kết nối trong package tiktok-live-connector.');
-  console.error('Các export hiện có:', Object.keys(tiktokLib));
-  console.error('Chạy `npm ls tiktok-live-connector` để kiểm tra version đã cài.');
-} else {
-  console.log(`[TikTok] Dùng class kết nối: ${ConnectorClass.name || '(anonymous)'} (${isV2 ? 'API v2' : 'API v1'})`);
-}
+  isV2 = !!(tiktokLib.TikTokLiveConnection || tiktokLib.default?.TikTokLiveConnection);
+
+  if (!ConnectorClass) {
+    console.error('❌ Không tìm thấy class kết nối trong package tiktok-live-connector.');
+    console.error('Các export hiện có:', Object.keys(tiktokLib));
+    console.error('Chạy `npm ls tiktok-live-connector` để kiểm tra version đã cài.');
+  } else {
+    console.log(`[TikTok] Dùng class kết nối: ${ConnectorClass.name || '(anonymous)'} (${isV2 ? 'API v2' : 'API v1'})`);
+  }
+
+  _resolveConnectorReady();
+})();
 
 const app = express();
 const server = http.createServer(app);
@@ -73,6 +85,7 @@ wss.on('connection', (ws) => {
       const data = JSON.parse(message);
       
       if (data.type === 'START_TIKTOK') {
+        await connectorReady; // đợi module ESM nạp xong lần đầu (nếu chưa)
         const inputUrl = (data.username || '').trim();
         let username = inputUrl;
 
