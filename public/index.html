@@ -166,6 +166,25 @@
   .btn-mini.added:hover{ background:#173832; color:var(--teal); }
   .session-search-field{ margin-top:12px; }
 
+  /* ===== NHÓM THEO NGÀY (Lịch Sử Phiên Live) ===== */
+  .day-group{ display:flex; flex-direction:column; gap:10px; margin-bottom:22px; }
+  .day-group:last-child{ margin-bottom:0; }
+  .day-group-header{
+    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px;
+    padding:8px 4px; border-bottom:2px solid var(--teal);
+  }
+  .day-group-date{ font-weight:800; font-size:14.5px; color:#fff; }
+  .day-group-stats{ font-size:12px; color:var(--muted); font-family:'JetBrains Mono', monospace; }
+  .day-group-stats b{ color:var(--teal); }
+  .session-meta .live-count-tag{ color:var(--teal); }
+  .btn-export-session{
+    background:none; border:1px solid #2a5a52; color:var(--teal); border-radius:5px;
+    padding:0 8px; height:24px; cursor:pointer; font-size:12px; line-height:1; flex-shrink:0;
+    display:flex; align-items:center; gap:4px;
+  }
+  .btn-export-session:hover{ background:var(--teal); color:#000; border-color:var(--teal); }
+  .session-head-actions{ display:flex; align-items:center; gap:6px; flex-shrink:0; }
+
   /* ===== THANH TAB DƯỚI CÙNG ===== */
   .bottom-nav{
     position:fixed; left:0; right:0; bottom:0; height:66px;
@@ -249,6 +268,7 @@
   }
   .btn-logout:hover{ background:#e66; color:#000; border-color:#e66; }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -841,6 +861,7 @@
         `;
         row.querySelector('.btn-del-item').addEventListener('click', (e) => {
           e.stopPropagation();
+          if (!confirm(`Xóa đơn "${it.comment}" (${formatTien(it.price)}) của @${cust.uniqueId}?`)) return;
           removeCartItem(cust.uniqueId, it.id);
         });
         itemsBox.appendChild(row);
@@ -969,6 +990,33 @@
     return row;
   }
 
+  // Gom các session (mỗi lần bấm "Kết Nối") lại theo NGÀY, rồi trong từng ngày
+  // gom tiếp theo ID TikTok (không phân biệt session-comment theo giờ coi live
+  // từng lần) — để nếu 1 ngày coi live cùng 1 kênh nhiều lần thì toàn bộ cmt
+  // được cộng dồn vào chung 1 khối duy nhất, không tách vụn theo từng lần bấm
+  // "Kết Nối". Khác ngày thì luôn tách riêng, không bao giờ gộp lẫn vào nhau.
+  function groupSessionsByDayAndUsername(filteredList) {
+    const dayMap = {}; // dateKey -> { dateKey, sessionCount, groups: { usernameLower -> {...} } }
+    filteredList.forEach(({ sessionId, session, commentsToShow }) => {
+      const dateKey = dateKeyLocal(session.startedAt);
+      if (!dayMap[dateKey]) dayMap[dateKey] = { dateKey, sessionIds: new Set(), groups: {} };
+      const day = dayMap[dateKey];
+      day.sessionIds.add(sessionId);
+
+      const uKey = (session.username || '').toLowerCase();
+      if (!day.groups[uKey]) {
+        day.groups[uKey] = { username: session.username, sessionIds: [], sessionCount: 0, comments: [], firstStartedAt: session.startedAt, lastStartedAt: session.startedAt };
+      }
+      const grp = day.groups[uKey];
+      grp.sessionIds.push(sessionId);
+      grp.sessionCount += 1;
+      if (new Date(session.startedAt) < new Date(grp.firstStartedAt)) grp.firstStartedAt = session.startedAt;
+      if (new Date(session.startedAt) > new Date(grp.lastStartedAt)) grp.lastStartedAt = session.startedAt;
+      commentsToShow.forEach(c => grp.comments.push(Object.assign({ __sessionId: sessionId }, c)));
+    });
+    return dayMap;
+  }
+
   function renderSessionList() {
     const body = $('#sessionListBody');
     const searchTerm = ($('#sessionSearchInput').value || '').trim().toLowerCase();
@@ -988,9 +1036,8 @@
       return;
     }
 
-    body.innerHTML = '';
-    let shownAny = false;
-
+    // Lọc theo từ khóa tìm kiếm trước (giữ nguyên logic cũ), sau đó mới gom nhóm.
+    const filteredList = [];
     entries.forEach(([sessionId, session]) => {
       const allComments = session.comments || [];
       let commentsToShow = allComments;
@@ -1006,82 +1053,162 @@
         if (matchesSessionName && commentsToShow.length === 0) commentsToShow = allComments;
       }
 
-      shownAny = true;
-      const startedAt = new Date(session.startedAt);
-      const dateLabel = startedAt.toLocaleDateString('vi-VN') + ' ' + startedAt.toLocaleTimeString('vi-VN');
-
-      const card = document.createElement('div');
-      card.className = 'session-card';
-      card.dataset.sessionId = sessionId;
-      card.innerHTML = `
-        <div class="session-head">
-          <div class="left">
-            <span class="session-title">@${escapeHtml(session.username)}</span>
-            <span class="session-meta">Bắt đầu lúc ${dateLabel}</span>
-          </div>
-          <span class="session-count">${allComments.length} cmt</span>
-          <button class="btn-del-session" title="Xóa phiên này">✕</button>
-        </div>
-        <div class="session-comments"></div>
-      `;
-
-      card.querySelector('.btn-del-session').addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (confirm(`Xóa phiên live @${session.username} cùng ${allComments.length} bình luận đã lưu?`)) {
-          deleteSession(sessionId);
-        }
-      });
-
-      const commentsBox = card.querySelector('.session-comments');
-
-      if (commentsToShow.length === 0) {
-        commentsBox.innerHTML = '<div class="empty-note">Không có bình luận nào khớp tìm kiếm.</div>';
-      } else {
-        // Mới nhất lên trước cho dễ tìm khi vừa live xong
-        [...commentsToShow].reverse().forEach(c => {
-          commentsBox.appendChild(buildSessionCommentRowEl(sessionId, c));
-        });
-      }
-
-      // Giữ nguyên trạng thái đóng/mở của thẻ này qua các lần render lại,
-      // và nếu đang tìm kiếm thì tự mở sẵn để thấy kết quả ngay.
-      if (searchTerm || openSessionIds.has(sessionId)) commentsBox.classList.add('open');
-
-      card.querySelector('.session-head').addEventListener('click', (e) => {
-        if (e.target.closest('.btn-del-session')) return;
-        commentsBox.classList.toggle('open');
-        if (commentsBox.classList.contains('open')) openSessionIds.add(sessionId);
-        else openSessionIds.delete(sessionId);
-      });
-
-      body.appendChild(card);
+      filteredList.push({ sessionId, session, commentsToShow });
     });
 
-    if (!shownAny) {
+    if (filteredList.length === 0) {
       body.innerHTML = '<div class="empty-note">Không tìm thấy bình luận hoặc phiên live nào khớp từ khóa.</div>';
       return;
     }
 
+    const dayMap = groupSessionsByDayAndUsername(filteredList);
+    const dayKeysSorted = Object.keys(dayMap).sort((a, b) => b.localeCompare(a)); // ngày mới nhất lên trước
+
+    body.innerHTML = '';
+
+    dayKeysSorted.forEach(dateKey => {
+      const day = dayMap[dateKey];
+      const groupKeys = Object.keys(day.groups).sort(
+        (a, b) => new Date(day.groups[b].lastStartedAt) - new Date(day.groups[a].lastStartedAt)
+      );
+
+      let dayCmtCount = 0;
+      groupKeys.forEach(k => dayCmtCount += day.groups[k].comments.length);
+
+      const dayEl = document.createElement('div');
+      dayEl.className = 'day-group';
+      dayEl.dataset.dayKey = dateKey;
+      dayEl.innerHTML = `
+        <div class="day-group-header">
+          <span class="day-group-date">📅 ${humanizeDateKey(dateKey)}</span>
+          <span class="day-group-stats"><b class="day-live-count">${day.sessionIds.size}</b> phiên live · <b class="day-cmt-count">${dayCmtCount}</b> bình luận</span>
+        </div>
+      `;
+
+      groupKeys.forEach(uKey => {
+        const grp = day.groups[uKey];
+        dayEl.appendChild(buildUserGroupCardEl(dateKey, uKey, grp, !!searchTerm));
+      });
+
+      body.appendChild(dayEl);
+    });
+
     body.scrollTop = savedScrollTop; // khôi phục vị trí cuộn sau khi dựng lại danh sách
   }
 
-  // Chèn thêm 1 bình luận mới vào ĐÚNG thẻ phiên đang hiển thị trong tab Lịch sử
-  // mà KHÔNG dựng lại toàn bộ danh sách. Đây là điểm mấu chốt để sửa lỗi
-  // "đang xem/mở 1 thẻ trong Lịch sử thì bị giật văng/đóng lại" khi có
-  // bình luận mới liên tục đổ về lúc đang live — trước đây mỗi comment mới
-  // đều gọi renderSessionList() dựng lại từ đầu, làm sập mọi thẻ đang mở và
-  // nhảy cuộn về đầu trang. Giờ chỉ chèn thêm 1 dòng, còn lại giữ nguyên.
+  // Chuyển 'YYYY-MM-DD' thành chữ dễ đọc kiểu "Thứ Tư, 24/07/2026" (+ "Hôm nay" / "Hôm qua").
+  function humanizeDateKey(dateKey) {
+    const [y, m, d] = dateKey.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    const todayKey = dateKeyLocal(new Date());
+    const yesterdayKey = dateKeyLocal(new Date(Date.now() - 86400000));
+    const weekday = dt.toLocaleDateString('vi-VN', { weekday: 'long' });
+    const ddmmyyyy = dt.toLocaleDateString('vi-VN');
+    let prefix = weekday.charAt(0).toUpperCase() + weekday.slice(1);
+    if (dateKey === todayKey) prefix = 'Hôm nay';
+    else if (dateKey === yesterdayKey) prefix = 'Hôm qua';
+    return `${prefix}, ${ddmmyyyy}`;
+  }
+
+  // Dựng 1 khối "live" đã gộp toàn bộ session cùng ID TikTok trong cùng 1 ngày.
+  function buildUserGroupCardEl(dateKey, uKey, grp, forceOpen) {
+    const groupKey = `${dateKey}__${uKey}`;
+    const comments = [...grp.comments].sort((a, b) => new Date(b.receivedAt) - new Date(a.receivedAt));
+    const firstTime = new Date(grp.firstStartedAt).toLocaleTimeString('vi-VN');
+
+    const card = document.createElement('div');
+    card.className = 'session-card';
+    card.dataset.groupKey = groupKey;
+    card.innerHTML = `
+      <div class="session-head">
+        <div class="left">
+          <span class="session-title">@${escapeHtml(grp.username)}</span>
+          <span class="session-meta">Coi live lúc ${firstTime}${grp.sessionCount > 1 ? ` · <span class="live-count-tag">gộp ${grp.sessionCount} lần coi trong ngày</span>` : ''}</span>
+        </div>
+        <div class="session-head-actions">
+          <span class="session-count">${comments.length} cmt</span>
+          <button class="btn-export-session" title="Xuất bình luận ra Excel">⬇️ Excel</button>
+          <button class="btn-del-session" title="Xóa toàn bộ bình luận nhóm này">✕</button>
+        </div>
+      </div>
+      <div class="session-comments"></div>
+    `;
+
+    card.querySelector('.btn-export-session').addEventListener('click', (e) => {
+      e.stopPropagation();
+      exportGroupToExcel(grp.username, dateKey, comments);
+    });
+
+    card.querySelector('.btn-del-session').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const soLan = grp.sessionCount > 1 ? ` (gộp ${grp.sessionCount} lần coi)` : '';
+      if (confirm(`Xóa toàn bộ ${comments.length} bình luận của @${grp.username} ngày ${humanizeDateKey(dateKey).replace('Hôm nay, ', '').replace('Hôm qua, ', '')}${soLan}?`)) {
+        grp.sessionIds.forEach(sid => deleteSession(sid));
+      }
+    });
+
+    const commentsBox = card.querySelector('.session-comments');
+    if (comments.length === 0) {
+      commentsBox.innerHTML = '<div class="empty-note">Không có bình luận nào khớp tìm kiếm.</div>';
+    } else {
+      comments.forEach(c => commentsBox.appendChild(buildSessionCommentRowEl(c.__sessionId, c)));
+    }
+
+    if (forceOpen || openSessionIds.has(groupKey)) commentsBox.classList.add('open');
+
+    card.querySelector('.session-head').addEventListener('click', (e) => {
+      if (e.target.closest('.btn-del-session') || e.target.closest('.btn-export-session')) return;
+      commentsBox.classList.toggle('open');
+      if (commentsBox.classList.contains('open')) openSessionIds.add(groupKey);
+      else openSessionIds.delete(groupKey);
+    });
+
+    return card;
+  }
+
+  // Xuất danh sách bình luận (của 1 khối live đã gộp) ra file Excel thật (.xlsx)
+  // gồm 4 cột: Giờ, Tên, ID TikTok, Bình luận — sắp theo thời gian tăng dần.
+  function exportGroupToExcel(username, dateKey, comments) {
+    if (typeof XLSX === 'undefined') {
+      alert('Không tải được thư viện xuất Excel (cần có mạng internet). Vui lòng thử lại.');
+      return;
+    }
+    const sorted = [...comments].sort((a, b) => new Date(a.receivedAt) - new Date(b.receivedAt));
+    const rows = sorted.map(c => ({
+      'Giờ': c.receivedAt ? new Date(c.receivedAt).toLocaleTimeString('vi-VN') : '',
+      'Tên': c.nickname || '',
+      'ID TikTok': '@' + (c.uniqueId || ''),
+      'Bình luận': c.comment || ''
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{ wch: 12 }, { wch: 22 }, { wch: 22 }, { wch: 60 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Binh luan');
+
+    const fileName = `binh-luan_${username}_${dateKey}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  }
+
+  // Chèn thêm 1 bình luận mới vào ĐÚNG khối (ngày + ID TikTok) đang hiển thị
+  // trong tab Lịch sử mà KHÔNG dựng lại toàn bộ danh sách. Đây là điểm mấu
+  // chốt để sửa lỗi "đang xem/mở 1 thẻ trong Lịch sử thì bị giật văng/đóng
+  // lại" khi có bình luận mới liên tục đổ về lúc đang live.
   // Trả về true nếu chèn thành công; false thì nơi gọi sẽ tự render lại toàn bộ.
   function appendCommentToSessionDOM(sessionId, c) {
     if (($('#sessionSearchInput').value || '').trim()) return false; // đang tìm kiếm thì để nguyên, tránh hiện sai kết quả lọc
 
     const body = $('#sessionListBody');
     if (!body) return false;
-    const card = body.querySelector(`.session-card[data-session-id="${sessionId}"]`);
-    if (!card) return false; // thẻ chưa tồn tại trong DOM (vd vừa render lần đầu) -> để renderSessionList() lo
+
+    const dateKey = dateKeyLocal(c.receivedAt || new Date());
+    const uKey = (currentSessionUsername || '').toLowerCase();
+    const groupKey = `${dateKey}__${uKey}`;
+    const card = body.querySelector(`.session-card[data-group-key="${groupKey}"]`);
+    if (!card) return false; // khối chưa tồn tại trong DOM (vd vừa render lần đầu, hoặc phiên live mới trong ngày) -> để renderSessionList() lo
 
     const countBadge = card.querySelector('.session-count');
-    const totalNow = (liveSessions[sessionId] && liveSessions[sessionId].comments || []).length;
+    const totalNow = parseInt((countBadge && countBadge.textContent) || '0', 10) + 1;
     if (countBadge) countBadge.textContent = `${totalNow} cmt`;
 
     const commentsBox = card.querySelector('.session-comments');
@@ -1091,6 +1218,12 @@
 
     commentsBox.prepend(buildSessionCommentRowEl(sessionId, c));
 
+    // Cập nhật số cmt của cả ngày + tổng toàn bộ.
+    const dayEl = card.closest('.day-group');
+    if (dayEl) {
+      const dayCmtEl = dayEl.querySelector('.day-cmt-count');
+      if (dayCmtEl) dayCmtEl.textContent = String((parseInt(dayCmtEl.textContent, 10) || 0) + 1);
+    }
     const totalEl = $('#summarySessionCommentCount');
     if (totalEl) totalEl.textContent = String((parseInt(totalEl.textContent, 10) || 0) + 1);
 
