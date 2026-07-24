@@ -130,19 +130,27 @@ function createSession(userId) {
   return token;
 }
 
+// Tra userId từ token phiên đăng nhập — dùng chung cho cả REST API (middleware
+// requireAuth bên dưới) lẫn WebSocket (nơi không có sẵn header Authorization).
+function getUserIdFromToken(token) {
+  if (!token) return null;
+  const session = db.prepare('SELECT * FROM sessions WHERE token = ?').get(token);
+  if (!session || session.expires_at < Date.now()) {
+    if (session) db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+    return null;
+  }
+  return session.user_id;
+}
+
 // Middleware xác thực: đọc header "Authorization: Bearer <token>"
 function requireAuth(req, res, next) {
   const authHeader = req.headers['authorization'] || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  if (!token) {
-    return res.status(401).json({ error: 'Thiếu token đăng nhập.' });
+  const userId = getUserIdFromToken(token);
+  if (!userId) {
+    return res.status(401).json({ error: 'Thiếu token đăng nhập hoặc phiên đã hết hạn, vui lòng đăng nhập lại.' });
   }
-  const session = db.prepare('SELECT * FROM sessions WHERE token = ?').get(token);
-  if (!session || session.expires_at < Date.now()) {
-    if (session) db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
-    return res.status(401).json({ error: 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.' });
-  }
-  req.userId = session.user_id;
+  req.userId = userId;
   req.sessionToken = token;
   next();
 }
@@ -444,6 +452,57 @@ wss.on('connection', (ws) => {
       if (data.type === 'print_result') {
         const job = pendingPrintJobs.get(data.requestId);
         if (job) job.resolve(data.ok, data.error);
+        return;
+      }
+
+      // Xóa 1 phiên lịch sử — xóa THẲNG trên dữ liệu đã lưu trong DB (không
+      // phải ghi đè toàn bộ bằng bản sao cục bộ của trình duyệt), để tránh
+      // trường hợp 1 thiết bị khác đang giữ bản dữ liệu cũ (chưa kịp đồng bộ)
+      // lỡ ghi đè làm "hồi sinh" lại phiên vừa xóa. Sau khi xóa xong, phát tin
+      // cho MỌI thiết bị đang mở trang để chúng tự xóa khỏi giao diện ngay,
+      // không cần tải lại trang.
+      if (data.type === 'DELETE_SESSION') {
+        const userId = getUserIdFromToken(data.token);
+        if (!userId || !data.sessionId) return;
+        const row = db.prepare('SELECT data FROM live_session_data WHERE user_id = ?').get(userId);
+        const sessions = row ? JSON.parse(row.data) : {};
+        if (sessions[data.sessionId]) {
+          delete sessions[data.sessionId];
+          db.prepare(`
+            INSERT INTO live_session_data (user_id, data, updated_at) VALUES (?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at
+          `).run(userId, JSON.stringify(sessions), Date.now());
+        }
+        broadcastToBrowsers({ type: 'SESSION_DELETED', sessionId: data.sessionId });
+        return;
+      }
+
+      // Xóa 1 sản phẩm khỏi giỏ hàng của 1 khách hàng — cùng nguyên tắc: xóa
+      // thẳng trên dữ liệu đã lưu, rồi phát tin cho mọi thiết bị tự cập nhật.
+      if (data.type === 'DELETE_CART_ITEM') {
+        const userId = getUserIdFromToken(data.token);
+        if (!userId || !data.customerId || !data.itemId) return;
+        const row = db.prepare('SELECT data FROM customer_data WHERE user_id = ?').get(userId);
+        const customersData = row ? JSON.parse(row.data) : {};
+        let customerRemoved = false;
+        if (customersData[data.customerId]) {
+          customersData[data.customerId].items = (customersData[data.customerId].items || [])
+            .filter(it => it.id !== data.itemId);
+          if (customersData[data.customerId].items.length === 0) {
+            delete customersData[data.customerId];
+            customerRemoved = true;
+          }
+          db.prepare(`
+            INSERT INTO customer_data (user_id, data, updated_at) VALUES (?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at
+          `).run(userId, JSON.stringify(customersData), Date.now());
+        }
+        broadcastToBrowsers({
+          type: 'CART_ITEM_DELETED',
+          customerId: data.customerId,
+          itemId: data.itemId,
+          customerRemoved
+        });
         return;
       }
 
