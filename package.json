@@ -1,6 +1,6 @@
 {
   "name": "bridge-server-tiktok-in-phieu",
-  "version": "2.9.4",
+  "version": "2.9.6",
   "main": "server.js",
   "engines": {
     "node": ">=22"
