@@ -1,4 +1,4 @@
-# TikTok Live Print & Order Manager v2.9.6
+# TikTok Live Print & Order Manager v2.10.0
 
 Bộ mã này chạy trực tiếp trên Railway và phục vụ giao diện tại:
 
@@ -44,7 +44,7 @@ Sau khi upload, chọn **Redeploy**. Server tự tạo/migrate bảng SQLite, kh
 Bridge Server đang chạy tại cổng ...
 ```
 
-## Tính năng v2.9.6
+## Tính năng v2.10.0
 
 - Tab **Vận chuyển** riêng, dùng chung đơn đã chốt.
 - Chỉ nhập mã vận đơn SPX: hệ thống tự tra cứu trạng thái, vị trí hiện tại, hành trình và ngày giao dự kiến, rồi lưu vào đúng đơn.
@@ -56,6 +56,11 @@ Bridge Server đang chạy tại cổng ...
 - Báo cáo theo ngày có thêm **Tạm tính đơn đang giao**; doanh thu ngày, tháng và biểu đồ vẫn chỉ cộng đơn giao thành công.
 - Các ô đơn giá, phí vận chuyển, phí giao, COD và giá sản phẩm để trống khi giá trị bằng 0, nên có thể nhập ngay mà không phải xóa số 0.
 - Trên điện thoại, tiền và nhãn **Doanh thu/Tạm tính** của từng đơn được cố định thành một cột bên phải, tách thành hai dòng và không xô lệch theo tên sản phẩm.
+- Tự nhớ tên khách, số điện thoại và địa chỉ theo ID TikTok sau lần lưu đầu tiên; đơn mới của cùng ID tự điền lại, kể cả ở phiên Live sau.
+- Mỗi đơn mua mới đặt lại ngày mua gần nhất. Hồ sơ khách không mua lại quá 3 tháng tự được xóa để giảm dữ liệu; đơn hàng và báo cáo đã chốt vẫn giữ nguyên.
+- Phần **Đơn hàng** đã bỏ ô và chữ **Mã sản phẩm** khỏi màn hình thêm/sửa, danh sách và file Excel để thao tác gọn hơn.
+- Trong **Đơn hàng** và **Vận chuyển**, tên người mua hiển thị to, đậm ở trên; ID TikTok nhỏ hơn nằm ngay bên dưới.
+- Tối ưu responsive cho laptop, iPad và điện thoại: thanh tab luôn đủ mục, bộ lọc tự xuống dòng, thẻ đơn/vận chuyển không chồng chữ, cửa sổ nhập và nút bấm không tràn màn hình.
 - Đơn chưa giao chỉ cộng vào **Tạm tính**. Chỉ khi vận chuyển chuyển sang **Đã giao** mới ghi nhận **Doanh thu**, theo đúng ngày giao thành công.
 - Đã bỏ tab **Sản phẩm** khỏi thanh điều hướng; dữ liệu sản phẩm cũ vẫn được giữ an toàn trong database.
 - Đã bỏ nút **Hành trình** cũ trong Vận chuyển; chỉ giữ **Xem hành trình SPX**.

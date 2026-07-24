@@ -413,7 +413,9 @@
   .order-head{ display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:start; gap:12px; }
   .order-head>div:first-child{ min-width:0; }
   .order-actions{ display:flex; align-items:center; justify-content:flex-start; gap:8px; flex-wrap:wrap; margin-top:9px; }
-  .order-main{ display:block; font-weight:700; overflow-wrap:anywhere; }
+  .order-main{ display:block; font-size:16px; font-weight:800; overflow-wrap:anywhere; }
+  .order-customer-id{ display:block; margin-top:2px; color:var(--teal); font-size:11.5px; font-weight:700; overflow-wrap:anywhere; }
+  .order-product-name{ margin-top:7px; font-size:13px; font-weight:700; overflow-wrap:anywhere; }
   .order-meta{ color:var(--muted); font-size:11.5px; margin-top:5px; line-height:1.55; }
   .order-financial{ min-width:104px; display:flex; flex-direction:column; align-items:flex-end; gap:7px; text-align:right; }
   .order-total{ color:var(--teal); font:700 14px/1.15 'JetBrains Mono',monospace; white-space:nowrap; }
@@ -438,7 +440,7 @@
   .shipping-card:hover{border-color:var(--teal);transform:translateY(-1px)}
   .shipping-card-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
   .shipping-code{font-family:'JetBrains Mono',monospace;font-weight:800;font-size:13px;color:var(--teal)}
-  .shipping-recipient{font-weight:800;margin-top:5px}.shipping-address{color:var(--muted);font-size:12.5px;line-height:1.45;margin-top:4px}
+  .shipping-recipient{font-size:16px;font-weight:800;margin-top:5px}.shipping-tiktok-id{color:var(--teal);font-size:11.5px;font-weight:700;margin-top:2px}.shipping-address{color:var(--muted);font-size:12.5px;line-height:1.45;margin-top:4px}
   .shipping-money{text-align:right;font-weight:800;white-space:nowrap}.shipping-money small{display:block;color:var(--muted);font-weight:500}
   .shipping-card-meta{display:grid;grid-template-columns:repeat(3,minmax(100px,1fr));gap:8px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);font-size:12px}
   .shipping-card-meta span{color:var(--muted)}.shipping-card-meta b{display:block;color:var(--text);margin-top:2px}
@@ -474,11 +476,71 @@
   .danger-text{ color:#b91c1c!important; border-color:#fecaca!important; }
   .bottom-nav{ overflow-x:auto; }
   .bottom-nav .nav-item{ min-width:74px; }
+  .tab-view,.panel,.feed-panel,.management-page,.shipping-page,.customers-page,.report-page{min-width:0;width:100%}
+  input,select,textarea,button{max-width:100%}
+  canvas,img{max-width:100%;height:auto}
+  @media(max-width:1024px){
+    body{padding:16px;padding-bottom:86px}
+    .panel,.feed-panel{padding:16px}
+    .management-page,.shipping-page{max-width:100%}
+  }
+  @media(max-width:768px){
+    body{padding:12px;padding-bottom:82px}
+    #accountBar{gap:10px;flex-wrap:wrap}
+    .account-info{min-width:0;flex:1 1 220px}
+    .account-info b{overflow-wrap:anywhere}
+    .feed-panel-header{gap:10px;flex-wrap:wrap}
+    .toolbar>*{min-width:0}
+    .toolbar input,.toolbar select{flex:1 1 210px}
+    .cust-summary{justify-content:flex-start}
+    .cust-summary>span{flex:1 1 calc(50% - 8px)}
+    .shipping-hero{padding:15px}
+    .shipping-card-head{display:grid;grid-template-columns:minmax(0,1fr) auto}
+    .reconcile-row{grid-template-columns:1fr}
+    .app-modal{padding:10px}
+    .app-modal-card{padding:16px}
+    .bottom-nav{height:72px;overflow:hidden}
+    .bottom-nav .nav-item{min-width:0;padding:4px 2px}
+    .nav-label{font-size:10px;line-height:1.1;text-align:center}
+    .nav-icon{font-size:17px}
+    .badge-count{font-size:9px;min-width:16px;padding:1px 5px}
+  }
   @media(max-width:680px){
     .form-grid{grid-template-columns:1fr}.form-grid .full{grid-column:auto}
     .product-row{grid-template-columns:1fr 1fr}.product-row .product-name{grid-column:1/-1}
     .order-head{grid-template-columns:minmax(0,1fr) 96px;gap:10px}
     .order-financial{min-width:0;width:96px}
+  }
+  @media(max-width:520px){
+    body{padding:8px;padding-bottom:78px}
+    .panel,.feed-panel{padding:12px;border-radius:13px}
+    #accountBar{padding:9px 11px;margin-bottom:12px}
+    .account-info{font-size:12px}
+    .toolbar input,.toolbar select{flex-basis:100%;width:100%}
+    .toolbar .btn-mini{flex:1 1 auto;min-height:38px}
+    .cust-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));padding:10px 12px;gap:8px 12px}
+    .cust-summary>span{min-width:0;overflow-wrap:anywhere}
+    .comment-card{align-items:flex-start;flex-direction:column}
+    .comment-card .btn-print{align-self:stretch}
+    .cart-item{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start}
+    .cart-item .item-meta{grid-column:1/2;flex-wrap:wrap}
+    .cart-item .btn-del-item{grid-column:2;grid-row:1/3}
+    .customer-head{align-items:flex-start}
+    .shipping-stats{gap:7px}
+    .shipping-stat{padding:10px}
+    .shipping-stat b{font-size:15px;overflow-wrap:anywhere}
+    .shipping-card{padding:12px}
+    .shipping-card-head{grid-template-columns:minmax(0,1fr) 92px;gap:8px}
+    .shipping-money{max-width:92px;overflow-wrap:anywhere;white-space:normal}
+    .shipping-card-meta{grid-template-columns:1fr}
+    .shipping-actions .btn-mini,.order-actions .btn-mini{min-height:34px}
+    .report-section-title input{width:100%}
+    .modal-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+    .modal-actions .btn,.modal-actions .btn-mini{width:100%;min-width:0}
+    .bottom-nav{height:70px}
+    .bottom-nav .nav-item{padding:3px 1px}
+    .nav-label{font-size:8.5px}
+    .nav-label-row{gap:2px}
   }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -708,7 +770,7 @@
       <span>Chờ xử lý: <b id="orderPendingSummary">0</b></span>
     </div>
     <div class="toolbar">
-      <input id="orderSearch" placeholder="Tìm khách, mã SP, tên SP, SĐT...">
+      <input id="orderSearch" placeholder="Tìm khách, tên sản phẩm, SĐT...">
       <select id="orderStatusFilter">
         <option value="">Tất cả trạng thái</option><option value="new">Đơn mới</option>
         <option value="confirmed">Đã xác nhận</option><option value="packing">Đóng gói</option>
@@ -950,7 +1012,6 @@
     <form id="orderForm" class="form-grid">
       <div class="field"><label>ID TikTok *</label><input id="ordCustomerId" required></div>
       <div class="field"><label>Tên khách *</label><input id="ordCustomerName" required></div>
-      <div class="field"><label>Mã sản phẩm</label><input id="ordProductCode" list="productCodeOptions"></div>
       <div class="field"><label>Tên sản phẩm *</label><input id="ordProductName" required></div>
       <div class="field"><label>Số lượng</label><input id="ordQuantity" type="number" min="1" value="1"></div>
       <div class="field"><label>Đơn giá (nhập tại đơn)</label><input id="ordUnitPrice" type="number" min="0" placeholder="0"></div>
@@ -960,7 +1021,6 @@
       <div class="field"><label>Thanh toán</label><select id="ordPaymentStatus"><option value="unpaid">Chưa thanh toán</option><option value="partial">Đặt cọc</option><option value="paid">Đã thanh toán</option><option value="refunded">Đã hoàn tiền</option></select></div>
       <div class="field full"><label>Địa chỉ</label><textarea id="ordAddress"></textarea></div>
       <div class="field full"><label>Ghi chú</label><textarea id="ordNote"></textarea></div>
-      <datalist id="productCodeOptions"></datalist>
     </form>
     <div class="auth-error" id="orderModalError"></div>
     <div class="modal-actions">
@@ -1059,6 +1119,7 @@
   let productsV2 = [];
   let shipmentsV2 = [];
   let editingOrderId = null;
+  let draftProductCode = '';
   let editingProductId = null;
   let editingShipmentId = null;
   let activeShippingFilter = 'all';
@@ -1393,7 +1454,7 @@
     const cust = customers[customerId];
     if (!cust) return;
     cust.items = cust.items.filter(it => it.id !== itemId);
-    if (cust.items.length === 0) delete customers[customerId];
+    if (cust.items.length === 0 && !cust.profile) delete customers[customerId];
     renderCustomerBadge();
     renderCustomerList();
     if ($('#viewReport').style.display !== 'none') renderReport($('#reportDate').value || dateKeyLocal());
@@ -1551,7 +1612,6 @@ function cartItemAmount(item) {
       const data = await apiFetch('/api/products');
       productsV2 = data.products || [];
       renderProductsV2();
-      renderProductOptions();
     } catch (err) {
       console.error('Không tải được sản phẩm:', err);
     }
@@ -1585,13 +1645,6 @@ function cartItemAmount(item) {
     } catch(err){ $('#settingStatus').textContent = '❌ '+err.message; }
   }
 
-  function renderProductOptions() {
-    const box = $('#productCodeOptions');
-    if (box) box.innerHTML = productsV2.filter(p => p.active).map(p =>
-      `<option value="${escapeHtml(p.code)}">${escapeHtml(p.name)} — ${formatTien(p.price)}</option>`
-    ).join('');
-  }
-
   function findProductFromText(text) {
     const raw = String(text || '').toLowerCase();
     return productsV2.find(p => {
@@ -1619,23 +1672,76 @@ function cartItemAmount(item) {
     return Number.isFinite(number) && number > 0 ? String(number) : '';
   }
 
+  function customerRecordById(customerId) {
+    const normalized = String(customerId || '').trim().replace(/^@/, '').toLowerCase();
+    if (!normalized) return null;
+    const key = Object.keys(customers).find(item =>
+      item.replace(/^@/, '').toLowerCase() === normalized
+    );
+    return key ? customers[key] : null;
+  }
+
+  function savedCustomerProfile(customerId) {
+    const record = customerRecordById(customerId);
+    const profile = record?.profile || {};
+    const previousOrder = ordersV2.find(order =>
+      String(order.customerId || '').replace(/^@/, '').toLowerCase() ===
+      String(customerId || '').replace(/^@/, '').toLowerCase()
+    );
+    if (!record && !previousOrder) return null;
+    return {
+      customerName: profile.customerName || previousOrder?.customerName || record?.nickname || '',
+      phone: profile.phone || previousOrder?.phone || '',
+      address: profile.address || previousOrder?.address || ''
+    };
+  }
+
+  function rememberCustomerProfileLocal(profile, options = {}) {
+    const customerId = String(profile?.customerId || '').trim().replace(/^@/, '');
+    if (!customerId) return;
+    let record = customerRecordById(customerId);
+    if (!record) {
+      record = { nickname: profile.customerName || customerId, uniqueId: customerId, avatar: '', items: [] };
+      customers[customerId] = record;
+    }
+    if (!Array.isArray(record.items)) record.items = [];
+    const oldProfile = record.profile || {};
+    record.profile = {
+      customerName: String(profile.customerName || '').trim() || oldProfile.customerName || record.nickname || customerId,
+      phone: String(profile.phone || '').trim() || oldProfile.phone || '',
+      address: String(profile.address || '').trim() || oldProfile.address || '',
+      updatedAt: Date.now()
+    };
+    if (options.markPurchase) record.lastPurchaseAt = Date.now();
+  }
+
+  function autofillCustomerProfile(customerId) {
+    const profile = savedCustomerProfile(customerId);
+    if (!profile) return;
+    if (profile.customerName) $('#ordCustomerName').value = profile.customerName;
+    if (profile.phone) $('#ordPhone').value = profile.phone;
+    if (profile.address) $('#ordAddress').value = profile.address;
+  }
+
   function openOrderModal(cmt, order) {
     editingOrderId = order ? order.id : null;
     draftComment = cmt || null;
     const matched = !order ? findProductFromText(cmt?.comment) : null;
+    draftProductCode = order?.productCode || matched?.code || '';
+    const customerId = order?.customerId || cmt?.uniqueId || '';
+    const remembered = savedCustomerProfile(customerId) || {};
     $('#orderModalTitle').textContent = order ? `Sửa đơn ${order.id}` : 'Xác nhận đơn từ bình luận';
     $('#orderSourceComment').textContent = order
       ? `Tạo lúc ${new Date(order.createdAt).toLocaleString('vi-VN')}`
       : (cmt ? `@${cmt.uniqueId || ''}: ${cmt.comment || ''}` : 'Đơn nhập thủ công');
-    $('#ordCustomerId').value = order?.customerId || cmt?.uniqueId || '';
-    $('#ordCustomerName').value = order?.customerName || cmt?.nickname || '';
-    $('#ordProductCode').value = order?.productCode || matched?.code || '';
+    $('#ordCustomerId').value = customerId;
+    $('#ordCustomerName').value = order?.customerName || remembered.customerName || cmt?.nickname || '';
     $('#ordProductName').value = order?.productName || matched?.name || cmt?.comment || '';
     $('#ordQuantity').value = order?.quantity || guessQuantity(cmt?.comment);
     $('#ordUnitPrice').value = optionalNumberValue(order?.unitPrice ?? matched?.price);
     $('#ordShippingFee').value = optionalNumberValue(order?.shippingFee);
-    $('#ordPhone').value = order?.phone || '';
-    $('#ordAddress').value = order?.address || '';
+    $('#ordPhone').value = order?.phone || remembered.phone || '';
+    $('#ordAddress').value = order?.address || remembered.address || '';
     $('#ordNote').value = order?.note || '';
     $('#ordPaymentStatus').value = order?.paymentStatus || 'unpaid';
     $('#orderModalError').textContent = '';
@@ -1647,6 +1753,7 @@ function cartItemAmount(item) {
   function closeOrderModal() {
     $('#orderModal').classList.remove('open');
     editingOrderId = null;
+    draftProductCode = '';
     draftComment = null;
   }
 
@@ -1656,7 +1763,7 @@ function cartItemAmount(item) {
       sourceSessionId: editingOrderId ? undefined : currentSessionId,
       customerId: $('#ordCustomerId').value.trim(),
       customerName: $('#ordCustomerName').value.trim(),
-      productCode: $('#ordProductCode').value.trim().toUpperCase(),
+      productCode: draftProductCode,
       productName: $('#ordProductName').value.trim(),
       quantity: parseInt($('#ordQuantity').value, 10) || 1,
       unitPrice: parseInt($('#ordUnitPrice').value, 10) || 0,
@@ -1684,6 +1791,8 @@ function cartItemAmount(item) {
         body: JSON.stringify(payload)
       });
       const savedOrder = data.order;
+      rememberCustomerProfileLocal(payload, { markPurchase: !editingOrderId });
+      await saveCustomers();
       closeOrderModal();
       await loadOrdersV2();
       if (printAfter && savedOrder) await printOrderV2(savedOrder);
@@ -1727,14 +1836,18 @@ function cartItemAmount(item) {
     const matched = findProductFromText(cmt.comment);
     const quantity = guessQuantity(cmt.comment);
     const unitPrice = matched?.price ?? 0;
+    const remembered = savedCustomerProfile(cmt.uniqueId) || {};
     const payload = {
       sourceCommentId: cmt.id || null,
       sourceSessionId: currentSessionId,
       customerId: cmt.uniqueId,
-      customerName: cmt.nickname || cmt.uniqueId,
+      customerName: remembered.customerName || cmt.nickname || cmt.uniqueId,
       productCode: matched?.code || '',
       productName: matched?.name || cmt.comment || 'Sản phẩm từ Live',
       quantity, unitPrice, shippingFee: 0, paymentStatus: 'unpaid',
+      phone: remembered.phone || '',
+      address: remembered.address || '',
+      useSavedCustomerProfile: true,
       note: `Comment gốc: ${cmt.comment || ''}`
     };
     await withButtonBusy(button, async () => {
@@ -1742,6 +1855,7 @@ function cartItemAmount(item) {
         const data = await apiFetch('/api/orders', {method:'POST',body:JSON.stringify(payload)});
         const order = data.order;
         const printed = await printOrderV2(order);
+        rememberCustomerProfileLocal(payload, { markPurchase: true });
         addToCart(Object.assign({}, cmt, {
           comment: `${payload.productCode ? payload.productCode + ' - ' : ''}${payload.productName} x${quantity}`,
           orderPrice: order.total,
@@ -1782,8 +1896,10 @@ function cartItemAmount(item) {
       card.className = 'order-card';
       card.innerHTML = `
         <div class="order-head">
-          <div><span class="order-main">@${escapeHtml(o.customerId)} · ${escapeHtml(o.productCode || '')} ${escapeHtml(o.productName)}</span>
-          <div class="order-meta">${escapeHtml(o.customerName)} · SL ${o.quantity} · ${new Date(o.createdAt).toLocaleString('vi-VN')}<br>
+          <div><span class="order-main">${escapeHtml(o.customerName)}</span>
+          <span class="order-customer-id">@${escapeHtml(o.customerId)}</span>
+          <div class="order-product-name">${escapeHtml(o.productName)}</div>
+          <div class="order-meta">SL ${o.quantity} · ${new Date(o.createdAt).toLocaleString('vi-VN')}<br>
           ${o.phone ? '☎ ' + escapeHtml(o.phone) + ' · ' : ''}${o.address ? escapeHtml(o.address) : ''}</div></div>
           <div class="order-financial"><div class="order-total">${formatTien(o.total)}<small>${o.shippingStatus === 'delivered' ? 'Doanh thu' : 'Tạm tính'}</small></div><span class="status-pill status-${o.status}">${ORDER_STATUS_LABELS[o.status] || o.status}</span></div>
         </div>
@@ -1881,7 +1997,8 @@ function cartItemAmount(item) {
         <div class="shipping-card-head">
           <div>
             <div class="shipping-code">${escapeHtml(o.shippingCode || 'CHƯA TẠO PHIẾU')}</div>
-            <div class="shipping-recipient">${escapeHtml(o.customerName)} · @${escapeHtml(o.customerId)}</div>
+            <div class="shipping-recipient">${escapeHtml(o.customerName)}</div>
+            <div class="shipping-tiktok-id">@${escapeHtml(o.customerId)}</div>
             <div class="shipping-address">${o.phone ? '☎ '+escapeHtml(o.phone)+'<br>' : ''}${escapeHtml(o.address || 'Chưa có địa chỉ')}</div>
             ${o.externalTrackingCode ? `<div class="shipping-address"><b>SPX ${escapeHtml(o.externalTrackingCode)}</b> · ${escapeHtml(o.carrierStatus || 'Đang cập nhật')}
               ${o.currentLocation ? '<br>📍 '+escapeHtml(o.currentLocation) : ''}
@@ -1954,6 +2071,7 @@ function cartItemAmount(item) {
 
   async function saveShipmentV2() {
     if (!editingShipmentId) return;
+    const editingOrder = shipmentsV2.find(order => order.id === editingShipmentId);
     const payload = {
       customerName:$('#shipReceiverName').value.trim(), phone:$('#shipReceiverPhone').value.trim(),
       address:$('#shipReceiverAddress').value.trim(), packageWeight:parseInt($('#shipWeight').value,10)||500,
@@ -1963,6 +2081,15 @@ function cartItemAmount(item) {
     $('#shippingModalError').textContent = '';
     try {
       await apiFetch(`/api/shipments/${editingShipmentId}/prepare`, {method:'POST',body:JSON.stringify(payload)});
+      if (editingOrder) {
+        rememberCustomerProfileLocal({
+          customerId: editingOrder.customerId,
+          customerName: payload.customerName,
+          phone: payload.phone,
+          address: payload.address
+        });
+        await saveCustomers();
+      }
       closeShippingModal();
       await Promise.all([loadShippingV2(),loadOrdersV2()]);
     } catch(err){ $('#shippingModalError').textContent = err.message; }
@@ -2268,7 +2395,7 @@ function cartItemAmount(item) {
     if (!ordersV2.length) return alert('Chưa có đơn để xuất.');
     const rows = ordersV2.map(o => ({
       'Mã đơn':o.id,'Ngày':new Date(o.createdAt).toLocaleString('vi-VN'),'ID TikTok':o.customerId,
-      'Tên khách':o.customerName,'Mã SP':o.productCode,'Sản phẩm':o.productName,'SL':o.quantity,
+      'Tên khách':o.customerName,'Sản phẩm':o.productName,'SL':o.quantity,
       'Đơn giá':o.unitPrice,'Phí ship':o.shippingFee,'Tổng':o.total,'SĐT':o.phone,'Địa chỉ':o.address,
       'Trạng thái':ORDER_STATUS_LABELS[o.status]||o.status,'Thanh toán':PAYMENT_LABELS[o.paymentStatus]||o.paymentStatus,
       'In':o.printStatus,'Ghi chú':o.note
@@ -2278,10 +2405,7 @@ function cartItemAmount(item) {
   }
 
   ['ordQuantity','ordUnitPrice','ordShippingFee'].forEach(id => $('#'+id).addEventListener('input', updateOrderTotalPreview));
-  $('#ordProductCode').addEventListener('change', () => {
-    const p=productsV2.find(x=>x.code.toLowerCase()===$('#ordProductCode').value.trim().toLowerCase());
-    if(p){ $('#ordProductName').value=p.name; $('#ordUnitPrice').value=p.price; updateOrderTotalPreview(); }
-  });
+  $('#ordCustomerId').addEventListener('change', () => autofillCustomerProfile($('#ordCustomerId').value));
   $('#orderModalClose').addEventListener('click', closeOrderModal); $('#orderModalCancel').addEventListener('click', closeOrderModal);
   $('#btnSaveOrder').addEventListener('click', () => saveOrderV2(false)); $('#btnSavePrintOrder').addEventListener('click', () => saveOrderV2(true));
   $('#btnNewManualOrder').addEventListener('click', () => openOrderModal(null,null));

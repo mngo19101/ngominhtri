@@ -353,6 +353,79 @@ function cleanupExpiredComments(now = new Date()) {
   }
   return { removedComments, removedSessions, updatedUsers, checkedAt: now.toISOString() };
 }
+
+function addThreeCalendarMonthsEndOfDay(value) {
+  const source = new Date(value);
+  if (!Number.isFinite(source.getTime())) return null;
+  const vietnam = new Date(source.getTime() + 7 * 60 * 60 * 1000);
+  const year = vietnam.getUTCFullYear();
+  const month = vietnam.getUTCMonth();
+  const day = vietnam.getUTCDate();
+  const lastDayOfTargetMonth = new Date(Date.UTC(year, month + 4, 0)).getUTCDate();
+  const targetDay = Math.min(day, lastDayOfTargetMonth);
+  return new Date(Date.UTC(year, month + 3, targetDay, 16, 59, 59, 999));
+}
+
+function cleanupInactiveCustomers(now = new Date()) {
+  const rows = db.prepare('SELECT user_id, data, updated_at FROM customer_data').all();
+  const latestOrder = db.prepare(`SELECT MAX(created_at) AS last_purchase_at
+    FROM orders
+    WHERE user_id = ? AND deleted_at IS NULL
+      AND lower(replace(customer_id, '@', '')) = lower(?)`);
+  let removedCustomers = 0;
+  let updatedUsers = 0;
+
+  for (const row of rows) {
+    let customersData;
+    try {
+      customersData = JSON.parse(row.data || '{}');
+      if (!customersData || typeof customersData !== 'object' || Array.isArray(customersData)) continue;
+    } catch (err) {
+      console.warn(`[Customer Retention] Bỏ qua dữ liệu lỗi JSON của user #${row.user_id}.`);
+      continue;
+    }
+    let changed = false;
+    for (const [key, customer] of Object.entries(customersData)) {
+      const customerId = cleanText(customer?.uniqueId || key, 120).replace(/^@/, '');
+      const orderTime = Number(latestOrder.get(row.user_id, customerId)?.last_purchase_at) || 0;
+      const itemTime = (Array.isArray(customer?.items) ? customer.items : []).reduce((latest, item) => {
+        const timestamp = new Date(item?.time || 0).getTime();
+        return Number.isFinite(timestamp) ? Math.max(latest, timestamp) : latest;
+      }, 0);
+      const recordedPurchaseAt = Math.max(
+        Number(customer?.lastPurchaseAt) || 0,
+        orderTime,
+        itemTime
+      );
+      const lastPurchaseAt = recordedPurchaseAt ||
+        Number(customer?.profile?.updatedAt) ||
+        Number(row.updated_at) ||
+        0;
+      const expiry = addThreeCalendarMonthsEndOfDay(lastPurchaseAt);
+      if (expiry && now.getTime() > expiry.getTime()) {
+        delete customersData[key];
+        removedCustomers++;
+        changed = true;
+      } else if (lastPurchaseAt && customer.lastPurchaseAt !== lastPurchaseAt) {
+        customer.lastPurchaseAt = lastPurchaseAt;
+        changed = true;
+      }
+    }
+    if (changed) {
+      db.prepare('UPDATE customer_data SET data = ?, updated_at = ? WHERE user_id = ?')
+        .run(JSON.stringify(customersData), Date.now(), row.user_id);
+      updatedUsers++;
+    }
+  }
+
+  if (removedCustomers) {
+    console.log(`[Customer Retention] Đã xóa ${removedCustomers} khách không mua lại quá 3 tháng.`);
+  } else {
+    console.log('[Customer Retention] Không có khách quá 3 tháng cần xóa.');
+  }
+  return { removedCustomers, updatedUsers, checkedAt: now.toISOString() };
+}
+
 function generatePrinterToken() {
   return crypto.randomBytes(5).toString('hex').toUpperCase(); // vd: "A1B2C3D4E5" - đủ ngắn để gõ vào firmware
 }
@@ -899,6 +972,62 @@ function intValue(value, fallback = 0, min = 0, max = 1000000000) {
   return Number.isFinite(n) ? Math.max(min, Math.min(max, n)) : fallback;
 }
 
+function rememberCustomerProfile(userId, profile, options = {}) {
+  const customerId = cleanText(profile?.customerId, 120).replace(/^@/, '');
+  if (!customerId) return;
+  const row = db.prepare('SELECT data FROM customer_data WHERE user_id = ?').get(userId);
+  let data = {};
+  try {
+    data = row?.data ? JSON.parse(row.data) : {};
+    if (!data || typeof data !== 'object' || Array.isArray(data)) data = {};
+  } catch (err) {
+    data = {};
+  }
+  const key = Object.keys(data).find(item =>
+    item.replace(/^@/, '').toLowerCase() === customerId.toLowerCase()
+  ) || customerId;
+  const current = data[key] && typeof data[key] === 'object' ? data[key] : {};
+  const oldProfile = current.profile && typeof current.profile === 'object' ? current.profile : {};
+  const customerName = cleanText(profile?.customerName, 160);
+  const phone = cleanText(profile?.phone, 40);
+  const address = cleanText(profile?.address, 500);
+  const nextProfile = {
+    customerName: customerName || oldProfile.customerName || current.nickname || customerId,
+    phone: phone || oldProfile.phone || '',
+    address: address || oldProfile.address || '',
+    updatedAt: Date.now()
+  };
+  const now = Date.now();
+  data[key] = {
+    ...current,
+    uniqueId: current.uniqueId || customerId,
+    nickname: current.nickname || nextProfile.customerName,
+    items: Array.isArray(current.items) ? current.items : [],
+    profile: nextProfile,
+    lastPurchaseAt: options.markPurchase ? now : (current.lastPurchaseAt || null)
+  };
+  db.prepare(`INSERT INTO customer_data (user_id, data, updated_at) VALUES (?, ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`)
+    .run(userId, JSON.stringify(data), now);
+}
+
+function getRememberedCustomerProfile(userId, customerId) {
+  const normalized = cleanText(customerId, 120).replace(/^@/, '').toLowerCase();
+  if (!normalized) return {};
+  const row = db.prepare('SELECT data FROM customer_data WHERE user_id = ?').get(userId);
+  try {
+    const data = row?.data ? JSON.parse(row.data) : {};
+    const key = Object.keys(data || {}).find(item =>
+      item.replace(/^@/, '').toLowerCase() === normalized
+    );
+    return key && data[key]?.profile && typeof data[key].profile === 'object'
+      ? data[key].profile
+      : {};
+  } catch (err) {
+    return {};
+  }
+}
+
 function makeId(prefix) {
   return `${prefix}_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
 }
@@ -1257,7 +1386,11 @@ app.get('/api/orders', requireAuth, (req, res) => {
 app.post('/api/orders', requireAuth, (req, res) => {
   const b = req.body || {};
   const customerId = cleanText(b.customerId, 120);
-  const customerName = cleanText(b.customerName, 160) || customerId;
+  const rememberedProfile = getRememberedCustomerProfile(req.userId, customerId);
+  const requestedCustomerName = cleanText(b.customerName, 160);
+  const customerName = b.useSavedCustomerProfile && rememberedProfile.customerName
+    ? cleanText(rememberedProfile.customerName, 160)
+    : requestedCustomerName || cleanText(rememberedProfile.customerName, 160) || customerId;
   const productName = cleanText(b.productName, 240) || cleanText(b.comment, 240);
   if (!customerId || !productName) {
     return res.status(400).json({ error: 'Đơn hàng cần có khách hàng và sản phẩm.' });
@@ -1276,6 +1409,8 @@ app.post('/api/orders', requireAuth, (req, res) => {
   const quantity = intValue(b.quantity, 1, 1, 9999);
   const unitPrice = intValue(b.unitPrice, 0);
   const shippingFee = intValue(b.shippingFee, 0);
+  const phone = cleanText(b.phone, 40) || cleanText(rememberedProfile.phone, 40);
+  const address = cleanText(b.address, 500) || cleanText(rememberedProfile.address, 500);
   const total = quantity * unitPrice + shippingFee;
   const id = makeId('ord');
   const now = Date.now();
@@ -1286,9 +1421,10 @@ app.post('/api/orders', requireAuth, (req, res) => {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new', ?, 'not_printed', ?, ?)`)
     .run(id, req.userId, sourceCommentId, cleanText(b.sourceSessionId, 160) || null,
       customerId, customerName, cleanText(b.productCode, 80) || null, productName,
-      quantity, unitPrice, shippingFee, total, cleanText(b.phone, 40) || null,
-      cleanText(b.address, 500) || null, cleanText(b.note, 1000) || null,
+      quantity, unitPrice, shippingFee, total, phone || null,
+      address || null, cleanText(b.note, 1000) || null,
       PAYMENT_STATUSES.has(b.paymentStatus) ? b.paymentStatus : 'unpaid', now, now);
+  rememberCustomerProfile(req.userId, { customerId, customerName, phone, address }, { markPurchase: true });
   addAudit(req.userId, 'order.created', 'order', id, { sourceCommentId, total });
   res.status(201).json({ order: publicOrder(db.prepare('SELECT * FROM orders WHERE id = ?').get(id)) });
 });
@@ -1303,16 +1439,22 @@ app.put('/api/orders/:id', requireAuth, (req, res) => {
   const shippingFee = intValue(b.shippingFee, old.shipping_fee);
   const status = ORDER_STATUSES.has(b.status) ? b.status : old.status;
   const paymentStatus = PAYMENT_STATUSES.has(b.paymentStatus) ? b.paymentStatus : old.payment_status;
+  const customerName = cleanText(b.customerName, 160) || old.customer_name;
+  const phone = cleanText(b.phone, 40);
+  const address = cleanText(b.address, 500);
   db.prepare(`UPDATE orders SET customer_name = ?, product_code = ?, product_name = ?,
     quantity = ?, unit_price = ?, shipping_fee = ?, total = ?, phone = ?, address = ?,
     note = ?, status = ?, payment_status = ?, updated_at = ? WHERE id = ? AND user_id = ?`)
-    .run(cleanText(b.customerName, 160) || old.customer_name,
+    .run(customerName,
       cleanText(b.productCode, 80) || null,
       cleanText(b.productName, 240) || old.product_name,
       quantity, unitPrice, shippingFee, quantity * unitPrice + shippingFee,
-      cleanText(b.phone, 40) || null, cleanText(b.address, 500) || null,
+      phone || null, address || null,
       cleanText(b.note, 1000) || null, status, paymentStatus, Date.now(),
       req.params.id, req.userId);
+  rememberCustomerProfile(req.userId, {
+    customerId: old.customer_id, customerName, phone, address
+  });
   addAudit(req.userId, 'order.updated', 'order', req.params.id, { status, paymentStatus });
   res.json({ order: publicOrder(db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id)) });
 });
@@ -1433,6 +1575,9 @@ app.post('/api/shipments/:id/prepare', requireAuth, (req, res) => {
     status = ?, updated_at = ? WHERE id = ? AND user_id = ?`)
     .run(customerName, phone, address, note, shippingFee, shippingFee, code,
       nextStatus, weight, codAmount, now, now, nextOrderStatus, now, old.id, req.userId);
+  rememberCustomerProfile(req.userId, {
+    customerId: old.customer_id, customerName, phone, address
+  });
   addShipmentEvent(req.userId, old.id, old.shipping_code ? 'details_updated' : 'shipment_created',
     nextStatus, old.shipping_code ? 'Cập nhật thông tin người nhận/kiện hàng' : 'Đã tạo phiếu luân chuyển');
   addAudit(req.userId, old.shipping_code ? 'shipment.updated' : 'shipment.created',
@@ -2031,7 +2176,7 @@ wss.on('connection', (ws) => {
         if (customersData[data.customerId]) {
           customersData[data.customerId].items = (customersData[data.customerId].items || [])
             .filter(it => it.id !== data.itemId);
-          if (customersData[data.customerId].items.length === 0) {
+          if (customersData[data.customerId].items.length === 0 && !customersData[data.customerId].profile) {
             delete customersData[data.customerId];
             customerRemoved = true;
           }
@@ -2339,7 +2484,11 @@ server.listen(PORT, () => {
   console.log('✅ Sẵn sàng nhận lệnh kết nối TikTok Live!');
   // Dọn ngay khi khởi động, sau đó kiểm tra lại mỗi 6 giờ.
   cleanupExpiredComments(new Date());
-  const retentionTimer = setInterval(() => cleanupExpiredComments(new Date()), 6 * 60 * 60 * 1000);
+  cleanupInactiveCustomers(new Date());
+  const retentionTimer = setInterval(() => {
+    cleanupExpiredComments(new Date());
+    cleanupInactiveCustomers(new Date());
+  }, 6 * 60 * 60 * 1000);
   retentionTimer.unref();
   // Mỗi 5 phút chỉ tra lại các mã SPX của đơn chưa giao xong/chưa hoàn xong.
   const spxAutoRefreshTimer = setInterval(refreshPendingSpxTracking, 5 * 60 * 1000);
