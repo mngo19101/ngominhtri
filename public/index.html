@@ -419,6 +419,33 @@
   .status-new{ background:#fff3cd; color:#8a6500; }.status-confirmed{ background:#dbeafe;color:#1d4ed8;}
   .status-packing{background:#ede9fe;color:#6d28d9}.status-shipped{background:#cffafe;color:#0e7490}
   .status-completed{background:#d1fae5;color:#047857}.status-cancelled,.status-returned{background:#fee2e2;color:#b91c1c}
+  .shipping-page{max-width:980px;margin:0 auto;padding-bottom:24px}
+  .shipping-hero{background:linear-gradient(135deg,rgba(255,255,255,.82),rgba(255,222,238,.78));border:1px solid var(--border);border-radius:18px;padding:18px;box-shadow:var(--shadow)}
+  .shipping-hero h2{margin:0 0 4px}.shipping-hero p{margin:0;color:var(--muted);font-size:13px}
+  .shipping-stats{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:10px;margin-top:14px}
+  .shipping-stat{background:rgba(255,255,255,.66);border:1px solid var(--border);border-radius:13px;padding:12px}
+  .shipping-stat small{display:block;color:var(--muted);font-size:11px}.shipping-stat b{display:block;margin-top:4px;font-size:18px;color:var(--text)}
+  .shipping-inner-tabs{display:flex;gap:8px;margin:14px 0 10px;overflow-x:auto}
+  .shipping-inner-tab{white-space:nowrap;border:1px solid var(--border);background:rgba(255,255,255,.62);color:var(--muted);padding:9px 14px;border-radius:999px;font-weight:700;cursor:pointer}
+  .shipping-inner-tab.active{background:var(--teal);border-color:var(--teal);color:#fff}
+  .shipping-filter-tabs{display:flex;gap:7px;margin:10px 0;overflow-x:auto}
+  .shipping-filter{white-space:nowrap;border:0;background:rgba(255,255,255,.58);color:var(--muted);padding:8px 11px;border-radius:9px;font-weight:700;cursor:pointer}
+  .shipping-filter.active{background:rgba(255,92,138,.18);color:var(--text);box-shadow:inset 0 0 0 1px var(--border)}
+  .shipping-card{background:var(--card);border:1px solid var(--border);border-radius:15px;padding:14px;margin:10px 0;box-shadow:0 8px 24px rgba(111,55,88,.07)}
+  .shipping-card-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+  .shipping-code{font-family:'JetBrains Mono',monospace;font-weight:800;font-size:13px;color:var(--teal)}
+  .shipping-recipient{font-weight:800;margin-top:5px}.shipping-address{color:var(--muted);font-size:12.5px;line-height:1.45;margin-top:4px}
+  .shipping-money{text-align:right;font-weight:800;white-space:nowrap}.shipping-money small{display:block;color:var(--muted);font-weight:500}
+  .shipping-card-meta{display:grid;grid-template-columns:repeat(3,minmax(100px,1fr));gap:8px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);font-size:12px}
+  .shipping-card-meta span{color:var(--muted)}.shipping-card-meta b{display:block;color:var(--text);margin-top:2px}
+  .shipping-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}
+  .shipping-status-awaiting_info{background:#fff3cd;color:#8a6500}.shipping-status-ready,.shipping-status-label_created{background:#ede9fe;color:#6d28d9}
+  .shipping-status-awaiting_pickup,.shipping-status-delivering{background:#cffafe;color:#0e7490}.shipping-status-delivery_failed{background:#fee2e2;color:#b91c1c}
+  .shipping-status-delivered{background:#d1fae5;color:#047857}.shipping-status-returning,.shipping-status-returned,.shipping-status-cancelled{background:#f3f4f6;color:#6b7280}
+  .reconcile-row{background:var(--card);border:1px solid var(--border);border-radius:13px;padding:13px;margin:9px 0;display:grid;grid-template-columns:1fr auto;gap:10px}
+  .label-preview-canvas{display:block;width:100%;max-width:420px;height:auto;margin:10px auto;background:#fff;border:1px solid #ddd;border-radius:8px}
+  .shipping-warning{padding:10px 12px;border-radius:10px;background:#fff8df;border:1px solid #f1d58b;color:#7a5a00;font-size:12px;margin-bottom:10px}
+  @media(max-width:700px){.shipping-stats{grid-template-columns:repeat(2,1fr)}.shipping-card-meta{grid-template-columns:repeat(2,1fr)}}
   .app-modal{ position:fixed; inset:0; z-index:1100; display:none; align-items:center; justify-content:center;
     padding:18px; background:rgba(74,46,70,.48); backdrop-filter:blur(4px); }
   .app-modal.open{ display:flex; }
@@ -488,7 +515,7 @@
       <button type="submit" class="btn">Tạo Tài Khoản</button>
     </form>
 
-    <div class="auth-hint">Tài khoản và dữ liệu khách hàng được lưu trên Bridge Server, dùng được ở bất kỳ máy/thiết bị nào — chỉ cần đăng nhập lại đúng tài khoản.</div>
+    <div class="auth-hint">Dữ liệu theo tài khoản, dùng được trên mọi thiết bị.</div>
   </div>
 </div>
 
@@ -565,7 +592,7 @@
       </div>
     </div>
     <div class="customer-list" id="customerListBody">
-      <div class="empty-note">Chưa có khách hàng nào. Bấm "🖨️ In phiếu" ở 1 bình luận để thêm khách hàng + sản phẩm vào giỏ.</div>
+      <div class="empty-note">Chưa có khách. Bấm “In phiếu” ở bình luận để thêm.</div>
     </div>
   </div>
 </div>
@@ -589,7 +616,7 @@
       </div>
     </div>
     <div class="customer-list" id="sessionListBody">
-      <div class="empty-note">Chưa có phiên live nào được lưu. Mỗi lần bấm "Kết Nối TikTok Live", toàn bộ bình luận nhận được sẽ tự động lưu lại ở đây để xem lại sau.</div>
+      <div class="empty-note">Chưa có lịch sử Live.</div>
     </div>
   </div>
 </div>
@@ -675,12 +702,72 @@
   </div>
 </div>
 
+<!-- TAB: VẬN CHUYỂN / PHIẾU LUÂN CHUYỂN -->
+<div class="tab-view" id="viewShipping" style="display:none;">
+  <div class="shipping-page">
+    <div class="shipping-hero">
+      <h2>Vận Chuyển</h2>
+      <p>Tạo phiếu, theo dõi giao hàng và đối soát COD.</p>
+      <div class="shipping-stats">
+        <div class="shipping-stat"><small>Tổng phiếu</small><b id="shipStatOrders">0</b></div>
+        <div class="shipping-stat"><small>COD dự kiến</small><b id="shipStatCod">0đ</b></div>
+        <div class="shipping-stat"><small>Phí giao</small><b id="shipStatFees">0đ</b></div>
+        <div class="shipping-stat"><small>Chờ nhận COD</small><b id="shipStatPending">0đ</b></div>
+      </div>
+    </div>
+
+    <div class="shipping-inner-tabs">
+      <button class="shipping-inner-tab active" data-shipping-panel="orders">Đơn vận chuyển</button>
+      <button class="shipping-inner-tab" data-shipping-panel="reconcile">Đối soát COD</button>
+      <button class="shipping-inner-tab" data-shipping-panel="settings">Người gửi</button>
+    </div>
+
+    <div id="shippingOrdersPanel">
+      <div class="toolbar">
+        <input id="shippingSearch" type="search" placeholder="Mã phiếu, TikTok, tên hoặc SĐT">
+        <button class="btn-mini" id="btnRefreshShipping">↻ Tải lại</button>
+      </div>
+      <div class="shipping-filter-tabs">
+        <button class="shipping-filter active" data-shipping-filter="all">Tất cả</button>
+        <button class="shipping-filter" data-shipping-filter="action">Cần xử lý <span id="shippingActionCount">0</span></button>
+        <button class="shipping-filter" data-shipping-filter="delivering">Đang giao</button>
+        <button class="shipping-filter" data-shipping-filter="done">Đã giao</button>
+        <button class="shipping-filter" data-shipping-filter="returned">Hoàn/Hủy</button>
+      </div>
+      <div id="shippingList"><div class="empty-note">Chưa có đơn hàng.</div></div>
+    </div>
+
+    <div id="shippingReconcilePanel" style="display:none;">
+      <div class="shipping-warning">Đối soát thủ công. Hệ thống không tự chuyển tiền ngân hàng.</div>
+      <div class="cust-summary">
+        <span>Đã giao: <b id="reconcileDeliveredCount">0</b></span>
+        <span>Đã đối soát: <b id="reconcileCheckedAmount">0đ</b></span>
+        <span>Đã nhận: <b id="reconcilePaidAmount">0đ</b></span>
+      </div>
+      <div id="reconcileList"><div class="empty-note">Chưa có đơn đã giao.</div></div>
+    </div>
+
+    <div id="shippingSettingsPanel" style="display:none;">
+      <div class="menu-card">
+        <h2>Thông tin người gửi</h2>
+        <div class="form-grid">
+          <div class="field"><label>Tên shop</label><input id="shipSenderName" placeholder="SHOP LIVE"></div>
+          <div class="field"><label>Số điện thoại</label><input id="shipSenderPhone" inputmode="tel"></div>
+          <div class="field full"><label>Địa chỉ lấy hàng</label><textarea id="shipSenderAddress"></textarea></div>
+        </div>
+        <div class="toolbar"><button class="btn" id="btnSaveShippingSettings">Lưu người gửi</button></div>
+        <div class="status" id="shippingSettingsStatus">Thông tin này sẽ in trên mọi phiếu.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- TAB V2: DANH MỤC SẢN PHẨM -->
 <div class="tab-view" id="viewProducts" style="display:none;">
   <div class="management-page">
     <div class="feed-panel-header"><h2>Danh Mục & Quy Tắc Nhận Sản Phẩm</h2>
       <button class="btn-print" id="btnNewProduct">＋ Thêm sản phẩm</button></div>
-    <div class="menu-hint">Khi comment chứa mã hoặc bí danh, hệ thống tự điền tên và giá. Ví dụ: mã A12, bí danh “váy hoa”.</div>
+    <div class="menu-hint">Comment có mã hoặc bí danh sẽ tự nhận sản phẩm.</div>
     <div id="productList" style="margin-top:12px;"><div class="empty-note">Chưa có sản phẩm.</div></div>
   </div>
 </div>
@@ -739,11 +826,7 @@
         <span class="k">Trạng thái máy in</span>
         <span class="v" id="menuPrinterConnected">-</span>
       </div>
-      <div class="menu-hint">
-        Mỗi tài khoản có 1 Mã Máy In riêng, KHÔNG trùng với ai khác. Nạp đúng mã này vào firmware ESP32 của bạn
-        (thay cho PRINTER_TOKEN) thì lệnh in của bạn sẽ chỉ gửi tới đúng máy in của bạn, không lẫn sang tài khoản khác.
-        Không chia sẻ mã này cho người khác.
-      </div>
+      <div class="menu-hint">Nhập mã này vào ESP32. Không chia sẻ cho người khác.</div>
     </div>
 
     <div class="menu-card">
@@ -778,7 +861,7 @@
         <button class="btn-mini danger-text" id="btnRestoreBackup">↥ Khôi phục sao lưu</button>
         <input type="file" id="backupFileInput" accept="application/json,.json" style="display:none;">
       </div>
-      <div class="menu-hint">Đổi mật khẩu sẽ đăng xuất các thiết bị khác. Bản sao lưu chứa đơn, sản phẩm, khách hàng và lịch sử Live của tài khoản.</div>
+      <div class="menu-hint">Sao lưu gồm đơn, sản phẩm, khách và lịch sử Live.</div>
     </div>
 
     <div class="menu-card">
@@ -821,6 +904,9 @@
   </button>
   <button class="nav-item" id="navOrders" data-tab="orders">
     <span class="nav-icon">📦</span><span class="nav-label-row"><span class="nav-label">Đơn hàng</span><span class="badge-count" id="orderCountBadge">0</span></span>
+  </button>
+  <button class="nav-item" id="navShipping" data-tab="shipping">
+    <span class="nav-icon">🚚</span><span class="nav-label-row"><span class="nav-label">Vận chuyển</span><span class="badge-count" id="shippingCountBadge">0</span></span>
   </button>
   <button class="nav-item" id="navProducts" data-tab="products">
     <span class="nav-icon">🏷️</span><span class="nav-label">Sản phẩm</span>
@@ -877,6 +963,40 @@
   </div>
 </div>
 
+<!-- VẬN CHUYỂN: NHẬP NGƯỜI NHẬN / KIỆN HÀNG -->
+<div class="app-modal" id="shippingModal">
+  <div class="app-modal-card">
+    <div class="modal-head"><h3 id="shippingModalTitle">Tạo phiếu luân chuyển</h3><button class="btn-mini" id="shippingModalClose">✕</button></div>
+    <div class="status" id="shippingOrderSummary" style="margin:0 0 12px;"></div>
+    <form class="form-grid">
+      <div class="field"><label>Người nhận *</label><input id="shipReceiverName"></div>
+      <div class="field"><label>Số điện thoại *</label><input id="shipReceiverPhone" inputmode="tel"></div>
+      <div class="field full"><label>Địa chỉ *</label><textarea id="shipReceiverAddress"></textarea></div>
+      <div class="field"><label>Khối lượng (gram)</label><input id="shipWeight" type="number" min="1" max="100000" value="500"></div>
+      <div class="field"><label>Phí giao</label><input id="shipFee" type="number" min="0" value="0"></div>
+      <div class="field"><label>Tiền thu COD</label><input id="shipCod" type="number" min="0" value="0"></div>
+      <div class="field full"><label>Ghi chú</label><textarea id="shipNote"></textarea></div>
+    </form>
+    <div class="auth-error" id="shippingModalError"></div>
+    <div class="modal-actions">
+      <button class="btn-mini" id="shippingModalCancel">Hủy</button>
+      <button class="btn" id="btnSaveShipment">Lưu & tạo mã phiếu</button>
+    </div>
+  </div>
+</div>
+
+<!-- VẬN CHUYỂN: XEM / TẢI ẢNH PHIẾU -->
+<div class="app-modal" id="shippingLabelModal">
+  <div class="app-modal-card">
+    <div class="modal-head"><h3>Phiếu luân chuyển</h3><button class="btn-mini" id="shippingLabelClose">✕</button></div>
+    <canvas id="shippingLabelCanvas" class="label-preview-canvas" width="1200" height="1800"></canvas>
+    <div class="modal-actions">
+      <button class="btn-mini" id="btnDownloadShippingLabel">Tải ảnh PNG</button>
+      <button class="btn" id="btnPrintShippingLabel">In ảnh</button>
+    </div>
+  </div>
+</div>
+
 <!-- V2: BIÊN TẬP SẢN PHẨM -->
 <div class="app-modal" id="productModal">
   <div class="app-modal-card">
@@ -902,11 +1022,18 @@
   let authToken = null;   // token phiên đăng nhập, lấy từ Bridge Server
   let ordersV2 = [];
   let productsV2 = [];
+  let shipmentsV2 = [];
   let editingOrderId = null;
   let editingProductId = null;
+  let editingShipmentId = null;
+  let activeShippingFilter = 'all';
+  let labelOrder = null;
   let draftComment = null;
   let printBusy = false;
-  let appSettings = { shopName: 'SHOP LIVE', paperWidth: 80, copies: 1, orderKeywords: ['chốt','lấy','mua'] };
+  let appSettings = {
+    shopName: 'SHOP LIVE', paperWidth: 80, copies: 1, orderKeywords: ['chốt','lấy','mua'],
+    shippingSenderName: '', shippingSenderPhone: '', shippingSenderAddress: ''
+  };
 
   // ===== TÀI KHOẢN (ĐĂNG NHẬP / ĐĂNG KÝ QUA BRIDGE SERVER) =====
   // Tài khoản, mật khẩu và dữ liệu khách hàng giờ được lưu trong database
@@ -1047,7 +1174,7 @@
     await loadSavedTiktokIds();
     await loadSessions();
     renderSessionBadge();
-    await Promise.all([loadOrdersV2(), loadProductsV2(), loadSettingsV2()]);
+    await Promise.all([loadOrdersV2(), loadProductsV2(), loadSettingsV2(), loadShippingV2()]);
     await refreshAdminFlag();
     initWS();
   }
@@ -1079,7 +1206,7 @@
     await loadSavedTiktokIds();
     await loadSessions();
     renderSessionBadge();
-    await Promise.all([loadOrdersV2(), loadProductsV2(), loadSettingsV2()]);
+    await Promise.all([loadOrdersV2(), loadProductsV2(), loadSettingsV2(), loadShippingV2()]);
     await refreshAdminFlag();
     initWS();
     return true;
@@ -1310,7 +1437,7 @@
         ? '<div class="empty-note">Không tìm thấy khách hàng theo tên hoặc ID TikTok đã nhập.</div>'
         : selectedDate
         ? '<div class="empty-note">Không có khách hàng nào trong ngày đã chọn.</div>'
-        : '<div class="empty-note">Chưa có khách hàng nào. Bấm "🖨️ In phiếu" ở 1 bình luận để thêm khách hàng + sản phẩm vào giỏ.</div>';
+        : '<div class="empty-note">Chưa có khách. Bấm “In phiếu” ở bình luận để thêm.</div>';
       return;
     }
 
@@ -1407,16 +1534,19 @@
       $('#settingPaperWidth').value = String(appSettings.paperWidth || 80);
       $('#settingCopies').value = appSettings.copies || 1;
       $('#settingKeywords').value = (appSettings.orderKeywords || []).join(', ');
+      $('#shipSenderName').value = appSettings.shippingSenderName || appSettings.shopName || 'SHOP LIVE';
+      $('#shipSenderPhone').value = appSettings.shippingSenderPhone || '';
+      $('#shipSenderAddress').value = appSettings.shippingSenderAddress || '';
     } catch (err) { console.error('Không tải được cài đặt:', err); }
   }
 
   async function saveSettingsV2() {
-    appSettings = {
+    appSettings = Object.assign({}, appSettings, {
       shopName: $('#settingShopName').value.trim() || 'SHOP LIVE',
       paperWidth: parseInt($('#settingPaperWidth').value, 10) === 58 ? 58 : 80,
       copies: Math.max(1, Math.min(5, parseInt($('#settingCopies').value, 10) || 1)),
       orderKeywords: $('#settingKeywords').value.split(',').map(x => x.trim()).filter(Boolean).slice(0, 30)
-    };
+    });
     try {
       await apiFetch('/api/settings', {method:'PUT',body:JSON.stringify({settings:appSettings})});
       $('#settingStatus').textContent = '✅ Đã lưu và đồng bộ cài đặt.';
@@ -1555,7 +1685,7 @@
   async function quickPrintAndOrder(cmt, button) {
     if (!cmt?.uniqueId) return alert('Bình luận không có ID TikTok hợp lệ.');
     if (ordersV2.some(o => o.sourceCommentId && o.sourceCommentId === cmt.id)) {
-      return alert('Bình luận này đã được thêm đơn. Muốn in lại, hãy vào tab Đơn hàng.');
+      return alert('Bình luận đã có đơn. Vào Đơn hàng để in lại.');
     }
     const matched = findProductFromText(cmt.comment);
     const quantity = guessQuantity(cmt.comment);
@@ -1581,7 +1711,7 @@
         }));
         if (cmt.id) markSessionCommentAdded(cmt.id);
         await loadOrdersV2();
-        if (!printed) alert('Đơn đã được thêm vào giỏ khách hàng nhưng máy in báo lỗi. Vào tab Đơn hàng để bấm In lại.');
+        if (!printed) alert('Đã lưu đơn nhưng in lỗi. Vào Đơn hàng để in lại.');
       } catch (err) { alert(err.message); }
     });
   }
@@ -1604,7 +1734,7 @@
     $('#orderRevenueSummary').textContent = formatTien(revenue);
     $('#orderPendingSummary').textContent = list.filter(o => ['new','confirmed','packing'].includes(o.status)).length;
     $('#orderCountBadge').textContent = ordersV2.filter(o => o.status === 'new').length;
-    if (!list.length) { box.innerHTML = '<div class="empty-note">Không có đơn phù hợp bộ lọc.</div>'; return; }
+    if (!list.length) { box.innerHTML = '<div class="empty-note">Không có đơn phù hợp.</div>'; return; }
     box.innerHTML = '';
     list.forEach(o => {
       const card = document.createElement('div');
@@ -1637,6 +1767,291 @@
     });
   }
 
+  // ===== VẬN CHUYỂN + PHIẾU PNG =====
+  const SHIPPING_STATUS_LABELS = {
+    awaiting_info:'Chờ thông tin', ready:'Sẵn sàng', label_created:'Đã xuất phiếu',
+    awaiting_pickup:'Chờ lấy hàng', delivering:'Đang giao', delivery_failed:'Giao thất bại',
+    delivered:'Đã giao', returning:'Đang hoàn', returned:'Đã hoàn', cancelled:'Đã hủy'
+  };
+  const SHIPPING_STATUS_CHOICES = ['ready','label_created','awaiting_pickup','delivering','delivery_failed','delivered','returning','returned','cancelled'];
+
+  async function loadShippingV2() {
+    if (!authToken) return;
+    try {
+      const data = await apiFetch('/api/shipments');
+      shipmentsV2 = data.shipments || [];
+      renderShippingV2();
+      renderReconcileV2();
+    } catch (err) {
+      console.error('Không tải được vận chuyển:', err);
+    }
+  }
+
+  function shippingNeedsAction(o) {
+    return !o.shippingCode || ['awaiting_info','delivery_failed'].includes(o.shippingStatus);
+  }
+
+  function renderShippingV2() {
+    const box = $('#shippingList');
+    if (!box) return;
+    const prepared = shipmentsV2.filter(o => !!o.shippingCode);
+    const valid = prepared.filter(o => !['cancelled','returned'].includes(o.shippingStatus));
+    const pendingCod = prepared.filter(o => o.shippingStatus === 'delivered' && !o.codPaidAt)
+      .reduce((sum,o) => sum + (o.codAmount || 0), 0);
+    $('#shipStatOrders').textContent = prepared.length;
+    $('#shipStatCod').textContent = formatTien(valid.reduce((sum,o) => sum + (o.codAmount || 0), 0));
+    $('#shipStatFees').textContent = formatTien(valid.reduce((sum,o) => sum + (o.shippingFee || 0), 0));
+    $('#shipStatPending').textContent = formatTien(pendingCod);
+    $('#shippingCountBadge').textContent = shipmentsV2.filter(shippingNeedsAction).length;
+    $('#shippingActionCount').textContent = shipmentsV2.filter(shippingNeedsAction).length;
+
+    const q = ($('#shippingSearch').value || '').trim().toLowerCase().replace(/^@/,'');
+    const list = shipmentsV2.filter(o => {
+      if (q && ![o.shippingCode,o.customerId,o.customerName,o.phone,o.address,o.productCode,o.productName]
+        .join(' ').toLowerCase().includes(q)) return false;
+      if (activeShippingFilter === 'action') return shippingNeedsAction(o);
+      if (activeShippingFilter === 'delivering') return ['awaiting_pickup','delivering','delivery_failed'].includes(o.shippingStatus);
+      if (activeShippingFilter === 'done') return o.shippingStatus === 'delivered';
+      if (activeShippingFilter === 'returned') return ['returning','returned','cancelled'].includes(o.shippingStatus);
+      return true;
+    });
+    if (!list.length) {
+      box.innerHTML = '<div class="empty-note">Không có đơn phù hợp.</div>';
+      return;
+    }
+    box.innerHTML = '';
+    list.forEach(o => {
+      const status = o.shippingCode ? o.shippingStatus : 'awaiting_info';
+      const card = document.createElement('div');
+      card.className = 'shipping-card';
+      card.innerHTML = `
+        <div class="shipping-card-head">
+          <div>
+            <div class="shipping-code">${escapeHtml(o.shippingCode || 'CHƯA TẠO PHIẾU')}</div>
+            <div class="shipping-recipient">${escapeHtml(o.customerName)} · @${escapeHtml(o.customerId)}</div>
+            <div class="shipping-address">${o.phone ? '☎ '+escapeHtml(o.phone)+'<br>' : ''}${escapeHtml(o.address || 'Chưa có địa chỉ')}</div>
+          </div>
+          <div class="shipping-money">${formatTien(o.codAmount ?? o.total)}<small>COD</small>
+            <span class="status-pill shipping-status-${status}">${SHIPPING_STATUS_LABELS[status]}</span></div>
+        </div>
+        <div class="shipping-card-meta">
+          <span>Sản phẩm<b>${escapeHtml((o.productCode ? o.productCode+' · ' : '')+o.productName)} × ${o.quantity}</b></span>
+          <span>Khối lượng<b>${o.packageWeight || 500} g</b></span>
+          <span>Phí giao<b>${formatTien(o.shippingFee || 0)}</b></span>
+        </div>
+        <div class="shipping-actions">
+          <button class="btn-mini edit-shipment">${o.shippingCode ? 'Sửa thông tin' : 'Bổ sung & tạo phiếu'}</button>
+          ${o.shippingCode ? `<button class="btn-mini export-label">In đơn (xuất ảnh)</button>
+          <select class="shipment-status-select">${SHIPPING_STATUS_CHOICES.map(k=>`<option value="${k}"${status===k?' selected':''}>${SHIPPING_STATUS_LABELS[k]}</option>`).join('')}</select>
+          <button class="btn-mini shipment-history">Hành trình</button>` : ''}
+          ${status === 'delivery_failed' ? '<button class="btn-mini retry-shipment">Giao lại</button><button class="btn-mini return-shipment">Chuyển hoàn</button>' : ''}
+        </div>`;
+      card.querySelector('.edit-shipment').addEventListener('click', () => openShippingModal(o));
+      card.querySelector('.export-label')?.addEventListener('click', e => withButtonBusy(e.currentTarget, () => exportShippingLabel(o, true)));
+      card.querySelector('.shipment-status-select')?.addEventListener('change', async e => {
+        try {
+          await apiFetch(`/api/shipments/${o.id}/status`, {method:'POST',body:JSON.stringify({status:e.target.value})});
+          await Promise.all([loadShippingV2(),loadOrdersV2()]);
+        } catch(err){ alert(err.message); }
+      });
+      card.querySelector('.retry-shipment')?.addEventListener('click', () => changeShipmentStatus(o,'delivering','Yêu cầu giao lại'));
+      card.querySelector('.return-shipment')?.addEventListener('click', () => changeShipmentStatus(o,'returning','Yêu cầu chuyển hoàn'));
+      card.querySelector('.shipment-history')?.addEventListener('click', () => showShipmentHistory(o));
+      box.appendChild(card);
+    });
+  }
+
+  function openShippingModal(order) {
+    editingShipmentId = order.id;
+    $('#shippingModalTitle').textContent = order.shippingCode ? `Sửa ${order.shippingCode}` : 'Tạo phiếu luân chuyển';
+    $('#shippingOrderSummary').textContent = `${order.productCode ? order.productCode+' · ' : ''}${order.productName} × ${order.quantity} · @${order.customerId}`;
+    $('#shipReceiverName').value = order.customerName || '';
+    $('#shipReceiverPhone').value = order.phone || '';
+    $('#shipReceiverAddress').value = order.address || '';
+    $('#shipWeight').value = order.packageWeight || 500;
+    $('#shipFee').value = order.shippingFee || 0;
+    $('#shipCod').value = order.codAmount ?? order.total;
+    $('#shipNote').value = order.note || '';
+    $('#shippingModalError').textContent = '';
+    $('#shippingModal').classList.add('open');
+  }
+
+  function closeShippingModal() {
+    $('#shippingModal').classList.remove('open');
+    editingShipmentId = null;
+  }
+
+  async function saveShipmentV2() {
+    if (!editingShipmentId) return;
+    const payload = {
+      customerName:$('#shipReceiverName').value.trim(), phone:$('#shipReceiverPhone').value.trim(),
+      address:$('#shipReceiverAddress').value.trim(), packageWeight:parseInt($('#shipWeight').value,10)||500,
+      shippingFee:parseInt($('#shipFee').value,10)||0, codAmount:parseInt($('#shipCod').value,10)||0,
+      note:$('#shipNote').value.trim()
+    };
+    $('#shippingModalError').textContent = '';
+    try {
+      await apiFetch(`/api/shipments/${editingShipmentId}/prepare`, {method:'POST',body:JSON.stringify(payload)});
+      closeShippingModal();
+      await Promise.all([loadShippingV2(),loadOrdersV2()]);
+    } catch(err){ $('#shippingModalError').textContent = err.message; }
+  }
+
+  async function changeShipmentStatus(order,status,note='') {
+    try {
+      await apiFetch(`/api/shipments/${order.id}/status`, {method:'POST',body:JSON.stringify({status,note})});
+      await Promise.all([loadShippingV2(),loadOrdersV2()]);
+    } catch(err){ alert(err.message); }
+  }
+
+  async function showShipmentHistory(order) {
+    try {
+      const data = await apiFetch(`/api/shipments/${order.id}/events`);
+      const lines = (data.events||[]).map(e =>
+        `${new Date(e.createdAt).toLocaleString('vi-VN')} — ${SHIPPING_STATUS_LABELS[e.status]||e.eventType}${e.note?' — '+e.note:''}`);
+      alert(lines.length ? lines.join('\n') : 'Chưa có hành trình.');
+    } catch(err){ alert(err.message); }
+  }
+
+  function renderReconcileV2() {
+    const delivered = shipmentsV2.filter(o => o.shippingCode && o.shippingStatus === 'delivered');
+    $('#reconcileDeliveredCount').textContent = delivered.length;
+    $('#reconcileCheckedAmount').textContent = formatTien(delivered.filter(o=>o.codReconciledAt).reduce((s,o)=>s+(o.codAmount||0),0));
+    $('#reconcilePaidAmount').textContent = formatTien(delivered.filter(o=>o.codPaidAt).reduce((s,o)=>s+(o.codAmount||0),0));
+    const box = $('#reconcileList');
+    if (!delivered.length) { box.innerHTML='<div class="empty-note">Chưa có đơn đã giao.</div>'; return; }
+    box.innerHTML='';
+    delivered.forEach(o => {
+      const row=document.createElement('div');
+      row.className='reconcile-row';
+      row.innerHTML=`<div><b>${escapeHtml(o.shippingCode)}</b> · ${escapeHtml(o.customerName)}
+        <div class="order-meta">COD ${formatTien(o.codAmount||0)} · Phí ${formatTien(o.shippingFee||0)}<br>
+        ${o.codPaidAt?'Đã nhận tiền':o.codReconciledAt?'Đã đối soát':'Chờ đối soát'}</div></div>
+        <div class="shipping-actions">
+          ${!o.codReconciledAt?'<button class="btn-mini reconcile-check">Đã đối soát</button>':''}
+          ${!o.codPaidAt?'<button class="btn-mini reconcile-paid">Đã nhận COD</button>':'<span class="status-pill status-completed">Đã nhận</span>'}
+          ${(o.codReconciledAt||o.codPaidAt)?'<button class="btn-mini reconcile-reset">Đặt lại</button>':''}
+        </div>`;
+      row.querySelector('.reconcile-check')?.addEventListener('click',()=>reconcileShipment(o,'reconciled'));
+      row.querySelector('.reconcile-paid')?.addEventListener('click',()=>reconcileShipment(o,'paid'));
+      row.querySelector('.reconcile-reset')?.addEventListener('click',()=>reconcileShipment(o,'reset'));
+      box.appendChild(row);
+    });
+  }
+
+  async function reconcileShipment(order,action) {
+    try {
+      await apiFetch(`/api/shipments/${order.id}/reconcile`, {method:'POST',body:JSON.stringify({action})});
+      await loadShippingV2();
+    } catch(err){ alert(err.message); }
+  }
+
+  function drawWrappedText(ctx,text,x,y,maxWidth,lineHeight,maxLines=99) {
+    const words=String(text||'').split(/\s+/); let line=''; let lines=0;
+    for(let i=0;i<words.length;i++){
+      const test=line?line+' '+words[i]:words[i];
+      if(ctx.measureText(test).width>maxWidth && line){
+        ctx.fillText(line,x,y); y+=lineHeight; lines++; line=words[i];
+        if(lines>=maxLines-1){ line += i<words.length-1?'…':''; break; }
+      } else line=test;
+    }
+    if(line && lines<maxLines) { ctx.fillText(line,x,y); y+=lineHeight; }
+    return y;
+  }
+
+  function buildShippingLabel(order) {
+    const canvas=$('#shippingLabelCanvas'),ctx=canvas.getContext('2d');
+    const W=canvas.width,H=canvas.height,pad=78;
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);ctx.fillStyle='#111';ctx.textBaseline='top';
+    ctx.textAlign='center';ctx.font='800 56px Arial';ctx.fillText(String(appSettings.shippingSenderName||appSettings.shopName||'SHOP LIVE').slice(0,34),W/2,65);
+    ctx.font='700 36px Arial';ctx.fillText('PHIẾU LUÂN CHUYỂN',W/2,140);
+    ctx.font='28px Arial';ctx.fillStyle='#555';ctx.fillText('Phiếu giao hàng nội bộ',W/2,195);
+    ctx.strokeStyle='#111';ctx.lineWidth=4;ctx.strokeRect(pad,255,W-pad*2,150);
+    ctx.fillStyle='#111';ctx.font='800 52px monospace';ctx.fillText(order.shippingCode,W/2,300);
+    let y=460;ctx.textAlign='left';ctx.font='700 28px Arial';ctx.fillText('NGƯỜI GỬI',pad,y);y+=45;
+    ctx.font='32px Arial';ctx.fillText(appSettings.shippingSenderName||appSettings.shopName||'SHOP LIVE',pad,y);y+=44;
+    ctx.font='28px Arial';y=drawWrappedText(ctx,`${appSettings.shippingSenderPhone||'Chưa có SĐT'} · ${appSettings.shippingSenderAddress||'Chưa có địa chỉ lấy hàng'}`,pad,y,W-pad*2,38,3);
+    y+=20;ctx.strokeStyle='#bbb';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-pad,y);ctx.stroke();y+=32;
+    ctx.font='700 28px Arial';ctx.fillText('NGƯỜI NHẬN',pad,y);y+=45;
+    ctx.font='800 44px Arial';ctx.fillText(order.customerName,pad,y);y+=58;
+    ctx.font='700 38px Arial';ctx.fillText(order.phone,pad,y);y+=52;
+    ctx.font='30px Arial';y=drawWrappedText(ctx,order.address,pad,y,W-pad*2,42,4);
+    y+=18;ctx.strokeStyle='#bbb';ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(W-pad,y);ctx.stroke();y+=32;
+    ctx.font='700 28px Arial';ctx.fillText('HÀNG HÓA',pad,y);y+=45;
+    ctx.font='32px Arial';y=drawWrappedText(ctx,`${order.productCode?order.productCode+' · ':''}${order.productName} × ${order.quantity}`,pad,y,W-pad*2,43,4);
+    ctx.font='28px Arial';ctx.fillText(`Khối lượng: ${order.packageWeight||500} g`,pad,y+10);
+    y+=85;ctx.fillStyle='#111';ctx.fillRect(pad,y,W-pad*2,142);ctx.fillStyle='#fff';
+    ctx.font='700 30px Arial';ctx.fillText('THU NGƯỜI NHẬN',pad+28,y+22);
+    ctx.textAlign='right';ctx.font='800 58px Arial';ctx.fillText(formatTien(order.codAmount||0),W-pad-28,y+58);
+    ctx.fillStyle='#111';ctx.textAlign='left';y+=180;ctx.font='27px Arial';
+    if(order.note) y=drawWrappedText(ctx,`Ghi chú: ${order.note}`,pad,y,W-pad*2,38,3);
+    ctx.font='26px Arial';ctx.fillStyle='#555';ctx.fillText(`TikTok: @${order.customerId} · Phí giao: ${formatTien(order.shippingFee||0)}`,pad,H-145);
+    ctx.textAlign='center';ctx.font='24px Arial';ctx.fillText(`Tạo lúc ${new Date().toLocaleString('vi-VN')}`,W/2,H-85);
+    labelOrder=order;
+  }
+
+  function downloadShippingLabel() {
+    if(!labelOrder) return;
+    const a=document.createElement('a');
+    a.href=$('#shippingLabelCanvas').toDataURL('image/png');
+    a.download=`phieu-${labelOrder.shippingCode}.png`;
+    a.click();
+  }
+
+  async function exportShippingLabel(order,autoDownload=false) {
+    buildShippingLabel(order);
+    $('#shippingLabelModal').classList.add('open');
+    if(autoDownload) downloadShippingLabel();
+    try {
+      await apiFetch(`/api/shipments/${order.id}/label`, {method:'POST',body:'{}'});
+      await loadShippingV2();
+    } catch(err){ console.error(err); }
+  }
+
+  function printShippingLabel() {
+    if(!labelOrder) return;
+    const dataUrl=$('#shippingLabelCanvas').toDataURL('image/png');
+    const win=window.open('','_blank');
+    if(!win) return alert('Trình duyệt đang chặn cửa sổ in.');
+    win.document.write(`<html><head><title>${escapeHtml(labelOrder.shippingCode)}</title><style>@page{margin:0}body{margin:0;text-align:center}img{width:100%;max-width:100mm;height:auto}</style></head><body><img src="${dataUrl}" onload="window.print()"></body></html>`);
+    win.document.close();
+  }
+
+  async function saveShippingSettings() {
+    appSettings=Object.assign({},appSettings,{
+      shippingSenderName:$('#shipSenderName').value.trim()||appSettings.shopName||'SHOP LIVE',
+      shippingSenderPhone:$('#shipSenderPhone').value.trim(),
+      shippingSenderAddress:$('#shipSenderAddress').value.trim()
+    });
+    try {
+      await apiFetch('/api/settings',{method:'PUT',body:JSON.stringify({settings:appSettings})});
+      $('#shippingSettingsStatus').textContent='Đã lưu.';
+    } catch(err){ $('#shippingSettingsStatus').textContent=err.message; }
+  }
+
+  document.querySelectorAll('.shipping-inner-tab').forEach(btn=>btn.addEventListener('click',()=>{
+    document.querySelectorAll('.shipping-inner-tab').forEach(x=>x.classList.toggle('active',x===btn));
+    const panel=btn.dataset.shippingPanel;
+    $('#shippingOrdersPanel').style.display=panel==='orders'?'':'none';
+    $('#shippingReconcilePanel').style.display=panel==='reconcile'?'':'none';
+    $('#shippingSettingsPanel').style.display=panel==='settings'?'':'none';
+    if(panel==='reconcile') renderReconcileV2();
+  }));
+  document.querySelectorAll('.shipping-filter').forEach(btn=>btn.addEventListener('click',()=>{
+    activeShippingFilter=btn.dataset.shippingFilter;
+    document.querySelectorAll('.shipping-filter').forEach(x=>x.classList.toggle('active',x===btn));
+    renderShippingV2();
+  }));
+  $('#shippingSearch').addEventListener('input',renderShippingV2);
+  $('#btnRefreshShipping').addEventListener('click',loadShippingV2);
+  $('#shippingModalClose').addEventListener('click',closeShippingModal);
+  $('#shippingModalCancel').addEventListener('click',closeShippingModal);
+  $('#btnSaveShipment').addEventListener('click',saveShipmentV2);
+  $('#shippingLabelClose').addEventListener('click',()=>$('#shippingLabelModal').classList.remove('open'));
+  $('#btnDownloadShippingLabel').addEventListener('click',downloadShippingLabel);
+  $('#btnPrintShippingLabel').addEventListener('click',printShippingLabel);
+  $('#btnSaveShippingSettings').addEventListener('click',saveShippingSettings);
+
   async function withButtonBusy(button, fn) {
     if (button.disabled) return;
     const old = button.textContent;
@@ -1647,7 +2062,7 @@
   function renderProductsV2() {
     const box = $('#productList');
     if (!box) return;
-    if (!productsV2.length) { box.innerHTML = '<div class="empty-note">Chưa có sản phẩm. Hãy thêm mã để tự nhận diện comment.</div>'; return; }
+    if (!productsV2.length) { box.innerHTML = '<div class="empty-note">Chưa có sản phẩm.</div>'; return; }
     box.innerHTML = '';
     productsV2.forEach(p => {
       const row = document.createElement('div');
@@ -1963,7 +2378,7 @@
     $('#summarySessionCommentCount').textContent = totalComments;
 
     if (entries.length === 0) {
-      body.innerHTML = '<div class="empty-note">Chưa có phiên live nào được lưu. Mỗi lần bấm "Kết Nối TikTok Live", toàn bộ bình luận nhận được sẽ tự động lưu lại ở đây để xem lại sau.</div>';
+      body.innerHTML = '<div class="empty-note">Chưa có lịch sử Live.</div>';
       return;
     }
 
@@ -1988,7 +2403,7 @@
     });
 
     if (filteredList.length === 0) {
-      body.innerHTML = '<div class="empty-note">Không tìm thấy bình luận hoặc phiên live nào khớp từ khóa.</div>';
+      body.innerHTML = '<div class="empty-note">Không tìm thấy kết quả.</div>';
       return;
     }
 
@@ -2111,7 +2526,7 @@
   // gồm 4 cột: Giờ, Tên, ID TikTok, Bình luận — sắp theo thời gian tăng dần.
   function exportGroupToExcel(username, dateKey, comments) {
     if (typeof XLSX === 'undefined') {
-      alert('Không tải được thư viện xuất Excel (cần có mạng internet). Vui lòng thử lại.');
+      alert('Không tải được công cụ Excel. Hãy kiểm tra mạng.');
       return;
     }
     const sorted = [...comments].sort((a, b) => new Date(a.receivedAt) - new Date(b.receivedAt));
@@ -2283,6 +2698,7 @@
     $('#viewSessions').style.display = tab === 'sessions' ? '' : 'none';
     $('#viewReport').style.display = tab === 'report' ? '' : 'none';
     $('#viewOrders').style.display = tab === 'orders' ? '' : 'none';
+    $('#viewShipping').style.display = tab === 'shipping' ? '' : 'none';
     $('#viewProducts').style.display = tab === 'products' ? '' : 'none';
     $('#viewMenu').style.display = tab === 'menu' ? '' : 'none';
     $('#viewAdmin').style.display = tab === 'admin' ? '' : 'none';
@@ -2291,6 +2707,7 @@
     $('#navSessions').classList.toggle('active', tab === 'sessions');
     $('#navReport').classList.toggle('active', tab === 'report');
     $('#navOrders').classList.toggle('active', tab === 'orders');
+    $('#navShipping').classList.toggle('active', tab === 'shipping');
     $('#navProducts').classList.toggle('active', tab === 'products');
     $('#navMenu').classList.toggle('active', tab === 'menu');
     $('#navAdmin').classList.toggle('active', tab === 'admin');
@@ -2298,6 +2715,7 @@
     if (tab === 'sessions') renderSessionList();
     if (tab === 'report') renderReport($('#reportDate').value || dateKeyLocal());
     if (tab === 'orders') loadOrdersV2();
+    if (tab === 'shipping') loadShippingV2();
     if (tab === 'products') loadProductsV2();
     if (tab === 'menu') loadMenuInfo();
     if (tab === 'admin') { loadAdminUsers(); loadLicenseLogs(); }
@@ -2308,6 +2726,7 @@
   $('#navSessions').addEventListener('click', () => switchTab('sessions'));
   $('#navReport').addEventListener('click', () => switchTab('report'));
   $('#navOrders').addEventListener('click', () => switchTab('orders'));
+  $('#navShipping').addEventListener('click', () => switchTab('shipping'));
   $('#navProducts').addEventListener('click', () => switchTab('products'));
   $('#navMenu').addEventListener('click', () => switchTab('menu'));
   $('#navAdmin').addEventListener('click', () => switchTab('admin'));
@@ -2440,11 +2859,11 @@
   $('#btnRestoreBackup').addEventListener('click', () => $('#backupFileInput').click());
   $('#backupFileInput').addEventListener('change', async e => {
     const file=e.target.files?.[0]; e.target.value=''; if(!file) return;
-    if(!confirm('Khôi phục sẽ thay thế toàn bộ đơn hàng, sản phẩm, khách hàng và lịch sử hiện tại bằng dữ liệu trong tệp. Tiếp tục?')) return;
+    if(!confirm('Khôi phục sẽ thay toàn bộ dữ liệu hiện tại. Tiếp tục?')) return;
     try {
       const backup=JSON.parse(await file.text());
       const result=await apiFetch('/api/backup/restore',{method:'POST',body:JSON.stringify({backup})});
-      await Promise.all([loadCustomers(),loadSessions(),loadSavedTiktokIds(),loadOrdersV2(),loadProductsV2(),loadSettingsV2()]);
+      await Promise.all([loadCustomers(),loadSessions(),loadSavedTiktokIds(),loadOrdersV2(),loadProductsV2(),loadSettingsV2(),loadShippingV2()]);
       renderCustomerBadge(); renderSessionBadge();
       alert(`Khôi phục thành công ${result.orders} đơn và ${result.products} sản phẩm.`);
     } catch(err){ alert('Khôi phục thất bại: '+err.message); }
@@ -2627,7 +3046,7 @@
       $('#adminError').textContent = 'Thời lượng trải nghiệm phải là số nguyên lớn hơn 0.';
       return;
     }
-    if (!confirm(`Cấp FULL tính năng trải nghiệm ${duration} ${unitLabel} cho @${username}? Thời gian bắt đầu tính ngay sau khi xác nhận.`)) return;
+    if (!confirm(`Cấp trải nghiệm ${duration} ${unitLabel} cho @${username}?`)) return;
     try {
       const data = await apiFetch(`/api/admin/users/${id}/license`, {
         method: 'POST',
@@ -2653,7 +3072,7 @@
       $('#adminError').textContent = 'Hai lần nhập mật khẩu không khớp.';
       return;
     }
-    if (!confirm(`Đổi mật khẩu @${username} và đăng xuất tài khoản này khỏi tất cả thiết bị?`)) return;
+    if (!confirm(`Đổi mật khẩu @${username} và đăng xuất mọi thiết bị?`)) return;
     try {
       const data = await apiFetch(`/api/admin/users/${id}/reset-password`, {
         method:'POST', body:JSON.stringify({newPassword})
@@ -2690,7 +3109,7 @@
   }
 
   async function adminDeleteUser(id, username) {
-    if (!confirm(`XÓA VĨNH VIỄN tài khoản @${username} cùng toàn bộ dữ liệu (khách hàng, lịch sử Live...)? Hành động này không thể hoàn tác.`)) return;
+    if (!confirm(`Xóa vĩnh viễn @${username} và toàn bộ dữ liệu?`)) return;
     try {
       await apiFetch(`/api/admin/users/${id}`, { method: 'DELETE' });
       await loadAdminUsers();
@@ -2920,7 +3339,7 @@
 
   $('#btnStopTikTok').addEventListener('click', () => {
     if (!ws || ws.readyState !== WebSocket.OPEN) { alert('Chưa kết nối tới Bridge Server!'); return; }
-    if (!confirm('Dừng xem phiên Live hiện tại? Bình luận mới sẽ không được nhận nữa cho tới khi bấm "Kết Nối" lại.')) return;
+    if (!confirm('Dừng nhận bình luận Live?')) return;
     setStatus('Đang gửi yêu cầu dừng xem Live...');
     ws.send(JSON.stringify({ type: 'STOP_TIKTOK', token: authToken }));
   });

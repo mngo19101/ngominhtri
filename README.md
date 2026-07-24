@@ -1,4 +1,4 @@
-# TikTok Live Print & Order Manager v2
+# TikTok Live Print & Order Manager v2.5
 
 Bộ mã này chạy trực tiếp trên Railway và phục vụ giao diện tại:
 
@@ -44,8 +44,18 @@ Sau khi upload, chọn **Redeploy**. Server tự tạo/migrate bảng SQLite, kh
 Bridge Server đang chạy tại cổng ...
 ```
 
-## Tính năng v2
+## Tính năng v2.5
 
+- Tab **Vận chuyển** riêng, dùng chung đơn đã chốt.
+- Bổ sung SĐT, địa chỉ, khối lượng, phí giao và COD.
+- Tạo mã phiếu luân chuyển riêng cho từng đơn.
+- Xuất phiếu PNG khổ 100 × 150 mm và in bằng trình duyệt.
+- Theo dõi: chờ lấy, đang giao, giao lỗi, giao lại, hoàn và hoàn tất.
+- Lưu hành trình và số lần xuất phiếu.
+- Đối soát COD thủ công: đã kiểm tra, đã nhận tiền, đặt lại.
+- Báo cáo tổng phiếu, COD, phí giao và COD đang chờ.
+- Sao lưu/khôi phục cả dữ liệu và lịch sử vận chuyển.
+- Câu chữ trên giao diện được rút gọn.
 - Xác nhận/chỉnh sửa đơn trước khi lưu hoặc in.
 - Nút **In & thêm đơn** trên comment: tự gom theo TikTok ID, tạo đơn nội bộ và in phiếu dán sản phẩm; không cần giỏ hàng TikTok.
 - Chống tạo đơn trùng bằng ID comment do server cấp.

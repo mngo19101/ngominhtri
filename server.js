@@ -226,6 +226,43 @@ ensureColumn('sessions', 'device_name', 'TEXT');
 ensureColumn('sessions', 'user_agent', 'TEXT');
 ensureColumn('sessions', 'last_seen_at', 'INTEGER');
 
+// ====== QUẢN LÝ VẬN CHUYỂN / PHIẾU LUÂN CHUYỂN NỘI BỘ ======
+// Các cột này nằm ngay trên đơn hàng để mỗi tài khoản chỉ nhìn thấy dữ liệu
+// của chính mình. Phiếu được xuất thành ảnh ở trình duyệt, không phụ thuộc
+// ESP32 hay API của một hãng vận chuyển.
+ensureColumn('orders', 'shipping_code', 'TEXT');
+ensureColumn('orders', 'shipping_status', "TEXT NOT NULL DEFAULT 'awaiting_info'");
+ensureColumn('orders', 'package_weight', 'INTEGER NOT NULL DEFAULT 500');
+ensureColumn('orders', 'cod_amount', 'INTEGER');
+ensureColumn('orders', 'shipping_created_at', 'INTEGER');
+ensureColumn('orders', 'shipping_updated_at', 'INTEGER');
+ensureColumn('orders', 'label_count', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('orders', 'last_label_at', 'INTEGER');
+ensureColumn('orders', 'delivery_attempts', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('orders', 'cod_reconciled_at', 'INTEGER');
+ensureColumn('orders', 'cod_paid_at', 'INTEGER');
+
+db.exec(`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_shipping_code
+    ON orders(user_id, shipping_code)
+    WHERE shipping_code IS NOT NULL;
+  CREATE INDEX IF NOT EXISTS idx_orders_shipping_status
+    ON orders(user_id, shipping_status, shipping_updated_at DESC);
+  CREATE TABLE IF NOT EXISTS shipment_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    order_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    status TEXT,
+    note TEXT,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (order_id) REFERENCES orders(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_shipment_events_order
+    ON shipment_events(user_id, order_id, created_at DESC);
+`);
+
 // ====== TỰ DỌN COMMENT QUÁ HẠN ======
 // Quy tắc theo ngày lịch đúng yêu cầu:
 // - Comment ngày 25/07 được giữ đến hết 25/08.
@@ -826,6 +863,10 @@ app.post('/api/sessions', requireAuth, (req, res) => {
 // ====== V2: ĐƠN HÀNG, SẢN PHẨM, CÀI ĐẶT, BẢO MẬT & SAO LƯU ======
 const ORDER_STATUSES = new Set(['new', 'confirmed', 'packing', 'shipped', 'completed', 'cancelled', 'returned']);
 const PAYMENT_STATUSES = new Set(['unpaid', 'partial', 'paid', 'refunded']);
+const SHIPPING_STATUSES = new Set([
+  'awaiting_info', 'ready', 'label_created', 'awaiting_pickup', 'delivering',
+  'delivery_failed', 'delivered', 'returning', 'returned', 'cancelled'
+]);
 
 function cleanText(value, max = 500) {
   return String(value == null ? '' : value).trim().slice(0, max);
@@ -846,6 +887,28 @@ function addAudit(userId, action, entityType, entityId, detail) {
     VALUES (?, ?, ?, ?, ?, ?)`)
     .run(userId, action, entityType || null, entityId || null,
       detail == null ? null : JSON.stringify(detail), Date.now());
+}
+
+function addShipmentEvent(userId, orderId, eventType, status, note) {
+  db.prepare(`INSERT INTO shipment_events
+    (user_id, order_id, event_type, status, note, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)`)
+    .run(userId, orderId, eventType, status || null, cleanText(note, 500) || null, Date.now());
+}
+
+function makeShippingCode(userId) {
+  const date = new Date(Date.now() + 7 * 60 * 60 * 1000);
+  const yy = String(date.getUTCFullYear()).slice(-2);
+  const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(date.getUTCDate()).padStart(2, '0');
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const suffix = crypto.randomBytes(3).toString('hex').toUpperCase();
+    const code = `LC${yy}${mm}${dd}${suffix}`;
+    const exists = db.prepare('SELECT 1 FROM orders WHERE user_id = ? AND shipping_code = ?')
+      .get(userId, code);
+    if (!exists) return code;
+  }
+  return `LC${Date.now()}${userId}`;
 }
 
 function publicOrder(row) {
@@ -870,6 +933,17 @@ function publicOrder(row) {
     printStatus: row.print_status,
     printAttempts: row.print_attempts,
     lastPrintError: row.last_print_error,
+    shippingCode: row.shipping_code || '',
+    shippingStatus: row.shipping_status || 'awaiting_info',
+    packageWeight: row.package_weight || 500,
+    codAmount: row.cod_amount == null ? row.total : row.cod_amount,
+    shippingCreatedAt: row.shipping_created_at,
+    shippingUpdatedAt: row.shipping_updated_at,
+    labelCount: row.label_count || 0,
+    lastLabelAt: row.last_label_at,
+    deliveryAttempts: row.delivery_attempts || 0,
+    codReconciledAt: row.cod_reconciled_at,
+    codPaidAt: row.cod_paid_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -984,6 +1058,137 @@ app.delete('/api/orders/:id', requireAuth, (req, res) => {
   if (!result.changes) return res.status(404).json({ error: 'Không tìm thấy đơn hàng.' });
   addAudit(req.userId, 'order.deleted', 'order', req.params.id);
   res.json({ ok: true });
+});
+
+// Danh sách vận chuyển dùng chung dữ liệu đơn hàng, nhưng chỉ trả về đơn thuộc
+// tài khoản đang đăng nhập. Đơn chưa đủ SĐT/địa chỉ vẫn xuất hiện ở "Cần xử lý".
+app.get('/api/shipments', requireAuth, (req, res) => {
+  const rows = db.prepare(`SELECT * FROM orders
+    WHERE user_id = ? AND deleted_at IS NULL
+    ORDER BY COALESCE(shipping_updated_at, updated_at) DESC LIMIT 5000`)
+    .all(req.userId);
+  res.json({ shipments: rows.map(publicOrder) });
+});
+
+app.get('/api/shipments/:id/events', requireAuth, (req, res) => {
+  const order = db.prepare('SELECT id FROM orders WHERE id = ? AND user_id = ? AND deleted_at IS NULL')
+    .get(req.params.id, req.userId);
+  if (!order) return res.status(404).json({ error: 'Không tìm thấy đơn vận chuyển.' });
+  const events = db.prepare(`SELECT event_type, status, note, created_at
+    FROM shipment_events WHERE user_id = ? AND order_id = ?
+    ORDER BY created_at DESC LIMIT 200`).all(req.userId, req.params.id);
+  res.json({ events: events.map(e => ({
+    eventType: e.event_type, status: e.status, note: e.note || '', createdAt: e.created_at
+  })) });
+});
+
+app.post('/api/shipments/:id/prepare', requireAuth, (req, res) => {
+  const old = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ? AND deleted_at IS NULL')
+    .get(req.params.id, req.userId);
+  if (!old) return res.status(404).json({ error: 'Không tìm thấy đơn hàng.' });
+  const b = req.body || {};
+  const phone = cleanText(b.phone ?? old.phone, 40);
+  const address = cleanText(b.address ?? old.address, 500);
+  const customerName = cleanText(b.customerName ?? old.customer_name, 160) || old.customer_name;
+  if ((phone.match(/\d/g) || []).length < 8) {
+    return res.status(400).json({ error: 'Số điện thoại người nhận cần có ít nhất 8 chữ số.' });
+  }
+  if (address.length < 8) {
+    return res.status(400).json({ error: 'Vui lòng nhập địa chỉ giao hàng đầy đủ.' });
+  }
+  const now = Date.now();
+  const code = old.shipping_code || makeShippingCode(req.userId);
+  const weight = intValue(b.packageWeight, old.package_weight || 500, 1, 100000);
+  const codAmount = intValue(b.codAmount, old.cod_amount == null ? old.total : old.cod_amount, 0, 1000000000);
+  const shippingFee = intValue(b.shippingFee, old.shipping_fee, 0, 1000000000);
+  const note = cleanText(b.note ?? old.note, 1000) || null;
+  const nextStatus = old.shipping_code && SHIPPING_STATUSES.has(old.shipping_status)
+    ? old.shipping_status : 'ready';
+  const nextOrderStatus = ['new'].includes(old.status) ? 'confirmed' : old.status;
+  db.prepare(`UPDATE orders SET customer_name = ?, phone = ?, address = ?, note = ?,
+    shipping_fee = ?, total = quantity * unit_price + ?, shipping_code = ?,
+    shipping_status = ?, package_weight = ?, cod_amount = ?,
+    shipping_created_at = COALESCE(shipping_created_at, ?), shipping_updated_at = ?,
+    status = ?, updated_at = ? WHERE id = ? AND user_id = ?`)
+    .run(customerName, phone, address, note, shippingFee, shippingFee, code,
+      nextStatus, weight, codAmount, now, now, nextOrderStatus, now, old.id, req.userId);
+  addShipmentEvent(req.userId, old.id, old.shipping_code ? 'details_updated' : 'shipment_created',
+    nextStatus, old.shipping_code ? 'Cập nhật thông tin người nhận/kiện hàng' : 'Đã tạo phiếu luân chuyển');
+  addAudit(req.userId, old.shipping_code ? 'shipment.updated' : 'shipment.created',
+    'order', old.id, { shippingCode: code, status: nextStatus });
+  res.json({ order: publicOrder(db.prepare('SELECT * FROM orders WHERE id = ?').get(old.id)) });
+});
+
+app.post('/api/shipments/:id/status', requireAuth, (req, res) => {
+  const old = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ? AND deleted_at IS NULL')
+    .get(req.params.id, req.userId);
+  if (!old) return res.status(404).json({ error: 'Không tìm thấy đơn vận chuyển.' });
+  if (!old.shipping_code) return res.status(400).json({ error: 'Hãy tạo phiếu luân chuyển trước.' });
+  const status = cleanText(req.body?.status, 40);
+  if (!SHIPPING_STATUSES.has(status) || status === 'awaiting_info') {
+    return res.status(400).json({ error: 'Trạng thái vận chuyển không hợp lệ.' });
+  }
+  const orderStatusMap = {
+    ready: 'confirmed', label_created: 'packing', awaiting_pickup: 'packing',
+    delivering: 'shipped', delivery_failed: 'shipped', delivered: 'completed',
+    returning: 'returned', returned: 'returned', cancelled: 'cancelled'
+  };
+  const note = cleanText(req.body?.note, 500);
+  const now = Date.now();
+  const addAttempt = status === 'delivering' && old.shipping_status !== 'delivering' ? 1 : 0;
+  db.prepare(`UPDATE orders SET shipping_status = ?, shipping_updated_at = ?,
+    delivery_attempts = delivery_attempts + ?, status = ?, updated_at = ?
+    WHERE id = ? AND user_id = ?`)
+    .run(status, now, addAttempt, orderStatusMap[status] || old.status, now, old.id, req.userId);
+  addShipmentEvent(req.userId, old.id, 'status_changed', status, note);
+  addAudit(req.userId, 'shipment.status_changed', 'order', old.id, { status, note });
+  res.json({ order: publicOrder(db.prepare('SELECT * FROM orders WHERE id = ?').get(old.id)) });
+});
+
+app.post('/api/shipments/:id/label', requireAuth, (req, res) => {
+  const old = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ? AND deleted_at IS NULL')
+    .get(req.params.id, req.userId);
+  if (!old) return res.status(404).json({ error: 'Không tìm thấy đơn vận chuyển.' });
+  if (!old.shipping_code) return res.status(400).json({ error: 'Hãy tạo phiếu luân chuyển trước.' });
+  const now = Date.now();
+  const nextStatus = ['ready', 'label_created'].includes(old.shipping_status) ? 'label_created' : old.shipping_status;
+  db.prepare(`UPDATE orders SET label_count = label_count + 1, last_label_at = ?,
+    shipping_status = ?, shipping_updated_at = ?, updated_at = ?
+    WHERE id = ? AND user_id = ?`)
+    .run(now, nextStatus, now, now, old.id, req.userId);
+  addShipmentEvent(req.userId, old.id, 'label_exported', nextStatus, 'Đã xuất phiếu PNG');
+  res.json({ order: publicOrder(db.prepare('SELECT * FROM orders WHERE id = ?').get(old.id)) });
+});
+
+app.post('/api/shipments/:id/reconcile', requireAuth, (req, res) => {
+  const old = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ? AND deleted_at IS NULL')
+    .get(req.params.id, req.userId);
+  if (!old) return res.status(404).json({ error: 'Không tìm thấy đơn vận chuyển.' });
+  if (old.shipping_status !== 'delivered') {
+    return res.status(400).json({ error: 'Chỉ đối soát đơn đã giao thành công.' });
+  }
+  const action = cleanText(req.body?.action, 30);
+  const now = Date.now();
+  let reconciledAt = old.cod_reconciled_at;
+  let paidAt = old.cod_paid_at;
+  if (action === 'reconciled') {
+    reconciledAt = reconciledAt || now;
+  } else if (action === 'paid') {
+    reconciledAt = reconciledAt || now;
+    paidAt = paidAt || now;
+  } else if (action === 'reset') {
+    reconciledAt = null;
+    paidAt = null;
+  } else {
+    return res.status(400).json({ error: 'Thao tác đối soát không hợp lệ.' });
+  }
+  db.prepare(`UPDATE orders SET cod_reconciled_at = ?, cod_paid_at = ?,
+    shipping_updated_at = ?, updated_at = ? WHERE id = ? AND user_id = ?`)
+    .run(reconciledAt, paidAt, now, now, old.id, req.userId);
+  addShipmentEvent(req.userId, old.id, `cod_${action}`, 'delivered',
+    action === 'paid' ? 'Đã nhận tiền COD' : action === 'reconciled' ? 'Đã đối soát COD' : 'Đặt lại đối soát');
+  addAudit(req.userId, `shipment.cod_${action}`, 'order', old.id);
+  res.json({ order: publicOrder(db.prepare('SELECT * FROM orders WHERE id = ?').get(old.id)) });
 });
 
 app.get('/api/products', requireAuth, (req, res) => {
@@ -1103,6 +1308,7 @@ app.get('/api/backup', requireAuth, (req, res) => {
   };
   const products = db.prepare('SELECT * FROM products WHERE user_id = ?').all(req.userId);
   const orders = db.prepare('SELECT * FROM orders WHERE user_id = ? AND deleted_at IS NULL').all(req.userId);
+  const shipmentEvents = db.prepare('SELECT * FROM shipment_events WHERE user_id = ? ORDER BY created_at').all(req.userId);
   const settingsRow = db.prepare('SELECT data FROM user_settings WHERE user_id = ?').get(req.userId);
   res.setHeader('Content-Disposition', `attachment; filename="tiktok-live-backup-${Date.now()}.json"`);
   res.json({
@@ -1113,6 +1319,7 @@ app.get('/api/backup', requireAuth, (req, res) => {
     savedTiktokIds: getJson('saved_tiktok_ids'),
     products,
     orders,
+    shipmentEvents,
     settings: settingsRow ? JSON.parse(settingsRow.data) : {}
   });
 });
@@ -1122,12 +1329,14 @@ app.post('/api/backup/restore', requireAuth, (req, res) => {
   if (!backup || backup.version !== 2 || !Array.isArray(backup.orders) || !Array.isArray(backup.products)) {
     return res.status(400).json({ error: 'Tệp sao lưu không đúng định dạng phiên bản 2.' });
   }
-  if (backup.orders.length > 100000 || backup.products.length > 10000) {
+  if (backup.orders.length > 100000 || backup.products.length > 10000 ||
+      (Array.isArray(backup.shipmentEvents) && backup.shipmentEvents.length > 500000)) {
     return res.status(400).json({ error: 'Bản sao lưu vượt quá giới hạn an toàn.' });
   }
   const now = Date.now();
   try {
     db.exec('BEGIN IMMEDIATE');
+    db.prepare('DELETE FROM shipment_events WHERE user_id = ?').run(req.userId);
     db.prepare('DELETE FROM orders WHERE user_id = ?').run(req.userId);
     db.prepare('DELETE FROM products WHERE user_id = ?').run(req.userId);
     const insertProduct = db.prepare(`INSERT INTO products
@@ -1145,8 +1354,11 @@ app.post('/api/backup/restore', requireAuth, (req, res) => {
     const insertOrder = db.prepare(`INSERT INTO orders
       (id,user_id,source_comment_id,source_session_id,customer_id,customer_name,
        product_code,product_name,quantity,unit_price,shipping_fee,total,phone,address,note,
-       status,payment_status,print_status,print_attempts,last_print_error,created_at,updated_at,deleted_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)`);
+       status,payment_status,print_status,print_attempts,last_print_error,
+       shipping_code,shipping_status,package_weight,cod_amount,shipping_created_at,
+       shipping_updated_at,label_count,last_label_at,delivery_attempts,cod_reconciled_at,cod_paid_at,
+       created_at,updated_at,deleted_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)`);
     for (const o of backup.orders) {
       const quantity = intValue(o.quantity, 1, 1, 9999);
       const unitPrice = intValue(o.unit_price ?? o.unitPrice, 0);
@@ -1166,8 +1378,30 @@ app.post('/api/backup/restore', requireAuth, (req, res) => {
         ['not_printed','printed','failed'].includes(o.print_status ?? o.printStatus) ? (o.print_status ?? o.printStatus) : 'not_printed',
         intValue(o.print_attempts ?? o.printAttempts, 0, 0, 100000),
         cleanText(o.last_print_error ?? o.lastPrintError, 500) || null,
+        cleanText(o.shipping_code ?? o.shippingCode, 80) || null,
+        SHIPPING_STATUSES.has(o.shipping_status ?? o.shippingStatus) ? (o.shipping_status ?? o.shippingStatus) : 'awaiting_info',
+        intValue(o.package_weight ?? o.packageWeight, 500, 1, 100000),
+        intValue(o.cod_amount ?? o.codAmount, quantity * unitPrice + shippingFee, 0, 1000000000),
+        o.shipping_created_at ?? o.shippingCreatedAt ?? null,
+        o.shipping_updated_at ?? o.shippingUpdatedAt ?? null,
+        intValue(o.label_count ?? o.labelCount, 0, 0, 100000),
+        o.last_label_at ?? o.lastLabelAt ?? null,
+        intValue(o.delivery_attempts ?? o.deliveryAttempts, 0, 0, 100000),
+        o.cod_reconciled_at ?? o.codReconciledAt ?? null,
+        o.cod_paid_at ?? o.codPaidAt ?? null,
         intValue(o.created_at ?? o.createdAt, now, 0, Number.MAX_SAFE_INTEGER),
         intValue(o.updated_at ?? o.updatedAt, now, 0, Number.MAX_SAFE_INTEGER));
+    }
+    const insertShipmentEvent = db.prepare(`INSERT INTO shipment_events
+      (user_id,order_id,event_type,status,note,created_at) VALUES (?,?,?,?,?,?)`);
+    const restoredOrderIds = new Set(backup.orders.map(o => cleanText(o.id, 160)).filter(Boolean));
+    for (const e of (Array.isArray(backup.shipmentEvents) ? backup.shipmentEvents : [])) {
+      const orderId = cleanText(e.order_id ?? e.orderId, 160);
+      if (!restoredOrderIds.has(orderId)) continue;
+      insertShipmentEvent.run(req.userId, orderId,
+        cleanText(e.event_type ?? e.eventType, 80) || 'restored',
+        cleanText(e.status, 40) || null, cleanText(e.note, 500) || null,
+        intValue(e.created_at ?? e.createdAt, now, 0, Number.MAX_SAFE_INTEGER));
     }
     const saveBlob = (table, value) => db.prepare(`INSERT INTO ${table} (user_id,data,updated_at)
       VALUES (?,?,?) ON CONFLICT(user_id) DO UPDATE SET data=excluded.data,updated_at=excluded.updated_at`)
