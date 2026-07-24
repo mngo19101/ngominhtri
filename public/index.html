@@ -548,6 +548,9 @@
     try { await apiFetch('/api/logout', { method: 'POST' }); } catch (e) {}
     currentUser = null;
     authToken = null;
+    currentSessionId = null;
+    currentSessionUsername = null;
+    openSessionIds.clear();
     localStorage.removeItem(SESSION_KEY);
     localStorage.removeItem(TOKEN_KEY);
     $('#appRoot').style.display = 'none';
@@ -853,7 +856,9 @@
   // và có thể bấm in + thêm đơn bù cho những comment lúc live quên bấm.
   let liveSessions = {};
   let currentSessionId = null;
+  let currentSessionUsername = null; // dùng để đối chiếu roomUsername server gửi về, chặn lẫn comment phiên cũ
   let sessionSaveTimer = null;
+  const openSessionIds = new Set(); // các phiên đang được mở (expand) trong tab Lịch sử — giữ nguyên khi render lại
 
   async function loadSessions() {
     try {
@@ -889,7 +894,10 @@
       comments: []
     };
     currentSessionId = sessionId;
+    currentSessionUsername = (username || '').toLowerCase();
     renderSessionBadge();
+    // Phiên mới toanh, chưa có card trong DOM -> chỉ full-render khi đang mở tab Lịch sử
+    if ($('#viewSessions').style.display !== 'none') renderSessionList();
     scheduleSaveSessions();
   }
 
@@ -900,15 +908,54 @@
 
   function deleteSession(sessionId) {
     delete liveSessions[sessionId];
-    if (currentSessionId === sessionId) currentSessionId = null;
+    openSessionIds.delete(sessionId);
+    if (currentSessionId === sessionId) { currentSessionId = null; currentSessionUsername = null; }
     renderSessionBadge();
     renderSessionList();
     scheduleSaveSessions();
   }
 
+  // Tạo phần tử DOM cho 1 dòng bình luận trong lịch sử (dùng chung cho cả
+  // render toàn bộ lẫn chèn thêm 1 dòng mới), để 2 chỗ luôn hiển thị giống nhau.
+  function buildSessionCommentRowEl(sessionId, c) {
+    const row = document.createElement('div');
+    row.className = 'session-comment-item';
+    if (c.id) row.dataset.commentId = c.id;
+    const dt = c.receivedAt ? new Date(c.receivedAt) : new Date();
+    row.innerHTML = `
+      <div class="session-comment-top">
+        <span class="session-comment-user">${escapeHtml(c.nickname || '')} <span class="session-comment-id">@${escapeHtml(c.uniqueId || '')}</span></span>
+        <span class="session-comment-time">${dt.toLocaleDateString('vi-VN')} · ${formatGio(dt)}</span>
+      </div>
+      <div class="session-comment-text">${escapeHtml(c.comment || '')}</div>
+      <div class="session-comment-actions">
+        <button class="btn-mini btn-print-history${c.added ? ' added' : ''}">${c.added ? '✔ Đã in / thêm đơn' : '🖨️ In phiếu + Thêm đơn'}</button>
+      </div>
+    `;
+
+    if (!c.added) {
+      row.querySelector('.btn-print-history').addEventListener('click', () => {
+        printComment(c);
+        addToCart(c);
+        c.added = true;
+        scheduleSaveSessions();
+        // Chỉ cập nhật lại đúng nút này, KHÔNG render lại toàn bộ danh sách —
+        // tránh làm sập các thẻ đang mở / mất vị trí cuộn của người dùng.
+        const btn = row.querySelector('.btn-print-history');
+        btn.textContent = '✔ Đã in / thêm đơn';
+        btn.classList.add('added');
+        const clone = btn.cloneNode(true); // gỡ listener cũ bằng cách thay bằng node mới, gọn hơn removeEventListener
+        btn.parentNode.replaceChild(clone, btn);
+      });
+    }
+
+    return row;
+  }
+
   function renderSessionList() {
     const body = $('#sessionListBody');
     const searchTerm = ($('#sessionSearchInput').value || '').trim().toLowerCase();
+    const savedScrollTop = body.scrollTop; // giữ vị trí cuộn để không bị "giật" về đầu trang mỗi lần render lại
 
     const entries = Object.entries(liveSessions).sort(
       (a, b) => new Date(b[1].startedAt) - new Date(a[1].startedAt)
@@ -948,6 +995,7 @@
 
       const card = document.createElement('div');
       card.className = 'session-card';
+      card.dataset.sessionId = sessionId;
       card.innerHTML = `
         <div class="session-head">
           <div class="left">
@@ -974,40 +1022,19 @@
       } else {
         // Mới nhất lên trước cho dễ tìm khi vừa live xong
         [...commentsToShow].reverse().forEach(c => {
-          const row = document.createElement('div');
-          row.className = 'session-comment-item';
-          const dt = c.receivedAt ? new Date(c.receivedAt) : new Date();
-          row.innerHTML = `
-            <div class="session-comment-top">
-              <span class="session-comment-user">${escapeHtml(c.nickname || '')} <span class="session-comment-id">@${escapeHtml(c.uniqueId || '')}</span></span>
-              <span class="session-comment-time">${dt.toLocaleDateString('vi-VN')} · ${formatGio(dt)}</span>
-            </div>
-            <div class="session-comment-text">${escapeHtml(c.comment || '')}</div>
-            <div class="session-comment-actions">
-              <button class="btn-mini btn-print-history${c.added ? ' added' : ''}">${c.added ? '✔ Đã in / thêm đơn' : '🖨️ In phiếu + Thêm đơn'}</button>
-            </div>
-          `;
-
-          if (!c.added) {
-            row.querySelector('.btn-print-history').addEventListener('click', () => {
-              printComment(c);
-              addToCart(c);
-              c.added = true;
-              scheduleSaveSessions();
-              renderSessionList();
-            });
-          }
-
-          commentsBox.appendChild(row);
+          commentsBox.appendChild(buildSessionCommentRowEl(sessionId, c));
         });
       }
 
-      // Nếu đang tìm kiếm, tự mở sẵn để thấy kết quả ngay
-      if (searchTerm) commentsBox.classList.add('open');
+      // Giữ nguyên trạng thái đóng/mở của thẻ này qua các lần render lại,
+      // và nếu đang tìm kiếm thì tự mở sẵn để thấy kết quả ngay.
+      if (searchTerm || openSessionIds.has(sessionId)) commentsBox.classList.add('open');
 
       card.querySelector('.session-head').addEventListener('click', (e) => {
         if (e.target.closest('.btn-del-session')) return;
         commentsBox.classList.toggle('open');
+        if (commentsBox.classList.contains('open')) openSessionIds.add(sessionId);
+        else openSessionIds.delete(sessionId);
       });
 
       body.appendChild(card);
@@ -1015,7 +1042,42 @@
 
     if (!shownAny) {
       body.innerHTML = '<div class="empty-note">Không tìm thấy bình luận hoặc phiên live nào khớp từ khóa.</div>';
+      return;
     }
+
+    body.scrollTop = savedScrollTop; // khôi phục vị trí cuộn sau khi dựng lại danh sách
+  }
+
+  // Chèn thêm 1 bình luận mới vào ĐÚNG thẻ phiên đang hiển thị trong tab Lịch sử
+  // mà KHÔNG dựng lại toàn bộ danh sách. Đây là điểm mấu chốt để sửa lỗi
+  // "đang xem/mở 1 thẻ trong Lịch sử thì bị giật văng/đóng lại" khi có
+  // bình luận mới liên tục đổ về lúc đang live — trước đây mỗi comment mới
+  // đều gọi renderSessionList() dựng lại từ đầu, làm sập mọi thẻ đang mở và
+  // nhảy cuộn về đầu trang. Giờ chỉ chèn thêm 1 dòng, còn lại giữ nguyên.
+  // Trả về true nếu chèn thành công; false thì nơi gọi sẽ tự render lại toàn bộ.
+  function appendCommentToSessionDOM(sessionId, c) {
+    if (($('#sessionSearchInput').value || '').trim()) return false; // đang tìm kiếm thì để nguyên, tránh hiện sai kết quả lọc
+
+    const body = $('#sessionListBody');
+    if (!body) return false;
+    const card = body.querySelector(`.session-card[data-session-id="${sessionId}"]`);
+    if (!card) return false; // thẻ chưa tồn tại trong DOM (vd vừa render lần đầu) -> để renderSessionList() lo
+
+    const countBadge = card.querySelector('.session-count');
+    const totalNow = (liveSessions[sessionId] && liveSessions[sessionId].comments || []).length;
+    if (countBadge) countBadge.textContent = `${totalNow} cmt`;
+
+    const commentsBox = card.querySelector('.session-comments');
+    if (!commentsBox) return false;
+    const emptyNote = commentsBox.querySelector('.empty-note');
+    if (emptyNote) emptyNote.remove();
+
+    commentsBox.prepend(buildSessionCommentRowEl(sessionId, c));
+
+    const totalEl = $('#summarySessionCommentCount');
+    if (totalEl) totalEl.textContent = String((parseInt(totalEl.textContent, 10) || 0) + 1);
+
+    return true;
   }
 
   $('#sessionSearchInput').addEventListener('input', () => renderSessionList());
@@ -1124,7 +1186,7 @@
       if (data.type === 'STATUS') {
         setStatus(data.msg);
       } else if (data.type === 'COMMENT') {
-        addCommentToFeed(data.comment);
+        addCommentToFeed(data.comment, data.roomUsername);
       }
     };
 
@@ -1200,7 +1262,17 @@
     }
   });
 
-  function addCommentToFeed(cmt) {
+  function addCommentToFeed(cmt, roomUsername) {
+    // Lớp bảo vệ thứ 2 ở phía trình duyệt: nếu server có gửi kèm roomUsername
+    // (ID phòng Live mà comment này thuộc về) và nó KHÔNG khớp với phiên Live
+    // đang mở hiện tại, đây chắc chắn là dữ liệu trễ của phiên Live cũ (thư viện
+    // TikTok đôi khi bắn nốt vài sự kiện cuối trước khi ngắt hẳn) -> bỏ qua
+    // hoàn toàn, không hiện lên feed và không lưu nhầm vào phiên mới.
+    if (roomUsername && currentSessionUsername && roomUsername.toLowerCase() !== currentSessionUsername) {
+      console.warn(`Bỏ qua 1 comment trễ từ phòng live cũ @${roomUsername} (đang xem @${currentSessionUsername})`);
+      return;
+    }
+
     if (!cmt.receivedAt) cmt.receivedAt = new Date().toISOString();
     if (!cmt.id) cmt.id = 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
 
@@ -1235,9 +1307,16 @@
     // Lưu lại toàn bộ comment vào phiên live hiện tại, kể cả khi chưa bấm "In phiếu",
     // để có thể xem lại / in bù sau này trong tab "Lịch sử".
     if (currentSessionId && liveSessions[currentSessionId]) {
-      liveSessions[currentSessionId].comments.push(Object.assign({}, cmt, { added: false }));
+      const stored = Object.assign({}, cmt, { added: false });
+      liveSessions[currentSessionId].comments.push(stored);
       renderSessionBadge();
-      if ($('#viewSessions').style.display !== 'none') renderSessionList();
+      if ($('#viewSessions').style.display !== 'none') {
+        // Ưu tiên chỉ chèn thêm 1 dòng vào đúng thẻ đang hiển thị (không rebuild
+        // toàn bộ danh sách) để không làm sập các thẻ đang mở hay nhảy vị trí
+        // cuộn — đây chính là nguyên nhân gây cảm giác "giật văng ra" trước đây.
+        const appended = appendCommentToSessionDOM(currentSessionId, stored);
+        if (!appended) renderSessionList();
+      }
       scheduleSaveSessions();
     }
   }
@@ -1250,6 +1329,19 @@
     if (found) {
       found.added = true;
       scheduleSaveSessions();
+    }
+
+    // Nếu dòng tương ứng đang hiển thị sẵn trong tab Lịch sử, cập nhật ngay
+    // tại chỗ (không render lại toàn bộ) để tránh làm mất trạng thái đang mở/cuộn.
+    const row = document.querySelector(`.session-comment-item[data-comment-id="${commentId}"]`);
+    if (row) {
+      const btn = row.querySelector('.btn-print-history');
+      if (btn && !btn.classList.contains('added')) {
+        btn.textContent = '✔ Đã in / thêm đơn';
+        btn.classList.add('added');
+        const clone = btn.cloneNode(true);
+        btn.parentNode.replaceChild(clone, btn);
+      }
     }
   }
 
