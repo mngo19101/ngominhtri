@@ -129,6 +129,43 @@
   .btn-del-item:hover{ background:#e66; color:#000; }
   .empty-note{ color:var(--muted); font-size:13px; text-align:center; padding:20px 0; }
 
+  /* ===== TRANG LỊCH SỬ PHIÊN LIVE ===== */
+  .session-card{
+    background:#262626; border:1px solid var(--border); border-radius:8px; padding:12px 14px;
+  }
+  .session-head{
+    display:flex; align-items:center; justify-content:space-between; cursor:pointer; gap:10px;
+  }
+  .session-head .left{ display:flex; flex-direction:column; gap:2px; flex:1; min-width:0; }
+  .session-title{ font-weight:700; color:#fff; font-size:14px; }
+  .session-meta{ font-size:11px; color:var(--muted); font-family:'JetBrains Mono', monospace; }
+  .session-count{ font-weight:700; color:var(--teal); font-family:'JetBrains Mono', monospace; white-space:nowrap; }
+  .btn-del-session{
+    background:none; border:1px solid #663; color:#e66; border-radius:5px;
+    width:24px; height:24px; cursor:pointer; font-size:13px; line-height:1; flex-shrink:0;
+  }
+  .btn-del-session:hover{ background:#e66; color:#000; }
+  .session-comments{ margin-top:10px; display:none; flex-direction:column; gap:8px; }
+  .session-comments.open{ display:flex; }
+  .session-comment-item{
+    background:#1a1a1a; border:1px solid var(--border); border-radius:6px;
+    padding:8px 10px; display:flex; flex-direction:column; gap:4px; font-size:12.5px;
+  }
+  .session-comment-top{ display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+  .session-comment-user{ color:#fff; font-weight:600; }
+  .session-comment-id{ color:var(--teal); font-family:'JetBrains Mono', monospace; font-size:11px; font-weight:400; }
+  .session-comment-time{ color:var(--muted); font-family:'JetBrains Mono', monospace; font-size:11px; white-space:nowrap; }
+  .session-comment-text{ color:#ddd; }
+  .session-comment-actions{ display:flex; gap:8px; margin-top:2px; }
+  .btn-mini{
+    background:#333; color:#fff; border:1px solid #555;
+    padding:5px 10px; border-radius:5px; font-size:11.5px; font-weight:600; cursor:pointer; transition:.15s;
+  }
+  .btn-mini:hover{ background:var(--teal); color:#000; border-color:var(--teal); }
+  .btn-mini.added{ background:#173832; color:var(--teal); border-color:var(--teal); cursor:default; }
+  .btn-mini.added:hover{ background:#173832; color:var(--teal); }
+  .session-search-field{ margin-top:12px; }
+
   /* ===== THANH TAB DƯỚI CÙNG ===== */
   .bottom-nav{
     position:fixed; left:0; right:0; bottom:0; height:66px;
@@ -329,7 +366,22 @@
   </div>
 </div>
 
-
+<!-- TAB: LỊCH SỬ PHIÊN LIVE (xem lại toàn bộ comment đã lưu, in bù nếu quên) -->
+<div class="tab-view" id="viewSessions" style="display:none;">
+  <div class="customers-page">
+    <h2>Lịch Sử Phiên Live</h2>
+    <div class="cust-summary">
+      <span><b id="summarySessionCount">0</b> phiên live</span>
+      <span><b id="summarySessionCommentCount">0</b> bình luận đã lưu</span>
+    </div>
+    <div class="field session-search-field">
+      <input id="sessionSearchInput" type="text" placeholder="Tìm theo tên, ID TikTok hoặc nội dung bình luận...">
+    </div>
+    <div class="customer-list" id="sessionListBody">
+      <div class="empty-note">Chưa có phiên live nào được lưu. Mỗi lần bấm "Kết Nối TikTok Live", toàn bộ bình luận nhận được sẽ tự động lưu lại ở đây để xem lại sau.</div>
+    </div>
+  </div>
+</div>
 
 <!-- TAB: BÁO CÁO -->
 <div class="tab-view" id="viewReport" style="display:none;">
@@ -381,6 +433,13 @@
     <span class="nav-label-row">
       <span class="nav-label">Khách hàng</span>
       <span class="badge-count" id="customerCountBadge">0</span>
+    </span>
+  </button>
+  <button class="nav-item" id="navSessions" data-tab="sessions">
+    <span class="nav-icon">🗂️</span>
+    <span class="nav-label-row">
+      <span class="nav-label">Lịch sử</span>
+      <span class="badge-count" id="sessionCountBadge">0</span>
     </span>
   </button>
   <button class="nav-item" id="navReport" data-tab="report">
@@ -510,6 +569,8 @@
     await loadCustomers();
     renderCustomerBadge();
     await loadSavedTiktokIds();
+    await loadSessions();
+    renderSessionBadge();
     initWS();
   }
 
@@ -537,6 +598,8 @@
     $('#appRoot').style.display = 'block';
     renderCustomerBadge();
     await loadSavedTiktokIds();
+    await loadSessions();
+    renderSessionBadge();
     initWS();
     return true;
   }
@@ -781,6 +844,183 @@
     });
   }
 
+  // ===== LỊCH SỬ PHIÊN LIVE (LƯU TOÀN BỘ COMMENT ĐỂ XEM LẠI / IN BÙ) =====
+  // Cấu trúc: { sessionId: { username, startedAt, comments: [{id, nickname, uniqueId, avatar, comment, receivedAt, added}] } }
+  // Mỗi lần bấm "Kết Nối TikTok Live" sẽ tạo 1 phiên (session) mới, mọi comment
+  // nhận được qua WebSocket trong lúc phiên đó đang mở sẽ được lưu vào đây,
+  // dù bạn có bấm "In phiếu" lúc live hay không. Sau khi live xong, vào tab
+  // "Lịch sử" để xem lại toàn bộ comment theo ngày giờ, ID TikTok, tên TikTok —
+  // và có thể bấm in + thêm đơn bù cho những comment lúc live quên bấm.
+  let liveSessions = {};
+  let currentSessionId = null;
+  let sessionSaveTimer = null;
+
+  async function loadSessions() {
+    try {
+      const data = await apiFetch('/api/sessions', { method: 'GET' });
+      liveSessions = (data && data.sessions) || {};
+    } catch (err) {
+      console.error('Không tải được lịch sử phiên live:', err);
+      liveSessions = {};
+    }
+  }
+
+  function scheduleSaveSessions() {
+    if (sessionSaveTimer) clearTimeout(sessionSaveTimer);
+    sessionSaveTimer = setTimeout(saveSessions, 1200);
+  }
+
+  async function saveSessions() {
+    try {
+      await apiFetch('/api/sessions', {
+        method: 'POST',
+        body: JSON.stringify({ sessions: liveSessions })
+      });
+    } catch (err) {
+      console.error('Không lưu được lịch sử phiên live lên Bridge Server:', err);
+    }
+  }
+
+  function startNewSession(username) {
+    const sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+    liveSessions[sessionId] = {
+      username,
+      startedAt: new Date().toISOString(),
+      comments: []
+    };
+    currentSessionId = sessionId;
+    renderSessionBadge();
+    scheduleSaveSessions();
+  }
+
+  function renderSessionBadge() {
+    const badge = $('#sessionCountBadge');
+    if (badge) badge.textContent = Object.keys(liveSessions).length;
+  }
+
+  function deleteSession(sessionId) {
+    delete liveSessions[sessionId];
+    if (currentSessionId === sessionId) currentSessionId = null;
+    renderSessionBadge();
+    renderSessionList();
+    scheduleSaveSessions();
+  }
+
+  function renderSessionList() {
+    const body = $('#sessionListBody');
+    const searchTerm = ($('#sessionSearchInput').value || '').trim().toLowerCase();
+
+    const entries = Object.entries(liveSessions).sort(
+      (a, b) => new Date(b[1].startedAt) - new Date(a[1].startedAt)
+    );
+
+    let totalComments = 0;
+    Object.values(liveSessions).forEach(s => totalComments += (s.comments || []).length);
+    $('#summarySessionCount').textContent = entries.length;
+    $('#summarySessionCommentCount').textContent = totalComments;
+
+    if (entries.length === 0) {
+      body.innerHTML = '<div class="empty-note">Chưa có phiên live nào được lưu. Mỗi lần bấm "Kết Nối TikTok Live", toàn bộ bình luận nhận được sẽ tự động lưu lại ở đây để xem lại sau.</div>';
+      return;
+    }
+
+    body.innerHTML = '';
+    let shownAny = false;
+
+    entries.forEach(([sessionId, session]) => {
+      const allComments = session.comments || [];
+      let commentsToShow = allComments;
+
+      if (searchTerm) {
+        const matchesSessionName = (session.username || '').toLowerCase().includes(searchTerm);
+        commentsToShow = allComments.filter(c =>
+          (c.nickname || '').toLowerCase().includes(searchTerm) ||
+          (c.uniqueId || '').toLowerCase().includes(searchTerm) ||
+          (c.comment || '').toLowerCase().includes(searchTerm)
+        );
+        if (!matchesSessionName && commentsToShow.length === 0) return; // phiên này không khớp tìm kiếm
+        if (matchesSessionName && commentsToShow.length === 0) commentsToShow = allComments;
+      }
+
+      shownAny = true;
+      const startedAt = new Date(session.startedAt);
+      const dateLabel = startedAt.toLocaleDateString('vi-VN') + ' ' + startedAt.toLocaleTimeString('vi-VN');
+
+      const card = document.createElement('div');
+      card.className = 'session-card';
+      card.innerHTML = `
+        <div class="session-head">
+          <div class="left">
+            <span class="session-title">@${escapeHtml(session.username)}</span>
+            <span class="session-meta">Bắt đầu lúc ${dateLabel}</span>
+          </div>
+          <span class="session-count">${allComments.length} cmt</span>
+          <button class="btn-del-session" title="Xóa phiên này">✕</button>
+        </div>
+        <div class="session-comments"></div>
+      `;
+
+      card.querySelector('.btn-del-session').addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (confirm(`Xóa phiên live @${session.username} cùng ${allComments.length} bình luận đã lưu?`)) {
+          deleteSession(sessionId);
+        }
+      });
+
+      const commentsBox = card.querySelector('.session-comments');
+
+      if (commentsToShow.length === 0) {
+        commentsBox.innerHTML = '<div class="empty-note">Không có bình luận nào khớp tìm kiếm.</div>';
+      } else {
+        // Mới nhất lên trước cho dễ tìm khi vừa live xong
+        [...commentsToShow].reverse().forEach(c => {
+          const row = document.createElement('div');
+          row.className = 'session-comment-item';
+          const dt = c.receivedAt ? new Date(c.receivedAt) : new Date();
+          row.innerHTML = `
+            <div class="session-comment-top">
+              <span class="session-comment-user">${escapeHtml(c.nickname || '')} <span class="session-comment-id">@${escapeHtml(c.uniqueId || '')}</span></span>
+              <span class="session-comment-time">${dt.toLocaleDateString('vi-VN')} · ${formatGio(dt)}</span>
+            </div>
+            <div class="session-comment-text">${escapeHtml(c.comment || '')}</div>
+            <div class="session-comment-actions">
+              <button class="btn-mini btn-print-history${c.added ? ' added' : ''}">${c.added ? '✔ Đã in / thêm đơn' : '🖨️ In phiếu + Thêm đơn'}</button>
+            </div>
+          `;
+
+          if (!c.added) {
+            row.querySelector('.btn-print-history').addEventListener('click', () => {
+              printComment(c);
+              addToCart(c);
+              c.added = true;
+              scheduleSaveSessions();
+              renderSessionList();
+            });
+          }
+
+          commentsBox.appendChild(row);
+        });
+      }
+
+      // Nếu đang tìm kiếm, tự mở sẵn để thấy kết quả ngay
+      if (searchTerm) commentsBox.classList.add('open');
+
+      card.querySelector('.session-head').addEventListener('click', (e) => {
+        if (e.target.closest('.btn-del-session')) return;
+        commentsBox.classList.toggle('open');
+      });
+
+      body.appendChild(card);
+    });
+
+    if (!shownAny) {
+      body.innerHTML = '<div class="empty-note">Không tìm thấy bình luận hoặc phiên live nào khớp từ khóa.</div>';
+    }
+  }
+
+  $('#sessionSearchInput').addEventListener('input', () => renderSessionList());
+  // ===== HẾT PHẦN LỊCH SỬ PHIÊN LIVE =====
+
   // ===== BÁO CÁO =====
   function getThongKeTheoNgay() {
     // { 'YYYY-MM-DD': { revenue, orders, customerSet:Set } }
@@ -846,16 +1086,20 @@
   function switchTab(tab) {
     $('#viewLive').style.display = tab === 'live' ? '' : 'none';
     $('#viewCustomers').style.display = tab === 'customers' ? '' : 'none';
+    $('#viewSessions').style.display = tab === 'sessions' ? '' : 'none';
     $('#viewReport').style.display = tab === 'report' ? '' : 'none';
     $('#navLive').classList.toggle('active', tab === 'live');
     $('#navCustomers').classList.toggle('active', tab === 'customers');
+    $('#navSessions').classList.toggle('active', tab === 'sessions');
     $('#navReport').classList.toggle('active', tab === 'report');
     if (tab === 'customers') renderCustomerList();
+    if (tab === 'sessions') renderSessionList();
     if (tab === 'report') renderReport($('#reportDate').value || dateKeyLocal());
   }
 
   $('#navLive').addEventListener('click', () => switchTab('live'));
   $('#navCustomers').addEventListener('click', () => switchTab('customers'));
+  $('#navSessions').addEventListener('click', () => switchTab('sessions'));
   $('#navReport').addEventListener('click', () => switchTab('report'));
   // ===== HẾT PHẦN KHÁCH HÀNG / GIỎ HÀNG =====
 
@@ -952,11 +1196,13 @@
     if (cleanUsername) {
       $('#tiktokUsername').value = cleanUsername;
       rememberTiktokId(cleanUsername);
+      startNewSession(cleanUsername); // mở 1 phiên lưu lịch sử mới cho lần kết nối này
     }
   });
 
   function addCommentToFeed(cmt) {
     if (!cmt.receivedAt) cmt.receivedAt = new Date().toISOString();
+    if (!cmt.id) cmt.id = 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
 
     const feed = $('#commentFeed');
     const placeholder = feed.querySelector('.feed-placeholder');
@@ -981,9 +1227,30 @@
     card.querySelector('.btn-print').addEventListener('click', () => {
       printComment(cmt);
       addToCart(cmt); // Tự động thêm khách hàng + sản phẩm (chính comment này) vào giỏ hàng
+      markSessionCommentAdded(cmt.id);
     });
 
     feed.prepend(card);
+
+    // Lưu lại toàn bộ comment vào phiên live hiện tại, kể cả khi chưa bấm "In phiếu",
+    // để có thể xem lại / in bù sau này trong tab "Lịch sử".
+    if (currentSessionId && liveSessions[currentSessionId]) {
+      liveSessions[currentSessionId].comments.push(Object.assign({}, cmt, { added: false }));
+      renderSessionBadge();
+      if ($('#viewSessions').style.display !== 'none') renderSessionList();
+      scheduleSaveSessions();
+    }
+  }
+
+  // Đánh dấu 1 comment trong lịch sử là "đã in/đã thêm đơn" khi nó được in
+  // trực tiếp từ feed Live (để tab Lịch sử không hiện lại nút in trùng lặp).
+  function markSessionCommentAdded(commentId) {
+    if (!commentId || !currentSessionId || !liveSessions[currentSessionId]) return;
+    const found = liveSessions[currentSessionId].comments.find(c => c.id === commentId);
+    if (found) {
+      found.added = true;
+      scheduleSaveSessions();
+    }
   }
 
   function escapeHtml(str) {
