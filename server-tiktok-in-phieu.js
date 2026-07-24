@@ -37,6 +37,72 @@ const connectorReady = new Promise((resolve) => { _resolveConnectorReady = resol
   _resolveConnectorReady();
 })();
 
+const path = require('path');
+const crypto = require('crypto');
+const Database = require('better-sqlite3');
+
+// ====== DATABASE (SQLite) ======
+// File database nằm cạnh server, tự tạo nếu chưa có. Lưu tài khoản + dữ liệu
+// khách hàng đã thêm, để dùng lại được ở bất kỳ máy nào, bất kỳ lúc nào (chỉ cần đăng nhập).
+const db = new Database(path.join(__dirname, 'data.db'));
+db.pragma('journal_mode = WAL');
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    salt TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS sessions (
+    token TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS customer_data (
+    user_id INTEGER PRIMARY KEY,
+    data TEXT NOT NULL,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+`);
+
+const SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000; // Phiên đăng nhập: 90 ngày
+
+function hashPassword(password, salt) {
+  return crypto.scryptSync(password, salt, 64).toString('hex');
+}
+
+function createSession(userId) {
+  const token = crypto.randomBytes(32).toString('hex');
+  const now = Date.now();
+  db.prepare('INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)')
+    .run(token, userId, now, now + SESSION_TTL_MS);
+  return token;
+}
+
+// Middleware xác thực: đọc header "Authorization: Bearer <token>"
+function requireAuth(req, res, next) {
+  const authHeader = req.headers['authorization'] || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  if (!token) {
+    return res.status(401).json({ error: 'Thiếu token đăng nhập.' });
+  }
+  const session = db.prepare('SELECT * FROM sessions WHERE token = ?').get(token);
+  if (!session || session.expires_at < Date.now()) {
+    if (session) db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+    return res.status(401).json({ error: 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.' });
+  }
+  req.userId = session.user_id;
+  req.sessionToken = token;
+  next();
+}
+
 const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
@@ -58,6 +124,76 @@ app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', '*');
   next();
+});
+
+// ====== API TÀI KHOẢN & DỮ LIỆU KHÁCH HÀNG ======
+
+// Đăng ký tài khoản mới
+app.post('/api/register', (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Thiếu username hoặc password.' });
+  }
+  if (String(password).length < 4) {
+    return res.status(400).json({ error: 'Mật khẩu phải có ít nhất 4 ký tự.' });
+  }
+  const existed = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
+  if (existed) {
+    return res.status(409).json({ error: 'Username đã tồn tại.' });
+  }
+  const salt = crypto.randomBytes(16).toString('hex');
+  const passwordHash = hashPassword(password, salt);
+  const info = db.prepare(
+    'INSERT INTO users (username, password_hash, salt, created_at) VALUES (?, ?, ?, ?)'
+  ).run(username, passwordHash, salt, Date.now());
+
+  const token = createSession(info.lastInsertRowid);
+  res.json({ token, username });
+});
+
+// Đăng nhập
+app.post('/api/login', (req, res) => {
+  const { username, password } = req.body || {};
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Thiếu username hoặc password.' });
+  }
+  const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+  if (!user) {
+    return res.status(401).json({ error: 'Sai username hoặc password.' });
+  }
+  const passwordHash = hashPassword(password, user.salt);
+  if (passwordHash !== user.password_hash) {
+    return res.status(401).json({ error: 'Sai username hoặc password.' });
+  }
+  const token = createSession(user.id);
+  res.json({ token, username: user.username });
+});
+
+// Đăng xuất
+app.post('/api/logout', requireAuth, (req, res) => {
+  db.prepare('DELETE FROM sessions WHERE token = ?').run(req.sessionToken);
+  res.json({ ok: true });
+});
+
+// Lấy danh sách khách hàng/người đã thêm của tài khoản đang đăng nhập
+app.get('/api/customers', requireAuth, (req, res) => {
+  const row = db.prepare('SELECT data FROM customer_data WHERE user_id = ?').get(req.userId);
+  res.json({ customers: row ? JSON.parse(row.data) : [] });
+});
+
+// Lưu (ghi đè) danh sách khách hàng/người đã thêm của tài khoản đang đăng nhập
+app.post('/api/customers', requireAuth, (req, res) => {
+  const { customers } = req.body || {};
+  if (!Array.isArray(customers)) {
+    return res.status(400).json({ error: 'Dữ liệu customers phải là một mảng (array).' });
+  }
+  const dataStr = JSON.stringify(customers);
+  const now = Date.now();
+  db.prepare(`
+    INSERT INTO customer_data (user_id, data, updated_at) VALUES (?, ?, ?)
+    ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at
+  `).run(req.userId, dataStr, now);
+  res.json({ ok: true, count: customers.length });
 });
 
 // Endpoint gửi lệnh in: chuyển tiếp dữ liệu ESC/POS (raw bytes) sang ESP32
