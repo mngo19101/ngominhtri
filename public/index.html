@@ -725,17 +725,6 @@
   </div>
 </div>
 
-<!-- MODAL: CHƯA KẾT NỐI MÁY IN (ESP32) -->
-<div class="locked-overlay" id="printerDisconnectedOverlay">
-  <div class="locked-modal">
-    <div class="icon">🖨️</div>
-    <h3>Chưa kết nối máy in</h3>
-    <p id="printerDisconnectedMsg">Thiết bị ESP32 chưa kết nối với máy in. Vui lòng kiểm tra lại hoặc liên hệ admin.</p>
-    <button class="btn" id="printerDisconnectedGoMenu">Xem thông tin mã máy in</button>
-    <button class="btn-secondary" id="printerDisconnectedClose">Đóng</button>
-  </div>
-</div>
-
 <script>
 (() => {
   const $ = (s) => document.querySelector(s);
@@ -1214,10 +1203,15 @@
 
   function scheduleSaveSessions() {
     if (sessionSaveTimer) clearTimeout(sessionSaveTimer);
-    sessionSaveTimer = setTimeout(saveSessions, 1200);
+    // Giảm từ 1200ms xuống 500ms: vẫn đủ để gộp nhiều comment liên tiếp thành
+    // 1 request (tránh spam server khi live đang chạy nhanh), nhưng rút ngắn
+    // khoảng thời gian "cửa sổ rủi ro" nếu người dùng đóng tab/tắt máy ngay
+    // sau khi vừa nhận comment cuối cùng.
+    sessionSaveTimer = setTimeout(saveSessions, 500);
   }
 
   async function saveSessions() {
+    sessionSaveTimer = null;
     try {
       await apiFetch('/api/sessions', {
         method: 'POST',
@@ -1228,7 +1222,35 @@
     }
   }
 
+  // Lưu NGAY LẬP TỨC (bỏ qua debounce), dùng khi trang sắp bị ẩn/đóng — ví dụ
+  // người dùng chuyển tab, khóa màn hình điện thoại, hoặc đóng hẳn trình
+  // duyệt. Dùng keepalive:true để trình duyệt vẫn cố gắng gửi xong request
+  // này ngay cả khi trang đã bắt đầu unload, thay vì hủy ngang giữa chừng
+  // như fetch thường — đây là điểm mấu chốt để không mất nốt vài comment
+  // cuối chưa kịp lưu do debounce phía trên.
+  function flushSessionsNow() {
+    if (sessionSaveTimer) { clearTimeout(sessionSaveTimer); sessionSaveTimer = null; }
+    if (!authToken || !Object.keys(liveSessions).length) return;
+    const base = apiBase();
+    if (!base) return;
+    try {
+      fetch(base + '/api/sessions', {
+        method: 'POST',
+        keepalive: true,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + authToken
+        },
+        body: JSON.stringify({ sessions: liveSessions })
+      }).catch(() => {});
+    } catch (e) {}
+  }
+
   function startNewSession(username) {
+    // Tạo tạm 1 ID cục bộ để hiện ngay lên giao diện trong lúc chờ server xác
+    // nhận kết nối thành công. ID THẬT SỰ dùng để lưu bền vào DB sẽ do server
+    // phát về (xem adoptServerSessionId) — vì chỉ có server mới biết chắc đây
+    // là phiên Live nào và phát cùng 1 ID đó cho MỌI thiết bị đang xem.
     const sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
     liveSessions[sessionId] = {
       username,
@@ -1239,6 +1261,43 @@
     currentSessionUsername = (username || '').toLowerCase();
     renderSessionBadge();
     // Phiên mới toanh, chưa có card trong DOM -> chỉ full-render khi đang mở tab Lịch sử
+    if ($('#viewSessions').style.display !== 'none') renderSessionList();
+    scheduleSaveSessions();
+  }
+
+  // Đồng bộ theo sessionId do SERVER phát ra (kèm trong STATUS/HISTORY/COMMENT).
+  // Trước đây mỗi trình duyệt tự sinh 1 sessionId riêng trong startNewSession(),
+  // nên chỉ đúng trên chính thiết bị vừa bấm "Kết Nối" — thiết bị nào mở trang
+  // SAU (F5 lại giữa chừng, hoặc điện thoại mở lên khi laptop đã kết nối sẵn)
+  // sẽ không có sessionId đó, khiến comment vẫn chạy trong feed Live (do server
+  // vẫn broadcast) nhưng KHÔNG được đẩy vào liveSessions -> KHÔNG lưu vào DB,
+  // chỉ tồn tại tạm trong bộ nhớ của feed cho tới khi rời trang là mất. Nay mọi
+  // thiết bị đều dùng chung đúng 1 sessionId do server cấp, nên comment về sau
+  // luôn được lưu đúng vào 1 phiên duy nhất, bền trên DB.
+  function adoptServerSessionId(sessionId, username, roomUsername) {
+    if (!sessionId || currentSessionId === sessionId) return;
+
+    // Nếu thiết bị này vừa có 1 phiên "tạm" (do chính nó bấm Kết Nối tạo ra,
+    // chưa kịp có comment nào) trùng username -> dọn phiên tạm đó đi, tránh để
+    // lại 1 mục rỗng thừa trong Lịch sử.
+    if (
+      currentSessionId &&
+      liveSessions[currentSessionId] &&
+      liveSessions[currentSessionId].comments.length === 0 &&
+      (liveSessions[currentSessionId].username || '').toLowerCase() === (roomUsername || '').toLowerCase()
+    ) {
+      delete liveSessions[currentSessionId];
+    }
+
+    if (!liveSessions[sessionId]) {
+      liveSessions[sessionId] = {
+        username: roomUsername || username || '',
+        startedAt: new Date().toISOString(),
+        comments: []
+      };
+    }
+    currentSessionId = sessionId;
+    renderSessionBadge();
     if ($('#viewSessions').style.display !== 'none') renderSessionList();
     scheduleSaveSessions();
   }
@@ -1790,20 +1849,6 @@
     switchTab('menu');
   });
 
-  // ===== MODAL: CHƯA KẾT NỐI MÁY IN (ESP32) =====
-  function showPrinterDisconnectedModal(msg) {
-    $('#printerDisconnectedMsg').textContent = msg || 'Thiết bị ESP32 chưa kết nối với máy in. Vui lòng kiểm tra lại hoặc liên hệ admin.';
-    $('#printerDisconnectedOverlay').classList.add('open');
-  }
-  function hidePrinterDisconnectedModal() {
-    $('#printerDisconnectedOverlay').classList.remove('open');
-  }
-  $('#printerDisconnectedClose').addEventListener('click', hidePrinterDisconnectedModal);
-  $('#printerDisconnectedGoMenu').addEventListener('click', () => {
-    hidePrinterDisconnectedModal();
-    switchTab('menu');
-  });
-
   // ===== PHẦN QUẢN TRỊ (chỉ tài khoản admin) =====
   let isCurrentUserAdmin = false;
 
@@ -2049,6 +2094,7 @@
             $('#tiktokUsername').value = data.roomUsername;
           }
           updateLiveIdLabel(data.roomUsername);
+          adoptServerSessionId(data.sessionId, data.roomUsername, data.roomUsername);
         } else if (data.stopped) {
           // Server đã dừng hẳn phiên Live (do bấm nút "Dừng xem Live") —
           // đồng bộ lại giao diện: bỏ ID đang xem, ẩn nút dừng, xoá feed.
@@ -2059,11 +2105,13 @@
           if (feed) feed.innerHTML = '<div class="feed-placeholder" style="color:var(--muted); font-size:13px;">Đang chờ bình luận từ phiên Live...</div>';
         }
       } else if (data.type === 'COMMENT') {
+        adoptServerSessionId(data.sessionId, data.roomUsername, data.roomUsername);
         addCommentToFeed(data.comment, data.roomUsername);
       } else if (data.type === 'HISTORY') {
         // Server gửi lại toàn bộ comment gần đây của phiên Live đang chạy —
         // nhận được khi vừa mở trang hoặc vừa kết nối lại WebSocket, để feed
         // không bao giờ hiện "0 comment" trong lúc phiên Live đã có sẵn dữ liệu.
+        adoptServerSessionId(data.sessionId, data.roomUsername, data.roomUsername);
         (data.comments || []).forEach(c => addCommentToFeed(c, data.roomUsername));
       } else if (data.type === 'SESSION_DELETED') {
         // 1 thiết bị khác (hoặc chính máy này) vừa xóa 1 phiên lịch sử — xóa
@@ -2121,11 +2169,20 @@
   // tự kết nối lại phía trên không được kích hoạt. Các sự kiện dưới đây đảm
   // bảo mỗi khi người dùng quay lại trang, ta chủ động kiểm tra và nối lại.
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') ensureWsAlive();
+    if (document.visibilityState === 'visible') {
+      ensureWsAlive();
+    } else {
+      // Trang bị ẩn đi (chuyển tab, khóa màn hình...) -> chưa chắc trang sẽ
+      // đóng hẳn, nhưng cứ lưu ngay cho chắc, tránh phụ thuộc vào timer 500ms
+      // còn đang chờ nếu người dùng thoát hẳn ngay sau đó.
+      flushSessionsNow();
+    }
   });
   window.addEventListener('focus', ensureWsAlive);
   window.addEventListener('pageshow', ensureWsAlive);
   window.addEventListener('online', ensureWsAlive);
+  // Trang thực sự bị đóng/điều hướng đi nơi khác -> lưu nốt lần cuối.
+  window.addEventListener('pagehide', flushSessionsNow);
   // ===== HẾT PHẦN TỰ KẾT NỐI LẠI =====
 
   function setStatus(msg) {
@@ -2293,23 +2350,6 @@
         setPrinterStatus('❌ Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.');
         return;
       }
-
-      // Tài khoản đã mua gói (canPrint = true) nhưng chưa có ESP32 nào kết
-      // nối bằng mã máy in của tài khoản này -> chặn in ngay từ phía client
-      // và hiện khung thông báo, thay vì gửi lệnh in rồi thất bại âm thầm.
-      try {
-        const me = await apiFetch('/api/me');
-        const lic = me.license || {};
-        if (lic.canPrint && !me.printerConnected) {
-          setPrinterStatus('🖨️ Chưa kết nối ESP32 với máy in.');
-          showPrinterDisconnectedModal('Tài khoản của bạn đã có gói in, nhưng chưa có ESP32 nào kết nối với máy in. Vui lòng kiểm tra lại thiết bị hoặc liên hệ admin.');
-          return;
-        }
-      } catch (checkErr) {
-        // Nếu không kiểm tra được trạng thái (vd. mất mạng), vẫn tiếp tục thử
-        // gửi lệnh in như bình thường và để phần xử lý lỗi bên dưới lo tiếp.
-      }
-
       const res = await fetch(`${bridgeUrl}/print`, {
         method: 'POST',
         headers: {
@@ -2329,11 +2369,6 @@
         const lockedMsg = text.slice('LOCKED:'.length).trim();
         setPrinterStatus(`🔒 ${lockedMsg}`);
         showLockedModal(lockedMsg);
-      } else if (/esp32|máy in.*(chưa kết nối|không kết nối)|not connected/i.test(text)) {
-        // Server báo ESP32 chưa kết nối (dù tài khoản đã có gói) -> hiện
-        // khung thông báo riêng thay vì chỉ ghi lỗi âm thầm trong status box.
-        setPrinterStatus(`🖨️ ${text}`);
-        showPrinterDisconnectedModal(text || 'Thiết bị ESP32 chưa kết nối với máy in. Vui lòng kiểm tra lại hoặc liên hệ admin.');
       } else {
         setPrinterStatus(`❌ ${text}`);
       }
