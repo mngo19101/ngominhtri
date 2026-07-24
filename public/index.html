@@ -771,10 +771,16 @@
     if (!cust) return;
     cust.items = cust.items.filter(it => it.id !== itemId);
     if (cust.items.length === 0) delete customers[customerId];
-    saveCustomers();
     renderCustomerBadge();
     renderCustomerList();
     if ($('#viewReport').style.display !== 'none') renderReport($('#reportDate').value || dateKeyLocal());
+    // Gửi yêu cầu xóa THẲNG trên server qua WebSocket, đồng bộ ngay cho mọi
+    // thiết bị khác đang mở trang (xem giải thích chi tiết ở deleteSession()).
+    if (ws && ws.readyState === WebSocket.OPEN && authToken) {
+      ws.send(JSON.stringify({ type: 'DELETE_CART_ITEM', customerId, itemId, token: authToken }));
+    } else {
+      saveCustomers();
+    }
   }
 
   function renderCustomerBadge() {
@@ -912,7 +918,17 @@
     if (currentSessionId === sessionId) { currentSessionId = null; currentSessionUsername = null; }
     renderSessionBadge();
     renderSessionList();
-    scheduleSaveSessions();
+    // Gửi yêu cầu xóa THẲNG trên server qua WebSocket (không chỉ ghi đè toàn
+    // bộ dữ liệu cục bộ lên) — để các thiết bị khác (điện thoại...) đang mở
+    // trang cũng tự xóa ngay lập tức, và tránh việc 1 thiết bị khác lỡ ghi đè
+    // "hồi sinh" lại phiên vừa xóa nếu nó đang giữ bản dữ liệu cũ.
+    if (ws && ws.readyState === WebSocket.OPEN && authToken) {
+      ws.send(JSON.stringify({ type: 'DELETE_SESSION', sessionId, token: authToken }));
+    } else {
+      // Không có kết nối WS lúc này thì tạm lưu theo cách cũ (ghi đè toàn bộ),
+      // để ít nhất dữ liệu trên chính thiết bị này không bị mất.
+      scheduleSaveSessions();
+    }
   }
 
   // Tạo phần tử DOM cho 1 dòng bình luận trong lịch sử (dùng chung cho cả
@@ -1202,6 +1218,27 @@
         // nhận được khi vừa mở trang hoặc vừa kết nối lại WebSocket, để feed
         // không bao giờ hiện "0 comment" trong lúc phiên Live đã có sẵn dữ liệu.
         (data.comments || []).forEach(c => addCommentToFeed(c, data.roomUsername));
+      } else if (data.type === 'SESSION_DELETED') {
+        // 1 thiết bị khác (hoặc chính máy này) vừa xóa 1 phiên lịch sử — xóa
+        // luôn khỏi bản dữ liệu đang giữ ở đây để giao diện đồng bộ ngay,
+        // không cần tải lại trang.
+        if (liveSessions[data.sessionId]) {
+          delete liveSessions[data.sessionId];
+          openSessionIds.delete(data.sessionId);
+          if (currentSessionId === data.sessionId) { currentSessionId = null; currentSessionUsername = null; }
+          renderSessionBadge();
+          if ($('#viewSessions').style.display !== 'none') renderSessionList();
+        }
+      } else if (data.type === 'CART_ITEM_DELETED') {
+        // Tương tự SESSION_DELETED nhưng cho 1 sản phẩm trong giỏ hàng.
+        const cust = customers[data.customerId];
+        if (cust) {
+          cust.items = (cust.items || []).filter(it => it.id !== data.itemId);
+          if (data.customerRemoved || cust.items.length === 0) delete customers[data.customerId];
+          renderCustomerBadge();
+          if ($('#viewCustomers').style.display !== 'none') renderCustomerList();
+          if ($('#viewReport').style.display !== 'none') renderReport($('#reportDate').value || dateKeyLocal());
+        }
       }
     };
 
