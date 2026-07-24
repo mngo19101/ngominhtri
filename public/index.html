@@ -166,11 +166,9 @@
   .btn-mini.added:hover{ background:#173832; color:var(--teal); }
   .session-search-field{ margin-top:12px; }
   .session-date-jump-field{ margin-top:10px; }
-  #sessionDateJump{
-    background:#141310; border:1px solid var(--border); color:#fff;
-    padding:10px; border-radius:6px; font-family:'JetBrains Mono', monospace; font-size:13px;
-    width:100%;
-  }
+  .session-date-jump-row{ display:flex; gap:8px; }
+  .session-date-jump-row #sessionDateJump{ flex:1; width:100%; }
+  .session-date-jump-row #sessionDateJumpClear{ flex-shrink:0; }
 
   /* ===== NHÓM THEO NGÀY (Lịch Sử Phiên Live) ===== */
   .day-group{ display:flex; flex-direction:column; gap:10px; margin-bottom:22px; }
@@ -405,10 +403,11 @@
       <input id="sessionSearchInput" type="text" placeholder="Tìm theo tên, ID TikTok hoặc nội dung bình luận...">
     </div>
     <div class="field session-date-jump-field">
-      <label>Chuyển nhanh đến ngày</label>
-      <select id="sessionDateJump">
-        <option value="">— Tất cả các ngày —</option>
-      </select>
+      <label>Lọc theo ngày</label>
+      <div class="session-date-jump-row">
+        <input type="date" id="sessionDateJump" class="date-input">
+        <button type="button" class="btn-mini" id="sessionDateJumpClear">Tất cả</button>
+      </div>
     </div>
     <div class="customer-list" id="sessionListBody">
       <div class="empty-note">Chưa có phiên live nào được lưu. Mỗi lần bấm "Kết Nối TikTok Live", toàn bộ bình luận nhận được sẽ tự động lưu lại ở đây để xem lại sau.</div>
@@ -1026,7 +1025,33 @@
       if (new Date(session.startedAt) > new Date(grp.lastStartedAt)) grp.lastStartedAt = session.startedAt;
       commentsToShow.forEach(c => grp.comments.push(Object.assign({ __sessionId: sessionId }, c)));
     });
+
+    // Sau khi gom xong, loại bỏ các bình luận trùng lặp CÙNG 1 ID TikTok trong
+    // từng nhóm (ngày + kênh live) — ví dụ do bridge gửi trùng sự kiện comment.
+    // Khác ID TikTok thì dù nội dung giống hệt nhau vẫn giữ nguyên, không gộp.
+    Object.values(dayMap).forEach(day => {
+      Object.values(day.groups).forEach(grp => {
+        grp.comments = dedupeCommentsSameId(grp.comments);
+      });
+    });
+
     return dayMap;
+  }
+
+  // Loại bỏ bình luận trùng lặp: cùng 1 ID TikTok (uniqueId) + cùng nội dung
+  // bình luận thì chỉ giữ lại 1 bản (ưu tiên giữ bản nhận sớm nhất). Nếu khác
+  // ID TikTok thì vẫn cho lặp nội dung bình thường, không coi là trùng.
+  function dedupeCommentsSameId(comments) {
+    const sorted = [...comments].sort((a, b) => new Date(a.receivedAt) - new Date(b.receivedAt));
+    const seen = new Set();
+    const result = [];
+    sorted.forEach(c => {
+      const key = (c.uniqueId || '').toLowerCase() + '||' + (c.comment || '').trim();
+      if (seen.has(key)) return;
+      seen.add(key);
+      result.push(c);
+    });
+    return result;
   }
 
   function renderSessionList() {
@@ -1043,15 +1068,8 @@
     $('#summarySessionCount').textContent = entries.length;
     $('#summarySessionCommentCount').textContent = totalComments;
 
-    // Danh sách ngày cho dropdown "Chuyển nhanh đến ngày" luôn lấy TOÀN BỘ
-    // ngày đang có dữ liệu, không phụ thuộc vào từ khóa tìm kiếm hiện tại —
-    // để có thể nhảy sang ngày khác rồi mới tìm kiếm, thay vì bị giới hạn.
-    const fullDayKeysSorted = [...new Set(entries.map(([, s]) => dateKeyLocal(s.startedAt)))].sort((a, b) => b.localeCompare(a));
-    updateSessionDateJumpOptions(fullDayKeysSorted);
-
     if (entries.length === 0) {
       body.innerHTML = '<div class="empty-note">Chưa có phiên live nào được lưu. Mỗi lần bấm "Kết Nối TikTok Live", toàn bộ bình luận nhận được sẽ tự động lưu lại ở đây để xem lại sau.</div>';
-      updateSessionDateJumpOptions([]);
       return;
     }
 
@@ -1081,9 +1099,19 @@
     }
 
     const dayMap = groupSessionsByDayAndUsername(filteredList);
-    const dayKeysSorted = Object.keys(dayMap).sort((a, b) => b.localeCompare(a)); // ngày mới nhất lên trước
+    let dayKeysSorted = Object.keys(dayMap).sort((a, b) => b.localeCompare(a)); // ngày mới nhất lên trước
+
+    // Lọc theo ngày đã chọn ở ô ngày (giống cách phần Báo Cáo lọc theo reportDate).
+    // Không chọn ngày nào ("") thì hiển thị đầy đủ tất cả các ngày như cũ.
+    const selectedDate = $('#sessionDateJump').value;
+    if (selectedDate) dayKeysSorted = dayKeysSorted.filter(dk => dk === selectedDate);
 
     body.innerHTML = '';
+
+    if (dayKeysSorted.length === 0) {
+      body.innerHTML = '<div class="empty-note">Không có bình luận nào trong ngày đã chọn.</div>';
+      return;
+    }
 
     dayKeysSorted.forEach(dateKey => {
       const day = dayMap[dateKey];
@@ -1249,39 +1277,13 @@
     return true;
   }
 
-  // Đổ danh sách các ngày đang có dữ liệu vào dropdown "Chuyển nhanh đến ngày",
-  // vẫn giữ nguyên lựa chọn hiện tại của người dùng (nếu ngày đó còn tồn tại)
-  // để không bị nhảy về "Tất cả" mỗi lần có comment mới / render lại.
-  function updateSessionDateJumpOptions(dayKeysSorted) {
-    const select = $('#sessionDateJump');
-    if (!select) return;
-    const currentValue = select.value;
-    select.innerHTML = '<option value="">— Tất cả các ngày —</option>' +
-      dayKeysSorted.map(dk => `<option value="${dk}">${humanizeDateKey(dk)}</option>`).join('');
-    if (currentValue && dayKeysSorted.includes(currentValue)) select.value = currentValue;
-  }
-
-  // Bấm chọn 1 ngày trong dropdown -> cuộn thẳng tới khối ngày đó và tự mở
-  // sẵn toàn bộ các live trong ngày để xem ngay, khỏi phải cuộn tay tìm.
-  $('#sessionDateJump').addEventListener('change', () => {
-    const dateKey = $('#sessionDateJump').value;
-    if (!dateKey) return; // "Tất cả các ngày" -> không làm gì thêm
-    const dayEl = $('#sessionListBody').querySelector(`.day-group[data-day-key="${dateKey}"]`);
-    if (!dayEl) return;
-
-    // Mở sẵn toàn bộ khối live trong ngày được chọn để thấy nội dung ngay.
-    dayEl.querySelectorAll('.session-card').forEach(card => {
-      const box = card.querySelector('.session-comments');
-      if (box) {
-        box.classList.add('open');
-        if (card.dataset.groupKey) openSessionIds.add(card.dataset.groupKey);
-      }
-    });
-
-    dayEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    dayEl.style.outline = '2px solid var(--teal)';
-    dayEl.style.borderRadius = '10px';
-    setTimeout(() => { dayEl.style.outline = 'none'; }, 1500);
+  // Chọn 1 ngày trong ô ngày -> lọc danh sách chỉ còn đúng ngày đó (giống hệt
+  // cách ô ngày ở tab Báo Cáo lọc dữ liệu theo ngày). Bấm "Tất cả" để xoá lọc,
+  // xem lại đầy đủ mọi ngày như trước.
+  $('#sessionDateJump').addEventListener('change', () => renderSessionList());
+  $('#sessionDateJumpClear').addEventListener('click', () => {
+    $('#sessionDateJump').value = '';
+    renderSessionList();
   });
 
   $('#sessionSearchInput').addEventListener('input', () => renderSessionList());
