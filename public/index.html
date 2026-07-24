@@ -431,7 +431,8 @@
   .shipping-filter-tabs{display:flex;gap:7px;margin:10px 0;overflow-x:auto}
   .shipping-filter{white-space:nowrap;border:0;background:rgba(255,255,255,.58);color:var(--muted);padding:8px 11px;border-radius:9px;font-weight:700;cursor:pointer}
   .shipping-filter.active{background:rgba(255,92,138,.18);color:var(--text);box-shadow:inset 0 0 0 1px var(--border)}
-  .shipping-card{background:var(--card);border:1px solid var(--border);border-radius:15px;padding:14px;margin:10px 0;box-shadow:0 8px 24px rgba(111,55,88,.07)}
+  .shipping-card{background:var(--card);border:1px solid var(--border);border-radius:15px;padding:14px;margin:10px 0;box-shadow:0 8px 24px rgba(111,55,88,.07);cursor:pointer;transition:.15s}
+  .shipping-card:hover{border-color:var(--teal);transform:translateY(-1px)}
   .shipping-card-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
   .shipping-code{font-family:'JetBrains Mono',monospace;font-weight:800;font-size:13px;color:var(--teal)}
   .shipping-recipient{font-weight:800;margin-top:5px}.shipping-address{color:var(--muted);font-size:12.5px;line-height:1.45;margin-top:4px}
@@ -445,6 +446,13 @@
   .reconcile-row{background:var(--card);border:1px solid var(--border);border-radius:13px;padding:13px;margin:9px 0;display:grid;grid-template-columns:1fr auto;gap:10px}
   .label-preview-canvas{display:block;width:100%;max-width:420px;height:auto;margin:10px auto;background:#fff;border:1px solid #ddd;border-radius:8px}
   .shipping-warning{padding:10px 12px;border-radius:10px;background:#fff8df;border:1px solid #f1d58b;color:#7a5a00;font-size:12px;margin-bottom:10px}
+  .spx-summary{background:linear-gradient(135deg,#fff4ef,#fff);border:1px solid #ffc7b8;border-radius:13px;padding:13px;margin-bottom:12px}
+  .spx-summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+  .spx-summary-grid small{display:block;color:var(--muted)}.spx-summary-grid b{display:block;margin-top:3px}
+  .tracking-timeline{margin:14px 0 0;padding-left:22px;border-left:2px solid var(--border)}
+  .tracking-event{position:relative;padding:0 0 16px 15px}.tracking-event:before{content:'';position:absolute;left:-29px;top:4px;width:11px;height:11px;border-radius:50%;background:var(--teal);border:3px solid #fff}
+  .tracking-event b{display:block}.tracking-event small{color:var(--muted);display:block;margin-top:3px;line-height:1.4}
+  @media(max-width:700px){.spx-summary-grid{grid-template-columns:1fr}}
   @media(max-width:700px){.shipping-stats{grid-template-columns:repeat(2,1fr)}.shipping-card-meta{grid-template-columns:repeat(2,1fr)}}
   .app-modal{ position:fixed; inset:0; z-index:1100; display:none; align-items:center; justify-content:center;
     padding:18px; background:rgba(74,46,70,.48); backdrop-filter:blur(4px); }
@@ -985,6 +993,32 @@
   </div>
 </div>
 
+<!-- VẬN CHUYỂN: TRA CỨU SPX TỰ ĐỘNG -->
+<div class="app-modal" id="spxTrackingModal">
+  <div class="app-modal-card">
+    <div class="modal-head"><h3 id="spxTrackingTitle">Theo dõi SPX</h3><button class="btn-mini" id="spxTrackingClose">✕</button></div>
+    <div class="toolbar">
+      <input id="spxTrackingCode" autocomplete="off" placeholder="Nhập mã vận đơn SPX">
+      <button class="btn" id="btnLookupSpx" style="width:auto;">Tra cứu & lưu</button>
+    </div>
+    <div class="auth-error" id="spxTrackingError"></div>
+    <div class="spx-summary" id="spxTrackingSummary" style="display:none;">
+      <b id="spxCurrentStatus">-</b>
+      <div class="spx-summary-grid">
+        <div><small>Đang ở</small><b id="spxCurrentLocation">-</b></div>
+        <div><small>Dự kiến giao</small><b id="spxExpectedDelivery">-</b></div>
+        <div><small>Cập nhật</small><b id="spxCheckedAt">-</b></div>
+      </div>
+    </div>
+    <div class="toolbar" id="spxTrackingLinks" style="display:none;">
+      <button class="btn-mini" id="btnRefreshSpx">↻ Cập nhật lại</button>
+      <a class="btn-mini" id="btnOpenSpx" target="_blank" rel="noopener">Mở trên SPX</a>
+    </div>
+    <h3>Hành trình</h3>
+    <div class="tracking-timeline" id="spxJourney"><div class="empty-note">Nhập mã để tra cứu.</div></div>
+  </div>
+</div>
+
 <!-- VẬN CHUYỂN: XEM / TẢI ẢNH PHIẾU -->
 <div class="app-modal" id="shippingLabelModal">
   <div class="app-modal-card">
@@ -1028,6 +1062,7 @@
   let editingShipmentId = null;
   let activeShippingFilter = 'all';
   let labelOrder = null;
+  let trackingShipmentId = null;
   let draftComment = null;
   let printBusy = false;
   let appSettings = {
@@ -1807,7 +1842,7 @@
 
     const q = ($('#shippingSearch').value || '').trim().toLowerCase().replace(/^@/,'');
     const list = shipmentsV2.filter(o => {
-      if (q && ![o.shippingCode,o.customerId,o.customerName,o.phone,o.address,o.productCode,o.productName]
+      if (q && ![o.shippingCode,o.externalTrackingCode,o.customerId,o.customerName,o.phone,o.address,o.productCode,o.productName,o.currentLocation]
         .join(' ').toLowerCase().includes(q)) return false;
       if (activeShippingFilter === 'action') return shippingNeedsAction(o);
       if (activeShippingFilter === 'delivering') return ['awaiting_pickup','delivering','delivery_failed'].includes(o.shippingStatus);
@@ -1830,6 +1865,11 @@
             <div class="shipping-code">${escapeHtml(o.shippingCode || 'CHƯA TẠO PHIẾU')}</div>
             <div class="shipping-recipient">${escapeHtml(o.customerName)} · @${escapeHtml(o.customerId)}</div>
             <div class="shipping-address">${o.phone ? '☎ '+escapeHtml(o.phone)+'<br>' : ''}${escapeHtml(o.address || 'Chưa có địa chỉ')}</div>
+            ${o.externalTrackingCode ? `<div class="shipping-address"><b>SPX ${escapeHtml(o.externalTrackingCode)}</b> · ${escapeHtml(o.carrierStatus || 'Đang cập nhật')}
+              ${o.currentLocation ? '<br>📍 '+escapeHtml(o.currentLocation) : ''}
+              ${o.expectedDeliveryText ? '<br>🗓 Dự kiến '+escapeHtml(o.expectedDeliveryText) : ''}
+              <br><b>${o.shippingStatus === 'delivered' ? '✅ Khách đã nhận' :
+                ['returning','returned'].includes(o.shippingStatus) ? '↩ Hoàn trả' : '⏳ Khách chưa nhận'}</b></div>` : ''}
           </div>
           <div class="shipping-money">${formatTien(o.codAmount ?? o.total)}<small>COD</small>
             <span class="status-pill shipping-status-${status}">${SHIPPING_STATUS_LABELS[status]}</span></div>
@@ -1840,6 +1880,7 @@
           <span>Phí giao<b>${formatTien(o.shippingFee || 0)}</b></span>
         </div>
         <div class="shipping-actions">
+          <button class="btn-mini track-spx">${o.externalTrackingCode ? 'Xem hành trình SPX' : 'Nhập mã SPX'}</button>
           <button class="btn-mini edit-shipment">${o.shippingCode ? 'Sửa thông tin' : 'Bổ sung & tạo phiếu'}</button>
           ${o.shippingCode ? `<button class="btn-mini export-label">In đơn (xuất ảnh)</button>
           <select class="shipment-status-select">${SHIPPING_STATUS_CHOICES.map(k=>`<option value="${k}"${status===k?' selected':''}>${SHIPPING_STATUS_LABELS[k]}</option>`).join('')}</select>
@@ -1847,6 +1888,7 @@
           ${status === 'delivery_failed' ? '<button class="btn-mini retry-shipment">Giao lại</button><button class="btn-mini return-shipment">Chuyển hoàn</button>' : ''}
         </div>`;
       card.querySelector('.edit-shipment').addEventListener('click', () => openShippingModal(o));
+      card.querySelector('.track-spx').addEventListener('click', () => openSpxTrackingModal(o));
       card.querySelector('.export-label')?.addEventListener('click', e => withButtonBusy(e.currentTarget, () => exportShippingLabel(o, true)));
       card.querySelector('.shipment-status-select')?.addEventListener('change', async e => {
         try {
@@ -1857,6 +1899,9 @@
       card.querySelector('.retry-shipment')?.addEventListener('click', () => changeShipmentStatus(o,'delivering','Yêu cầu giao lại'));
       card.querySelector('.return-shipment')?.addEventListener('click', () => changeShipmentStatus(o,'returning','Yêu cầu chuyển hoàn'));
       card.querySelector('.shipment-history')?.addEventListener('click', () => showShipmentHistory(o));
+      card.addEventListener('click', event => {
+        if (!event.target.closest('button,select,a,input,textarea')) openSpxTrackingModal(o);
+      });
       box.appendChild(card);
     });
   }
@@ -1908,9 +1953,102 @@
     try {
       const data = await apiFetch(`/api/shipments/${order.id}/events`);
       const lines = (data.events||[]).map(e =>
-        `${new Date(e.createdAt).toLocaleString('vi-VN')} — ${SHIPPING_STATUS_LABELS[e.status]||e.eventType}${e.note?' — '+e.note:''}`);
+        `${new Date(e.createdAt).toLocaleString('vi-VN')} — ${SHIPPING_STATUS_LABELS[e.status]||e.status||e.eventType}${e.location?' — '+e.location:''}${e.note?' — '+e.note:''}`);
       alert(lines.length ? lines.join('\n') : 'Chưa có hành trình.');
     } catch(err){ alert(err.message); }
+  }
+
+  function formatExpectedDelivery(order) {
+    if (order?.expectedDeliveryText) return order.expectedDeliveryText;
+    if (order?.expectedDeliveryAt) return new Date(order.expectedDeliveryAt).toLocaleDateString('vi-VN');
+    return 'SPX chưa cung cấp';
+  }
+
+  function renderSpxSummary(order) {
+    const code = order?.externalTrackingCode || $('#spxTrackingCode').value.trim();
+    const hasSavedTracking = !!order?.externalTrackingCode;
+    $('#spxTrackingSummary').style.display = hasSavedTracking ? '' : 'none';
+    $('#spxTrackingLinks').style.display = hasSavedTracking ? '' : 'none';
+    $('#spxCurrentStatus').textContent = order?.carrierStatus || (order?.trackingError ? 'Chưa có dữ liệu' : 'Đang cập nhật');
+    $('#spxCurrentLocation').textContent = order?.currentLocation || 'SPX chưa cung cấp';
+    $('#spxExpectedDelivery').textContent = formatExpectedDelivery(order);
+    $('#spxCheckedAt').textContent = order?.trackingUpdatedAt
+      ? new Date(order.trackingUpdatedAt).toLocaleString('vi-VN') : 'Chưa tra cứu';
+    $('#btnOpenSpx').href = code ? `https://spx.vn/track?${encodeURIComponent(code)}` : 'https://spx.vn/vi/';
+    $('#spxTrackingError').textContent = order?.trackingError || '';
+  }
+
+  async function loadSpxJourney(orderId) {
+    const box = $('#spxJourney');
+    box.innerHTML = '<div class="empty-note">Đang tải hành trình...</div>';
+    try {
+      const data = await apiFetch(`/api/shipments/${orderId}/events`);
+      const events = (data.events || []).filter(event => event.eventType === 'spx_tracking');
+      if (!events.length) {
+        box.innerHTML = '<div class="empty-note">Chưa có hành trình từ SPX.</div>';
+        return;
+      }
+      box.innerHTML = events.map(event => `
+        <div class="tracking-event">
+          <i></i>
+          <div>
+            <b>${escapeHtml(event.status || event.note || 'Cập nhật vận chuyển')}</b>
+            ${event.location ? `<span>📍 ${escapeHtml(event.location)}</span>` : ''}
+            ${event.note && event.note !== event.status ? `<span>${escapeHtml(event.note)}</span>` : ''}
+            <small>${new Date(event.createdAt).toLocaleString('vi-VN')}</small>
+          </div>
+        </div>`).join('');
+    } catch (err) {
+      box.innerHTML = `<div class="empty-note">${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  function openSpxTrackingModal(order) {
+    trackingShipmentId = order.id;
+    $('#spxTrackingTitle').textContent = `Theo dõi SPX · @${order.customerId}`;
+    $('#spxTrackingCode').value = order.externalTrackingCode || '';
+    $('#spxTrackingError').textContent = '';
+    renderSpxSummary(order);
+    $('#spxTrackingModal').classList.add('open');
+    if (order.externalTrackingCode) loadSpxJourney(order.id);
+    else $('#spxJourney').innerHTML = '<div class="empty-note">Chỉ cần nhập mã vận đơn SPX.</div>';
+    setTimeout(() => $('#spxTrackingCode').focus(), 0);
+  }
+
+  function closeSpxTrackingModal() {
+    $('#spxTrackingModal').classList.remove('open');
+    trackingShipmentId = null;
+  }
+
+  async function lookupSpxTracking() {
+    if (!trackingShipmentId) return;
+    const trackingCode = $('#spxTrackingCode').value.trim().toUpperCase().replace(/\s+/g, '');
+    if (!trackingCode) {
+      $('#spxTrackingError').textContent = 'Vui lòng nhập mã vận đơn SPX.';
+      return;
+    }
+    $('#spxTrackingCode').value = trackingCode;
+    $('#spxTrackingError').textContent = '';
+    const button = $('#btnLookupSpx');
+    await withButtonBusy(button, async () => {
+      let requestError = '';
+      try {
+        await apiFetch(`/api/shipments/${trackingShipmentId}/spx-track`, {
+          method:'POST', body:JSON.stringify({trackingCode})
+        });
+      } catch (err) {
+        requestError = err.message;
+      }
+      const orderId = trackingShipmentId;
+      await loadShippingV2();
+      const freshOrder = shipmentsV2.find(order => order.id === orderId);
+      if (freshOrder) {
+        $('#spxTrackingCode').value = freshOrder.externalTrackingCode || trackingCode;
+        renderSpxSummary(freshOrder);
+      }
+      if (requestError && !freshOrder?.trackingError) $('#spxTrackingError').textContent = requestError;
+      await loadSpxJourney(orderId);
+    });
   }
 
   function renderReconcileV2() {
@@ -2047,6 +2185,12 @@
   $('#shippingModalClose').addEventListener('click',closeShippingModal);
   $('#shippingModalCancel').addEventListener('click',closeShippingModal);
   $('#btnSaveShipment').addEventListener('click',saveShipmentV2);
+  $('#spxTrackingClose').addEventListener('click',closeSpxTrackingModal);
+  $('#btnLookupSpx').addEventListener('click',lookupSpxTracking);
+  $('#btnRefreshSpx').addEventListener('click',lookupSpxTracking);
+  $('#spxTrackingCode').addEventListener('keydown',event=>{
+    if(event.key==='Enter'){ event.preventDefault(); lookupSpxTracking(); }
+  });
   $('#shippingLabelClose').addEventListener('click',()=>$('#shippingLabelModal').classList.remove('open'));
   $('#btnDownloadShippingLabel').addEventListener('click',downloadShippingLabel);
   $('#btnPrintShippingLabel').addEventListener('click',printShippingLabel);

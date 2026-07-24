@@ -255,13 +255,34 @@ db.exec(`
     event_type TEXT NOT NULL,
     status TEXT,
     note TEXT,
+    location TEXT,
     created_at INTEGER NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (order_id) REFERENCES orders(id)
   );
   CREATE INDEX IF NOT EXISTS idx_shipment_events_order
     ON shipment_events(user_id, order_id, created_at DESC);
+  CREATE TABLE IF NOT EXISTS shipment_tracking (
+    order_id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    carrier TEXT NOT NULL DEFAULT 'SPX',
+    tracking_code TEXT NOT NULL,
+    current_status TEXT,
+    current_location TEXT,
+    expected_delivery_at INTEGER,
+    expected_delivery_text TEXT,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (order_id) REFERENCES orders(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_shipment_tracking_user_code
+    ON shipment_tracking(user_id, tracking_code);
 `);
+ensureColumn('shipment_events', 'location', 'TEXT');
+ensureColumn('shipment_tracking', 'raw_data', 'TEXT');
+ensureColumn('shipment_tracking', 'last_checked_at', 'INTEGER');
+ensureColumn('shipment_tracking', 'last_error', 'TEXT');
+ensureColumn('shipment_tracking', 'expected_delivery_text', 'TEXT');
 
 // ====== TỰ DỌN COMMENT QUÁ HẠN ======
 // Quy tắc theo ngày lịch đúng yêu cầu:
@@ -889,11 +910,13 @@ function addAudit(userId, action, entityType, entityId, detail) {
       detail == null ? null : JSON.stringify(detail), Date.now());
 }
 
-function addShipmentEvent(userId, orderId, eventType, status, note) {
+function addShipmentEvent(userId, orderId, eventType, status, note, location, createdAt) {
   db.prepare(`INSERT INTO shipment_events
-    (user_id, order_id, event_type, status, note, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)`)
-    .run(userId, orderId, eventType, status || null, cleanText(note, 500) || null, Date.now());
+    (user_id, order_id, event_type, status, note, location, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)`)
+    .run(userId, orderId, eventType, status || null, cleanText(note, 500) || null,
+      cleanText(location, 300) || null,
+      intValue(createdAt, Date.now(), 0, Number.MAX_SAFE_INTEGER));
 }
 
 function makeShippingCode(userId) {
@@ -909,6 +932,142 @@ function makeShippingCode(userId) {
     if (!exists) return code;
   }
   return `LC${Date.now()}${userId}`;
+}
+
+function valueAt(source, pathParts) {
+  let value = source;
+  for (const part of pathParts) {
+    if (value == null || typeof value !== 'object') return undefined;
+    value = value[part];
+  }
+  return value;
+}
+
+function firstValue(source, paths) {
+  for (const pathParts of paths) {
+    const value = valueAt(source, pathParts);
+    if (value !== undefined && value !== null && value !== '') return value;
+  }
+  return undefined;
+}
+
+function parseSpxTime(value) {
+  if (value == null || value === '') return null;
+  if (typeof value === 'number' || /^\d{10,13}$/.test(String(value))) {
+    const number = Number(value);
+    return Number.isFinite(number) ? (number < 100000000000 ? number * 1000 : number) : null;
+  }
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function mapSpxToShippingStatus(tracking) {
+  const text = [
+    tracking?.currentStatus,
+    ...(tracking?.journey || []).slice(0, 3).flatMap(event => [event.status, event.note])
+  ].filter(Boolean).join(' ').toLowerCase();
+  if (!text) return null;
+  if (/(đã hoàn|hoàn trả thành công|returned|return completed)/i.test(text)) return 'returned';
+  if (/(đang hoàn|chuyển hoàn|returning|return to sender)/i.test(text)) return 'returning';
+  if (/(giao thành công|đã giao|đã nhận|delivered|delivery successful)/i.test(text)) return 'delivered';
+  if (/(giao thất bại|giao không thành công|delivery failed|unsuccessful delivery)/i.test(text)) return 'delivery_failed';
+  if (/(đã hủy|cancelled|canceled)/i.test(text)) return 'cancelled';
+  if (/(chờ lấy|chưa lấy|awaiting pickup|pickup pending|ready for pickup)/i.test(text)) return 'awaiting_pickup';
+  if (/(đang giao|đang vận chuyển|đã lấy hàng|in transit|out for delivery|picked up|transporting)/i.test(text)) {
+    return 'delivering';
+  }
+  return null;
+}
+
+function normalizeSpxTracking(payload, requestedCode) {
+  const root = payload?.data?.data || payload?.data || {};
+  const recordLists = [
+    valueAt(root, ['sls_tracking_info', 'records']),
+    valueAt(root, ['tracking_info', 'records']),
+    valueAt(root, ['tracking_info', 'tracking_list']),
+    valueAt(root, ['tracking_list']),
+    valueAt(root, ['status_list'])
+  ].filter(Array.isArray);
+  const seen = new Set();
+  const journey = [];
+  for (const list of recordLists) {
+    for (const item of list) {
+      if (!item || typeof item !== 'object') continue;
+      const status = cleanText(firstValue(item, [
+        ['status_name'], ['milestone_name'], ['tracking_code_group_name'],
+        ['status'], ['milestone_code'], ['code']
+      ]), 160);
+      const note = cleanText(firstValue(item, [
+        ['message'], ['description'], ['status_desc'], ['tracking_message'],
+        ['event_description'], ['status_name']
+      ]), 500);
+      const location = cleanText(firstValue(item, [
+        ['location_name'], ['current_location'], ['station_name'], ['hub_name'],
+        ['location'], ['address']
+      ]), 300);
+      const timestamp = parseSpxTime(firstValue(item, [
+        ['timestamp'], ['event_time'], ['update_time'], ['ctime'], ['created_at'], ['time']
+      ])) || Date.now();
+      if (!status && !note && !location) continue;
+      const key = `${timestamp}|${status}|${note}|${location}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      journey.push({ status, note: note || status, location, createdAt: timestamp });
+    }
+  }
+  journey.sort((a, b) => b.createdAt - a.createdAt);
+
+  const currentStatus = cleanText(firstValue(root, [
+    ['order_info', 'tracking_code_group_name'], ['order_info', 'current_status'],
+    ['order_info', 'status_name'], ['tracking_info', 'current_status'],
+    ['current_status']
+  ]), 160) || journey[0]?.status || journey[0]?.note || 'Đang cập nhật';
+  const currentLocation = cleanText(firstValue(root, [
+    ['order_info', 'current_location'], ['tracking_info', 'current_location'],
+    ['current_location']
+  ]), 300) || journey[0]?.location || '';
+  const expectedRaw = firstValue(root, [
+    ['edd_info', 'expected_delivery_time'], ['edd_info', 'estimated_delivery_time'],
+    ['edd_info', 'expected_delivery_date'], ['edd_info', 'estimated_delivery_date'],
+    ['edd_info', 'delivery_date'], ['edd_info', 'edd'], ['expected_delivery_time']
+  ]);
+  const expectedDeliveryAt = parseSpxTime(expectedRaw);
+  const expectedDeliveryText = cleanText(
+    expectedDeliveryAt ? new Date(expectedDeliveryAt).toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })
+      : (typeof expectedRaw === 'object' ? JSON.stringify(expectedRaw) : expectedRaw), 160);
+  const trackingCode = cleanText(firstValue(root, [
+    ['order_info', 'spx_tn'], ['order_info', 'sls_tn'], ['tracking_number']
+  ]), 80) || requestedCode;
+  return { trackingCode, currentStatus, currentLocation, expectedDeliveryAt, expectedDeliveryText, journey, raw: root };
+}
+
+async function fetchSpxTracking(trackingCode) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12000);
+  try {
+    const url = new URL('https://spx.vn/shipment/order/open/order/get_order_info');
+    url.searchParams.set('spx_tn', trackingCode);
+    url.searchParams.set('language_code', 'vi');
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/json',
+        'Accept-Language': 'vi-VN,vi;q=0.9',
+        Referer: `https://spx.vn/track?${encodeURIComponent(trackingCode)}`,
+        'User-Agent': 'Mozilla/5.0 TikTok-Live-Order-Manager/2.6'
+      }
+    });
+    if (!response.ok) throw new Error(`SPX HTTP ${response.status}`);
+    const payload = await response.json();
+    if (Number(payload?.retcode) !== 0 || !payload?.data) {
+      const error = new Error('SPX chưa trả về dữ liệu cho mã này.');
+      error.code = 'SPX_NOT_FOUND';
+      throw error;
+    }
+    return normalizeSpxTracking(payload, trackingCode);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function publicOrder(row) {
@@ -944,6 +1103,14 @@ function publicOrder(row) {
     deliveryAttempts: row.delivery_attempts || 0,
     codReconciledAt: row.cod_reconciled_at,
     codPaidAt: row.cod_paid_at,
+    carrier: row.carrier_name || row.carrier || '',
+    externalTrackingCode: row.external_tracking_code || row.tracking_code || '',
+    carrierStatus: row.carrier_status || row.current_status || '',
+    currentLocation: row.carrier_location || row.current_location || '',
+    expectedDeliveryAt: row.expected_delivery_at || null,
+    expectedDeliveryText: row.expected_delivery_text || '',
+    trackingUpdatedAt: row.tracking_updated_at || row.last_checked_at || null,
+    trackingError: row.tracking_error || row.last_error || '',
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -1063,9 +1230,15 @@ app.delete('/api/orders/:id', requireAuth, (req, res) => {
 // Danh sách vận chuyển dùng chung dữ liệu đơn hàng, nhưng chỉ trả về đơn thuộc
 // tài khoản đang đăng nhập. Đơn chưa đủ SĐT/địa chỉ vẫn xuất hiện ở "Cần xử lý".
 app.get('/api/shipments', requireAuth, (req, res) => {
-  const rows = db.prepare(`SELECT * FROM orders
-    WHERE user_id = ? AND deleted_at IS NULL
-    ORDER BY COALESCE(shipping_updated_at, updated_at) DESC LIMIT 5000`)
+  const rows = db.prepare(`SELECT o.*, t.carrier AS carrier_name,
+      t.tracking_code AS external_tracking_code, t.current_status AS carrier_status,
+      t.current_location AS carrier_location, t.expected_delivery_at,
+      t.expected_delivery_text,
+      t.last_checked_at AS tracking_updated_at, t.last_error AS tracking_error
+    FROM orders o
+    LEFT JOIN shipment_tracking t ON t.order_id = o.id AND t.user_id = o.user_id
+    WHERE o.user_id = ? AND o.deleted_at IS NULL
+    ORDER BY COALESCE(o.shipping_updated_at, o.updated_at) DESC LIMIT 5000`)
     .all(req.userId);
   res.json({ shipments: rows.map(publicOrder) });
 });
@@ -1074,12 +1247,93 @@ app.get('/api/shipments/:id/events', requireAuth, (req, res) => {
   const order = db.prepare('SELECT id FROM orders WHERE id = ? AND user_id = ? AND deleted_at IS NULL')
     .get(req.params.id, req.userId);
   if (!order) return res.status(404).json({ error: 'Không tìm thấy đơn vận chuyển.' });
-  const events = db.prepare(`SELECT event_type, status, note, created_at
+  const events = db.prepare(`SELECT event_type, status, note, location, created_at
     FROM shipment_events WHERE user_id = ? AND order_id = ?
     ORDER BY created_at DESC LIMIT 200`).all(req.userId, req.params.id);
   res.json({ events: events.map(e => ({
-    eventType: e.event_type, status: e.status, note: e.note || '', createdAt: e.created_at
+    eventType: e.event_type, status: e.status, note: e.note || '',
+    location: e.location || '', createdAt: e.created_at
   })) });
+});
+
+app.post('/api/shipments/:id/spx-track', requireAuth, async (req, res) => {
+  const order = db.prepare('SELECT id FROM orders WHERE id = ? AND user_id = ? AND deleted_at IS NULL')
+    .get(req.params.id, req.userId);
+  if (!order) return res.status(404).json({ error: 'Không tìm thấy đơn hàng.' });
+  const trackingCode = cleanText(req.body?.trackingCode, 80).toUpperCase().replace(/\s+/g, '');
+  if (!/^[A-Z0-9-]{6,80}$/.test(trackingCode)) {
+    return res.status(400).json({ error: 'Mã vận đơn SPX không hợp lệ.' });
+  }
+  const now = Date.now();
+  try {
+    const tracking = await fetchSpxTracking(trackingCode);
+    const syncedShippingStatus = mapSpxToShippingStatus(tracking);
+    db.prepare(`INSERT INTO shipment_tracking
+      (order_id,user_id,carrier,tracking_code,current_status,current_location,
+       expected_delivery_at,expected_delivery_text,raw_data,last_checked_at,last_error,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,NULL,?)
+      ON CONFLICT(order_id) DO UPDATE SET carrier=excluded.carrier,
+        tracking_code=excluded.tracking_code,current_status=excluded.current_status,
+        current_location=excluded.current_location,
+        expected_delivery_at=excluded.expected_delivery_at,
+        expected_delivery_text=excluded.expected_delivery_text,
+        raw_data=excluded.raw_data,last_checked_at=excluded.last_checked_at,
+        last_error=NULL,updated_at=excluded.updated_at`)
+      .run(order.id, req.userId, 'SPX', tracking.trackingCode, tracking.currentStatus,
+        tracking.currentLocation || null, tracking.expectedDeliveryAt,
+        tracking.expectedDeliveryText || null, null, now, now);
+    if (syncedShippingStatus) {
+      db.prepare(`UPDATE orders SET shipping_status = ?, shipping_updated_at = ?, updated_at = ?
+        WHERE id = ? AND user_id = ?`)
+        .run(syncedShippingStatus, now, now, order.id, req.userId);
+    }
+    db.prepare(`DELETE FROM shipment_events
+      WHERE user_id = ? AND order_id = ? AND event_type = 'spx_tracking'`)
+      .run(req.userId, order.id);
+    for (const event of tracking.journey.slice(0, 300)) {
+      addShipmentEvent(req.userId, order.id, 'spx_tracking', event.status,
+        event.note, event.location, event.createdAt);
+    }
+    if (!tracking.journey.length) {
+      addShipmentEvent(req.userId, order.id, 'spx_tracking', tracking.currentStatus,
+        tracking.currentStatus, tracking.currentLocation, now);
+    }
+    if (syncedShippingStatus) {
+      addShipmentEvent(req.userId, order.id, 'carrier_status_sync', syncedShippingStatus,
+        'Tự đồng bộ theo trạng thái SPX', tracking.currentLocation, now);
+    }
+    addAudit(req.userId, 'shipment.spx_tracked', 'order', order.id, {
+      trackingCode: tracking.trackingCode, status: tracking.currentStatus, syncedShippingStatus
+    });
+    res.json({
+      ok: true,
+      tracking: {
+        carrier: 'SPX', trackingCode: tracking.trackingCode,
+        currentStatus: tracking.currentStatus, currentLocation: tracking.currentLocation,
+        expectedDeliveryAt: tracking.expectedDeliveryAt,
+        expectedDeliveryText: tracking.expectedDeliveryText,
+        checkedAt: now, shippingStatus: syncedShippingStatus, journey: tracking.journey
+      }
+    });
+  } catch (err) {
+    const message = err?.name === 'AbortError'
+      ? 'SPX phản hồi quá chậm. Hãy thử lại.'
+      : err?.code === 'SPX_NOT_FOUND'
+        ? 'SPX chưa tìm thấy mã này.'
+        : 'Không kết nối được SPX. Hãy thử lại.';
+    db.prepare(`INSERT INTO shipment_tracking
+      (order_id,user_id,carrier,tracking_code,current_status,current_location,
+       expected_delivery_at,expected_delivery_text,raw_data,last_checked_at,last_error,updated_at)
+      VALUES (?,?, 'SPX', ?,NULL,NULL,NULL,NULL,NULL,?,?,?)
+      ON CONFLICT(order_id) DO UPDATE SET carrier='SPX',
+        tracking_code=excluded.tracking_code,current_status=NULL,current_location=NULL,
+        expected_delivery_at=NULL,expected_delivery_text=NULL,raw_data=NULL,
+        last_checked_at=excluded.last_checked_at,last_error=excluded.last_error,
+        updated_at=excluded.updated_at`)
+      .run(order.id, req.userId, trackingCode, now, message, now);
+    addAudit(req.userId, 'shipment.spx_track_failed', 'order', order.id, { trackingCode });
+    res.status(err?.code === 'SPX_NOT_FOUND' ? 404 : 502).json({ error: message, saved: true });
+  }
 });
 
 app.post('/api/shipments/:id/prepare', requireAuth, (req, res) => {
@@ -1309,6 +1563,7 @@ app.get('/api/backup', requireAuth, (req, res) => {
   const products = db.prepare('SELECT * FROM products WHERE user_id = ?').all(req.userId);
   const orders = db.prepare('SELECT * FROM orders WHERE user_id = ? AND deleted_at IS NULL').all(req.userId);
   const shipmentEvents = db.prepare('SELECT * FROM shipment_events WHERE user_id = ? ORDER BY created_at').all(req.userId);
+  const shipmentTracking = db.prepare('SELECT * FROM shipment_tracking WHERE user_id = ?').all(req.userId);
   const settingsRow = db.prepare('SELECT data FROM user_settings WHERE user_id = ?').get(req.userId);
   res.setHeader('Content-Disposition', `attachment; filename="tiktok-live-backup-${Date.now()}.json"`);
   res.json({
@@ -1320,6 +1575,7 @@ app.get('/api/backup', requireAuth, (req, res) => {
     products,
     orders,
     shipmentEvents,
+    shipmentTracking,
     settings: settingsRow ? JSON.parse(settingsRow.data) : {}
   });
 });
@@ -1330,13 +1586,15 @@ app.post('/api/backup/restore', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'Tệp sao lưu không đúng định dạng phiên bản 2.' });
   }
   if (backup.orders.length > 100000 || backup.products.length > 10000 ||
-      (Array.isArray(backup.shipmentEvents) && backup.shipmentEvents.length > 500000)) {
+      (Array.isArray(backup.shipmentEvents) && backup.shipmentEvents.length > 500000) ||
+      (Array.isArray(backup.shipmentTracking) && backup.shipmentTracking.length > 100000)) {
     return res.status(400).json({ error: 'Bản sao lưu vượt quá giới hạn an toàn.' });
   }
   const now = Date.now();
   try {
     db.exec('BEGIN IMMEDIATE');
     db.prepare('DELETE FROM shipment_events WHERE user_id = ?').run(req.userId);
+    db.prepare('DELETE FROM shipment_tracking WHERE user_id = ?').run(req.userId);
     db.prepare('DELETE FROM orders WHERE user_id = ?').run(req.userId);
     db.prepare('DELETE FROM products WHERE user_id = ?').run(req.userId);
     const insertProduct = db.prepare(`INSERT INTO products
@@ -1392,15 +1650,34 @@ app.post('/api/backup/restore', requireAuth, (req, res) => {
         intValue(o.created_at ?? o.createdAt, now, 0, Number.MAX_SAFE_INTEGER),
         intValue(o.updated_at ?? o.updatedAt, now, 0, Number.MAX_SAFE_INTEGER));
     }
-    const insertShipmentEvent = db.prepare(`INSERT INTO shipment_events
-      (user_id,order_id,event_type,status,note,created_at) VALUES (?,?,?,?,?,?)`);
     const restoredOrderIds = new Set(backup.orders.map(o => cleanText(o.id, 160)).filter(Boolean));
+    const insertShipmentTracking = db.prepare(`INSERT INTO shipment_tracking
+      (order_id,user_id,carrier,tracking_code,current_status,current_location,
+       expected_delivery_at,expected_delivery_text,raw_data,last_checked_at,last_error,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`);
+    for (const t of (Array.isArray(backup.shipmentTracking) ? backup.shipmentTracking : [])) {
+      const orderId = cleanText(t.order_id ?? t.orderId, 160);
+      if (!restoredOrderIds.has(orderId)) continue;
+      insertShipmentTracking.run(orderId, req.userId, cleanText(t.carrier, 30) || 'SPX',
+        cleanText(t.tracking_code ?? t.trackingCode, 80),
+        cleanText(t.current_status ?? t.currentStatus, 160) || null,
+        cleanText(t.current_location ?? t.currentLocation, 300) || null,
+        t.expected_delivery_at ?? t.expectedDeliveryAt ?? null,
+        cleanText(t.expected_delivery_text ?? t.expectedDeliveryText, 160) || null,
+        cleanText(t.raw_data ?? t.rawData, 500000) || null,
+        t.last_checked_at ?? t.lastCheckedAt ?? null,
+        cleanText(t.last_error ?? t.lastError, 500) || null,
+        intValue(t.updated_at ?? t.updatedAt, now, 0, Number.MAX_SAFE_INTEGER));
+    }
+    const insertShipmentEvent = db.prepare(`INSERT INTO shipment_events
+      (user_id,order_id,event_type,status,note,location,created_at) VALUES (?,?,?,?,?,?,?)`);
     for (const e of (Array.isArray(backup.shipmentEvents) ? backup.shipmentEvents : [])) {
       const orderId = cleanText(e.order_id ?? e.orderId, 160);
       if (!restoredOrderIds.has(orderId)) continue;
       insertShipmentEvent.run(req.userId, orderId,
         cleanText(e.event_type ?? e.eventType, 80) || 'restored',
         cleanText(e.status, 40) || null, cleanText(e.note, 500) || null,
+        cleanText(e.location, 300) || null,
         intValue(e.created_at ?? e.createdAt, now, 0, Number.MAX_SAFE_INTEGER));
     }
     const saveBlob = (table, value) => db.prepare(`INSERT INTO ${table} (user_id,data,updated_at)
