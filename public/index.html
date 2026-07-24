@@ -1,0 +1,3072 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>In Comment TikTok Live - Xprinter LAN</title>
+<!-- Avatar nhỏ hiển thị trên tab trình duyệt (favicon). Thay link bên dưới bằng link ảnh TRỰC TIẾP (vd: https://i.pinimg.com/....jpg) lấy từ Pinterest -->
+<link rel="icon" type="image/webp" href="https://i.pinimg.com/vwebp/1200x/07/e9/79/07e979928cae556d87c2e6e7d94b100c.webp">
+<link rel="apple-touch-icon" href="https://i.pinimg.com/vwebp/1200x/07/e9/79/07e979928cae556d87c2e6e7d94b100c.webp">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+  :root{
+    --bg:#fdf1f8;
+    --card:rgba(255,255,255,.55);
+    --border:rgba(255,140,190,.35);
+    --teal:#ff5c8a;
+    --text:#4a2e46;
+    --muted:#9a7d9e;
+    --accent2:#a78bfa;
+    --accent3:#ffd166;
+    --glass:rgba(255,255,255,.55);
+    --glass-strong:rgba(255,255,255,.75);
+  }
+  *{box-sizing:border-box;}
+  html{ min-height:100%; }
+  body{
+    margin:0; padding:20px; padding-bottom:90px;
+    min-height:100vh;
+    color:var(--text);
+    font-family:'IBM Plex Sans', sans-serif;
+    background-color:var(--bg);
+    background-image:
+      radial-gradient(circle at 12% 12%, rgba(255,214,150,.45), transparent 42%),
+      radial-gradient(circle at 88% 8%, rgba(167,139,250,.40), transparent 40%),
+      radial-gradient(circle at 92% 92%, rgba(255,92,138,.30), transparent 45%),
+      radial-gradient(circle at 8% 90%, rgba(126,224,213,.35), transparent 42%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cg fill='%23ffb6c1' fill-opacity='0.45'%3E%3Cpath d='M28 20c-4-8-16-8-16 2 0 8 16 18 16 18s16-10 16-18c0-10-12-10-16-2z'/%3E%3C/g%3E%3Cg fill='%23c4b5fd' fill-opacity='0.45'%3E%3Cpath d='M104 14l3 6.5 7 1-5 5 1.2 7-6.2-3.3-6.2 3.3 1.2-7-5-5 7-1z'/%3E%3C/g%3E%3Ccircle cx='55' cy='95' r='4' fill='%23ffd166' fill-opacity='0.5'/%3E%3Ccircle cx='125' cy='110' r='3' fill='%23ff5c8a' fill-opacity='0.4'/%3E%3Ccircle cx='18' cy='115' r='2.5' fill='%237ee0d5' fill-opacity='0.45'/%3E%3Ccircle cx='75' cy='45' r='2' fill='%23a78bfa' fill-opacity='0.4'/%3E%3C/svg%3E");
+    background-repeat:no-repeat,no-repeat,no-repeat,no-repeat,repeat;
+    background-size:60% 60%,55% 55%,55% 55%,55% 55%,140px 140px;
+    background-attachment:fixed,fixed,fixed,fixed,fixed;
+  }
+  .container{
+    max-width:1000px; margin:0 auto;
+    display:grid; grid-template-columns: 320px 1fr; gap:20px;
+  }
+  @media(max-width:768px){ .container{ grid-template-columns:1fr; } }
+
+  .panel, .feed-panel{
+    background:var(--card); border:1px solid var(--border);
+    border-radius:16px; padding:20px;
+    backdrop-filter:blur(16px) saturate(160%);
+    -webkit-backdrop-filter:blur(16px) saturate(160%);
+    box-shadow:0 8px 30px rgba(180,120,190,.15);
+  }
+  h2{ font-size:15px; margin-top:0; color:var(--teal); text-transform:uppercase; letter-spacing:1px; }
+
+  .field{ display:flex; flex-direction:column; gap:6px; margin-bottom:12px; }
+  label{ font-size:12px; color:var(--muted); }
+  input{
+    background:rgba(255,255,255,.65); border:1px solid var(--border); color:var(--text);
+    padding:10px; border-radius:8px; font-family:'JetBrains Mono', monospace; font-size:13px;
+    backdrop-filter:blur(6px);
+  }
+  .btn{
+    background:var(--teal); color:#fff; font-weight:700; border:none;
+    padding:12px; border-radius:6px; cursor:pointer; width:100%; transition:.2s;
+  }
+  .btn:hover{ filter:brightness(1.1); }
+  .status{
+    margin-top:10px; font-size:12px; font-family:'JetBrains Mono', monospace;
+    padding:8px; background:rgba(255,255,255,.45); border-radius:8px; color:var(--muted); min-height:36px; word-break:break-word; border:1px solid var(--border);
+  }
+
+  .saved-id-list{ display:flex; flex-wrap:wrap; gap:6px; margin:-4px 0 12px; }
+  .saved-id-chip{
+    display:flex; align-items:center; gap:6px;
+    background:rgba(255,255,255,.55); border:1px solid var(--border); border-radius:999px;
+    padding:5px 6px 5px 12px; font-size:12px; color:var(--text); cursor:pointer; transition:.15s; backdrop-filter:blur(6px);
+  }
+  .saved-id-chip:hover{ border-color:var(--teal); color:var(--text); background:rgba(255,255,255,.8); }
+  .saved-id-chip.active{ border-color:var(--teal); background:rgba(255,92,138,.18); color:var(--text); }
+  .saved-id-chip .chip-id{ font-family:'JetBrains Mono', monospace; }
+  .saved-id-chip .chip-del{
+    background:none; border:none; color:var(--muted); cursor:pointer;
+    width:18px; height:18px; border-radius:50%; font-size:13px; line-height:1;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .saved-id-chip .chip-del:hover{ background:#ff4d6d; color:#fff; }
+
+  .feed-list{
+    display:flex; flex-direction:column; gap:10px;
+    max-height:calc(100vh - 220px); overflow-y:auto; padding-right:5px;
+  }
+  .comment-card{
+    background:var(--glass); border:1px solid var(--border); border-radius:10px;
+    padding:12px 14px; display:flex; align-items:center; justify-content:space-between; gap:12px;
+    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  }
+  .comment-info{ display:flex; flex-direction:column; gap:4px; flex:1; }
+  .comment-info .top-row{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .user-name{ font-weight:700; font-size:14px; color:var(--text); }
+  .user-id{ font-size:11px; color:var(--teal); font-family:'JetBrains Mono', monospace; }
+  .comment-time{ font-size:11px; color:var(--muted); font-family:'JetBrains Mono', monospace; white-space:nowrap; }
+  .comment-text{ font-size:13.5px; color:var(--text); margin-top:4px; line-height:1.4; opacity:.85; }
+  .btn-print{
+    background:rgba(255,255,255,.6); color:var(--text); border:1px solid var(--border);
+    padding:8px 12px; border-radius:8px; font-weight:600; cursor:pointer;
+    white-space:nowrap; transition:.15s; font-size:12px; backdrop-filter:blur(6px);
+  }
+  .btn-print:hover{ background:var(--teal); color:#fff; border-color:var(--teal); }
+
+  .feed-panel-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .feed-panel-header h2{ margin-bottom:0; }
+
+  .badge-count{
+    background:var(--teal); color:#fff; border-radius:999px; font-size:11px;
+    font-weight:800; padding:1px 7px; min-width:18px; text-align:center;
+  }
+
+  /* ===== TRANG KHÁCH HÀNG (thay cho modal) ===== */
+  .customers-page{ max-width:640px; margin:0 auto; }
+  .customers-page h2{ margin-bottom:14px; }
+  .cust-summary{
+    padding:12px 16px; border:1px solid var(--border); border-radius:12px;
+    background:var(--card); font-size:13px; color:var(--muted);
+    display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px;
+    backdrop-filter:blur(14px) saturate(160%); -webkit-backdrop-filter:blur(14px) saturate(160%);
+  }
+  .cust-summary b{ color:var(--teal); }
+  .customer-list{ margin-top:14px; display:flex; flex-direction:column; gap:12px; }
+  .customer-card{
+    background:var(--glass); border:1px solid var(--border); border-radius:10px; padding:12px 14px;
+    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  }
+  .customer-head{
+    display:flex; align-items:center; justify-content:space-between; cursor:pointer; gap:10px;
+  }
+  .customer-head .left{ display:flex; flex-direction:column; gap:2px; }
+  .customer-head .cust-total{ font-weight:700; color:var(--teal); font-family:'JetBrains Mono', monospace; white-space:nowrap; }
+  .customer-items{ margin-top:10px; display:none; flex-direction:column; gap:8px; }
+  .customer-items.open{ display:flex; }
+  .cart-item{
+    background:rgba(255,255,255,.45); border:1px solid var(--border); border-radius:8px;
+    padding:8px 10px; display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:12.5px;
+  }
+  .cart-item .item-text{ flex:1; color:var(--text); }
+  .cart-item .item-meta{ display:flex; align-items:center; gap:8px; }
+  .cart-item .item-time{ color:var(--muted); font-family:'JetBrains Mono', monospace; font-size:11px; white-space:nowrap; }
+  .cart-item .item-price{ color:var(--teal); font-family:'JetBrains Mono', monospace; white-space:nowrap; }
+  .btn-del-item{
+    background:none; border:1px solid rgba(230,102,102,.5); color:#e6386a; border-radius:5px;
+    width:22px; height:22px; cursor:pointer; font-size:13px; line-height:1; flex-shrink:0;
+  }
+  .btn-del-item:hover{ background:#ff4d6d; color:#fff; }
+  .empty-note{ color:var(--muted); font-size:13px; text-align:center; padding:20px 0; }
+
+  /* ===== TRANG QUẢN TRỊ TÀI KHOẢN ===== */
+  .admin-user-card{
+    background:var(--glass); border:1px solid var(--border); border-radius:10px; padding:12px 14px;
+    display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  }
+  .admin-user-info{ display:flex; flex-direction:column; gap:4px; min-width:0; }
+  .admin-user-name{ font-weight:700; color:var(--text); font-size:14px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .admin-user-meta{ font-size:11px; color:var(--muted); font-family:'JetBrains Mono', monospace; }
+  .admin-badge{ font-size:10px; font-weight:800; border-radius:999px; padding:2px 8px; letter-spacing:.3px; }
+  .admin-badge.badge-admin{ background:rgba(167,139,250,.25); color:#7c3aed; border:1px solid rgba(167,139,250,.5); }
+  .admin-badge.badge-banned{ background:rgba(230,56,106,.15); color:#e6386a; border:1px solid rgba(230,56,106,.4); }
+  .admin-user-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  .btn-admin-action{
+    background:rgba(255,255,255,.6); border:1px solid var(--border); color:var(--text);
+    padding:7px 12px; border-radius:8px; font-weight:600; cursor:pointer; font-size:12px; transition:.15s;
+  }
+  .btn-admin-action:hover{ background:var(--teal); color:#fff; border-color:var(--teal); }
+  .btn-admin-action.danger{ border-color:rgba(230,102,102,.5); color:#e6386a; }
+  .btn-admin-action.danger:hover{ background:#e6386a; color:#fff; border-color:#e6386a; }
+
+  /* Nhãn gói (license) hiển thị trong danh sách quản trị */
+  .admin-badge.badge-license-free{ background:rgba(154,125,158,.18); color:var(--muted); border:1px solid var(--border); }
+  .admin-badge.badge-license-paid{ background:rgba(126,224,213,.25); color:#0f8f7e; border:1px solid rgba(126,224,213,.6); }
+  .admin-badge.badge-license-lifetime{ background:rgba(255,209,102,.3); color:#a9740a; border:1px solid rgba(255,209,102,.6); }
+  .admin-badge.badge-license-expired{ background:rgba(230,56,106,.15); color:#e6386a; border:1px solid rgba(230,56,106,.4); }
+  .license-select-row{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .license-select-row select{
+    background:rgba(255,255,255,.65); border:1px solid var(--border); color:var(--text);
+    padding:7px 8px; border-radius:8px; font-size:12px; font-family:'IBM Plex Sans', sans-serif;
+  }
+
+  /* ===== TAB: MENU (thông tin tài khoản + hạn dùng) ===== */
+  .menu-page{ max-width:560px; margin:0 auto; }
+  .menu-card{
+    background:var(--glass); border:1px solid var(--border); border-radius:14px; padding:18px 20px;
+    backdrop-filter:blur(14px) saturate(160%); -webkit-backdrop-filter:blur(14px) saturate(160%);
+    margin-bottom:14px;
+  }
+  .menu-row{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:9px 0; border-bottom:1px dashed var(--border); font-size:13.5px;
+  }
+  .menu-row:last-child{ border-bottom:none; }
+  .menu-row .k{ color:var(--muted); }
+  .menu-row .v{ color:var(--text); font-weight:700; text-align:right; }
+  .menu-row .v.mono{ font-family:'JetBrains Mono', monospace; font-weight:600; }
+  .license-pill{
+    display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:800;
+    border-radius:999px; padding:3px 10px; letter-spacing:.2px;
+  }
+  .license-pill.free{ background:rgba(154,125,158,.18); color:var(--muted); border:1px solid var(--border); }
+  .license-pill.paid{ background:rgba(126,224,213,.25); color:#0f8f7e; border:1px solid rgba(126,224,213,.6); }
+  .license-pill.lifetime{ background:rgba(255,209,102,.3); color:#a9740a; border:1px solid rgba(255,209,102,.6); }
+  .license-pill.expired{ background:rgba(230,56,106,.15); color:#e6386a; border:1px solid rgba(230,56,106,.4); }
+  .menu-progress-wrap{ margin-top:6px; }
+  .menu-progress-bar{ background:rgba(255,255,255,.5); border:1px solid var(--border); border-radius:999px; height:8px; overflow:hidden; }
+  .menu-progress-fill{ height:100%; background:var(--teal); border-radius:999px; transition:.3s; }
+  .menu-hint{ font-size:11.5px; color:var(--muted); margin-top:6px; line-height:1.5; }
+
+  /* ===== MODAL: TÍNH NĂNG TẠM KHÓA (hết hạn / chưa có gói) ===== */
+  .locked-overlay{
+    position:fixed; inset:0; background:rgba(74,46,70,.45); backdrop-filter:blur(3px);
+    display:none; align-items:center; justify-content:center; z-index:999; padding:20px;
+  }
+  .locked-overlay.open{ display:flex; }
+  .locked-modal{
+    background:var(--glass-strong); border:1px solid var(--border); border-radius:16px;
+    padding:26px 24px; max-width:360px; width:100%; text-align:center;
+    box-shadow:0 20px 60px rgba(74,46,70,.3);
+    backdrop-filter:blur(20px) saturate(160%); -webkit-backdrop-filter:blur(20px) saturate(160%);
+  }
+  .locked-modal .icon{ font-size:38px; margin-bottom:8px; }
+  .locked-modal h3{ margin:0 0 8px; color:var(--teal); font-size:16px; letter-spacing:.3px; }
+  .locked-modal p{ margin:0 0 18px; color:var(--text); font-size:13.5px; line-height:1.55; }
+  .locked-modal .btn{ margin-top:0; }
+  .locked-modal .btn-secondary{
+    background:rgba(255,255,255,.6); color:var(--text); border:1px solid var(--border);
+    font-weight:700; padding:12px; border-radius:6px; cursor:pointer; width:100%; margin-top:8px;
+  }
+
+  /* ===== TRANG LỊCH SỬ PHIÊN LIVE ===== */
+  .session-card{
+    background:var(--glass); border:1px solid var(--border); border-radius:10px; padding:12px 14px;
+    backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  }
+  .session-head{
+    display:flex; align-items:center; justify-content:space-between; cursor:pointer; gap:10px;
+  }
+  .session-head .left{ display:flex; flex-direction:column; gap:2px; flex:1; min-width:0; }
+  .session-title{ font-weight:700; color:var(--text); font-size:14px; }
+  .session-meta{ font-size:11px; color:var(--muted); font-family:'JetBrains Mono', monospace; }
+  .session-count{ font-weight:700; color:var(--teal); font-family:'JetBrains Mono', monospace; white-space:nowrap; }
+  .btn-del-session{
+    background:none; border:1px solid rgba(230,102,102,.5); color:#e6386a; border-radius:5px;
+    width:24px; height:24px; cursor:pointer; font-size:13px; line-height:1; flex-shrink:0;
+  }
+  .btn-del-session:hover{ background:#ff4d6d; color:#fff; }
+  .session-comments{ margin-top:10px; display:none; flex-direction:column; gap:8px; }
+  .session-comments.open{ display:flex; }
+  .session-comment-item{
+    background:rgba(255,255,255,.45); border:1px solid var(--border); border-radius:8px;
+    padding:8px 10px; display:flex; flex-direction:column; gap:4px; font-size:12.5px;
+  }
+  .session-comment-top{ display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+  .session-comment-user{ color:var(--text); font-weight:600; }
+  .session-comment-id{ color:var(--teal); font-family:'JetBrains Mono', monospace; font-size:11px; font-weight:400; }
+  .session-comment-time{ color:var(--muted); font-family:'JetBrains Mono', monospace; font-size:11px; white-space:nowrap; }
+  .session-comment-text{ color:var(--text); opacity:.85; }
+  .session-comment-actions{ display:flex; gap:8px; margin-top:2px; }
+  .btn-mini{
+    background:rgba(255,255,255,.6); color:var(--text); border:1px solid var(--border);
+    padding:5px 10px; border-radius:7px; font-size:11.5px; font-weight:600; cursor:pointer; transition:.15s; backdrop-filter:blur(6px);
+  }
+  .btn-mini:hover{ background:var(--teal); color:#fff; border-color:var(--teal); }
+  .btn-mini.added{ background:#173832; color:var(--teal); border-color:var(--teal); cursor:default; }
+  .btn-mini.added:hover{ background:#173832; color:var(--teal); }
+  .session-search-field{ margin-top:12px; }
+  .session-date-jump-field{ margin-top:10px; }
+  .session-date-jump-row{ display:flex; gap:8px; }
+  .session-date-jump-row #sessionDateJump{ flex:1; width:100%; }
+  .session-date-jump-row #sessionDateJumpClear{ flex-shrink:0; }
+
+  /* ===== NHÓM THEO NGÀY (Lịch Sử Phiên Live) ===== */
+  .day-group{ display:flex; flex-direction:column; gap:10px; margin-bottom:22px; }
+  .day-group:last-child{ margin-bottom:0; }
+  .day-group-header{
+    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px;
+    padding:8px 4px; border-bottom:2px solid var(--teal);
+  }
+  .day-group-date{ font-weight:800; font-size:14.5px; color:var(--text); }
+  .day-group-stats{ font-size:12px; color:var(--muted); font-family:'JetBrains Mono', monospace; }
+  .day-group-stats b{ color:var(--teal); }
+  .session-meta .live-count-tag{ color:var(--teal); }
+  .btn-export-session{
+    background:none; border:1px solid #2a5a52; color:var(--teal); border-radius:5px;
+    padding:0 8px; height:24px; cursor:pointer; font-size:12px; line-height:1; flex-shrink:0;
+    display:flex; align-items:center; gap:4px;
+  }
+  .btn-export-session:hover{ background:var(--teal); color:#fff; border-color:var(--teal); }
+  .session-head-actions{ display:flex; align-items:center; gap:6px; flex-shrink:0; }
+
+  /* ===== THANH TAB DƯỚI CÙNG ===== */
+  .bottom-nav{
+    position:fixed; left:0; right:0; bottom:0; height:66px;
+    background:rgba(255,255,255,.55);
+    backdrop-filter:blur(20px) saturate(180%);
+    -webkit-backdrop-filter:blur(20px) saturate(180%);
+    border-top:1px solid rgba(255,255,255,.6);
+    box-shadow:0 -8px 30px rgba(180,120,190,.18);
+    display:flex; z-index:50; max-width:1000px; margin:0 auto;
+  }
+  .nav-item{
+    flex:1; background:none; border:none; color:var(--muted); cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+    font-family:'IBM Plex Sans', sans-serif; transition:.15s;
+  }
+  .nav-item.active{ color:var(--teal); }
+  .nav-icon{ font-size:19px; line-height:1; }
+  .nav-label-row{ display:flex; align-items:center; gap:5px; }
+  .nav-label{ font-size:11.5px; font-weight:600; }
+
+  /* ===== TRANG BÁO CÁO ===== */
+  .report-page{ max-width:640px; margin:0 auto; }
+  .report-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; gap:10px; flex-wrap:wrap; }
+  .date-input{
+    background:rgba(255,255,255,.65); border:1px solid var(--border); color:var(--text);
+    padding:8px 10px; border-radius:8px; font-family:'JetBrains Mono', monospace; font-size:13px; backdrop-filter:blur(6px);
+  }
+  .report-stats{ display:flex; flex-direction:column; gap:10px; }
+  .stat-card{
+    background:var(--card); border:1px solid var(--border); border-radius:12px;
+    padding:14px 16px; display:flex; align-items:center; gap:12px;
+    backdrop-filter:blur(14px) saturate(160%); -webkit-backdrop-filter:blur(14px) saturate(160%);
+  }
+  .stat-icon{ font-size:22px; }
+  .stat-info{ display:flex; flex-direction:column; gap:2px; }
+  .stat-label{ font-size:12px; color:var(--muted); }
+  .stat-value{ font-size:18px; font-weight:700; color:var(--text); font-family:'JetBrains Mono', monospace; }
+  .report-section-title{ margin-top:22px; }
+  .daily-chart{
+    display:flex; align-items:flex-end; gap:10px; height:180px; overflow-x:auto;
+    padding:14px 10px 10px; border:1px solid var(--border); border-radius:12px; background:var(--card);
+    backdrop-filter:blur(14px) saturate(160%); -webkit-backdrop-filter:blur(14px) saturate(160%);
+  }
+  .chart-bar-wrap{ display:flex; flex-direction:column; align-items:center; gap:4px; min-width:36px; cursor:pointer; flex-shrink:0; }
+  .chart-bar-value{ font-size:10px; color:var(--muted); font-family:'JetBrains Mono', monospace; white-space:nowrap; }
+  .chart-bar{ width:22px; background:rgba(167,139,250,.35); border-radius:4px 4px 0 0; transition:.15s; }
+  .chart-bar-wrap:hover .chart-bar{ background:rgba(167,139,250,.55); }
+  .chart-bar.active{ background:var(--teal); }
+  .chart-bar-wrap:hover .chart-bar.active{ background:var(--teal); }
+  .chart-bar-label{ font-size:10px; color:var(--muted); font-family:'JetBrains Mono', monospace; }
+
+  /* ===== ĐĂNG NHẬP / ĐĂNG KÝ ===== */
+  #authScreen{
+    min-height:80vh; display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .auth-box{
+    width:100%; max-width:380px; background:var(--card); border:1px solid var(--border);
+    border-radius:18px; padding:24px;
+    backdrop-filter:blur(18px) saturate(170%); -webkit-backdrop-filter:blur(18px) saturate(170%);
+    box-shadow:0 10px 36px rgba(180,120,190,.18);
+  }
+  .auth-title{
+    font-size:18px; font-weight:700; color:var(--text); text-align:center; margin-bottom:4px;
+  }
+  .auth-sub{ font-size:12.5px; color:var(--muted); text-align:center; margin-bottom:20px; }
+  .auth-tabs{
+    display:flex; border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-bottom:18px;
+    background:rgba(255,255,255,.35); backdrop-filter:blur(8px);
+  }
+  .auth-tab-btn{
+    flex:1; padding:10px; background:transparent; border:none; color:var(--muted);
+    font-weight:700; font-size:13px; cursor:pointer; transition:.15s;
+  }
+  .auth-tab-btn.active{ background:var(--teal); color:#fff; }
+  .auth-form{ display:none; flex-direction:column; }
+  .auth-form.active{ display:flex; }
+  .auth-error{
+    font-size:12px; color:#e6386a; min-height:16px; margin-top:-4px; margin-bottom:10px;
+  }
+  .auth-hint{ font-size:11.5px; color:var(--muted); text-align:center; margin-top:6px; }
+
+  /* ===== THANH TÀI KHOẢN ===== */
+  #accountBar{
+    max-width:1000px; margin:0 auto 16px; display:flex; align-items:center; justify-content:space-between;
+    background:var(--card); border:1px solid var(--border); border-radius:12px; padding:10px 16px;
+    backdrop-filter:blur(14px) saturate(160%); -webkit-backdrop-filter:blur(14px) saturate(160%);
+    box-shadow:0 6px 20px rgba(180,120,190,.12);
+  }
+  .account-info{ display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text); }
+  .account-info b{ color:var(--teal); }
+  .btn-logout{
+    background:none; border:1px solid rgba(230,102,102,.5); color:#e6386a; border-radius:6px;
+    padding:6px 12px; font-size:12px; font-weight:600; cursor:pointer; transition:.15s;
+  }
+  .btn-logout:hover{ background:#ff4d6d; color:#fff; border-color:#ff4d6d; }
+
+  /* ===== V2: QUẢN LÝ ĐƠN, SẢN PHẨM VÀ CỬA SỔ BIÊN TẬP ===== */
+  .management-page{ max-width:1000px; margin:0 auto; }
+  .toolbar{ display:flex; gap:8px; flex-wrap:wrap; margin:12px 0; }
+  .toolbar input,.toolbar select,.form-grid input,.form-grid select,.form-grid textarea{
+    background:rgba(255,255,255,.72); border:1px solid var(--border); color:var(--text);
+    padding:9px 10px; border-radius:8px; font:13px 'IBM Plex Sans',sans-serif;
+  }
+  .toolbar input{ flex:1; min-width:180px; }
+  .order-table{ display:flex; flex-direction:column; gap:9px; }
+  .order-card{ background:var(--glass); border:1px solid var(--border); border-radius:12px; padding:12px; }
+  .order-head,.order-actions{ display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+  .order-main{ font-weight:700; }
+  .order-meta{ color:var(--muted); font-size:11.5px; margin-top:5px; line-height:1.55; }
+  .order-total{ color:var(--teal); font:700 14px 'JetBrains Mono',monospace; }
+  .order-actions{ justify-content:flex-start; margin-top:9px; }
+  .status-pill{ border-radius:999px; padding:3px 9px; font-size:10.5px; font-weight:800; border:1px solid var(--border); }
+  .status-new{ background:#fff3cd; color:#8a6500; }.status-confirmed{ background:#dbeafe;color:#1d4ed8;}
+  .status-packing{background:#ede9fe;color:#6d28d9}.status-shipped{background:#cffafe;color:#0e7490}
+  .status-completed{background:#d1fae5;color:#047857}.status-cancelled,.status-returned{background:#fee2e2;color:#b91c1c}
+  .app-modal{ position:fixed; inset:0; z-index:1100; display:none; align-items:center; justify-content:center;
+    padding:18px; background:rgba(74,46,70,.48); backdrop-filter:blur(4px); }
+  .app-modal.open{ display:flex; }
+  .app-modal-card{ width:min(720px,100%); max-height:92vh; overflow:auto; background:#fff9fc;
+    border:1px solid var(--border); border-radius:16px; padding:20px; box-shadow:0 25px 70px rgba(74,46,70,.3); }
+  .modal-head{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:14px; }
+  .modal-head h3{ margin:0; color:var(--teal); }
+  .form-grid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+  .form-grid .field{ margin:0; }.form-grid .full{ grid-column:1/-1; }
+  .form-grid textarea{ min-height:72px; resize:vertical; }
+  .modal-actions{ display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap; margin-top:16px; }
+  .modal-actions .btn{ width:auto; min-width:130px; }
+  .product-row{ display:grid; grid-template-columns:100px 1fr 120px 90px auto; gap:8px; align-items:center;
+    background:var(--glass); border:1px solid var(--border); border-radius:10px; padding:10px; margin-bottom:8px; }
+  .danger-text{ color:#b91c1c!important; border-color:#fecaca!important; }
+  .bottom-nav{ overflow-x:auto; }
+  .bottom-nav .nav-item{ min-width:74px; }
+  @media(max-width:680px){
+    .form-grid{grid-template-columns:1fr}.form-grid .full{grid-column:auto}
+    .product-row{grid-template-columns:1fr 1fr}.product-row .product-name{grid-column:1/-1}
+  }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+
+<!-- MÀN HÌNH ĐĂNG NHẬP / ĐĂNG KÝ -->
+<div id="authScreen">
+  <div class="auth-box">
+    <div class="auth-title">🖨️ In Comment TikTok Live</div>
+    <div class="auth-sub">Đăng nhập để dùng tài khoản của riêng bạn</div>
+
+    <div class="auth-tabs">
+      <button class="auth-tab-btn active" id="authTabLoginBtn">Đăng nhập</button>
+      <button class="auth-tab-btn" id="authTabRegisterBtn">Đăng ký</button>
+    </div>
+
+    <!-- FORM ĐĂNG NHẬP -->
+    <form class="auth-form active" id="loginForm">
+      <div class="field">
+        <label>Tên đăng nhập</label>
+        <input id="loginUsername" type="text" autocomplete="username" placeholder="vd: shopcuaban">
+      </div>
+      <div class="field">
+        <label>Mật khẩu</label>
+        <input id="loginPassword" type="password" autocomplete="current-password" placeholder="••••••">
+      </div>
+      <div class="auth-error" id="loginError"></div>
+      <button type="submit" class="btn">Đăng Nhập</button>
+    </form>
+
+    <!-- FORM ĐĂNG KÝ -->
+    <form class="auth-form" id="registerForm">
+      <div class="field">
+        <label>Tên đăng nhập</label>
+        <input id="registerUsername" type="text" autocomplete="username" placeholder="vd: shopcuaban">
+      </div>
+      <div class="field">
+        <label>Mật khẩu</label>
+        <input id="registerPassword" type="password" autocomplete="new-password" placeholder="Tối thiểu 8 ký tự">
+      </div>
+      <div class="field">
+        <label>Nhập lại mật khẩu</label>
+        <input id="registerPassword2" type="password" autocomplete="new-password" placeholder="••••••">
+      </div>
+      <div class="auth-error" id="registerError"></div>
+      <button type="submit" class="btn">Tạo Tài Khoản</button>
+    </form>
+
+    <div class="auth-hint">Tài khoản và dữ liệu khách hàng được lưu trên Bridge Server, dùng được ở bất kỳ máy/thiết bị nào — chỉ cần đăng nhập lại đúng tài khoản.</div>
+  </div>
+</div>
+
+<!-- APP CHÍNH (chỉ hiện sau khi đăng nhập) -->
+<div id="appRoot" style="display:none;">
+
+  <div id="accountBar">
+    <div class="account-info">👤 Đang đăng nhập: <b id="currentUserLabel">-</b></div>
+    <button class="btn-logout" id="btnLogout">Đăng xuất</button>
+  </div>
+
+<!-- TAB: PHIÊN LIVE -->
+<div class="tab-view" id="viewLive">
+  <div class="container">
+
+    <!-- CẤU HÌNH -->
+    <div class="panel">
+      <h2>Cấu Hình LAN & TikTok</h2>
+
+      <div class="field">
+        <label>Địa chỉ Bridge Server (Railway/Render)</label>
+        <input id="bridgeUrl" type="text" value="https://ngominhtri-production.up.railway.app" placeholder="https://ten-app-cua-ban.up.railway.app">
+      </div>
+      <div class="field">
+        <label>Trạng thái máy in (ESP32)</label>
+        <div class="status" id="printerStatusBox" style="margin-top:0;">Chưa rõ — sẽ cập nhật khi thử in</div>
+      </div>
+
+      <hr style="border-color:var(--border); margin:15px 0;">
+
+      <div class="field">
+        <label>Tên / Link TikTok Live</label>
+        <input id="tiktokUsername" type="text" placeholder="Dán link hoặc nhập @username">
+      </div>
+
+      <div class="saved-id-list" id="savedIdList"></div>
+
+      <button class="btn" id="btnConnectTikTok">Kết Nối TikTok Live</button>
+
+      <div class="status" id="statusBox">Trạng thái: Chưa kết nối</div>
+    </div>
+
+    <!-- FEED BÌNH LUẬN -->
+    <div class="feed-panel">
+      <div class="feed-panel-header">
+        <h2>Bình Luận Trực Tiếp<span id="liveIdLabel" style="color:var(--muted); text-transform:none; letter-spacing:0; font-weight:600;"></span></h2>
+        <button class="btn-print" id="btnStopTikTok" style="display:none; border-color:rgba(230,102,102,.5); color:#e6386a;">⏹ Dừng xem Live</button>
+      </div>
+      <div class="feed-list" id="commentFeed">
+        <div class="feed-placeholder" style="color:var(--muted); font-size:13px;">Đang chờ bình luận từ phiên Live...</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- TAB: KHÁCH HÀNG / GIỎ HÀNG -->
+<div class="tab-view" id="viewCustomers" style="display:none;">
+  <div class="customers-page">
+    <h2>Khách Hàng & Giỏ Hàng</h2>
+    <div class="cust-summary">
+      <span><b id="summaryCustomerCount">0</b> khách hàng</span>
+      <span><b id="summaryItemCount">0</b> sản phẩm</span>
+      <span>Tổng: <b id="summaryRevenue">0đ</b></span>
+    </div>
+    <div class="field session-date-jump-field">
+      <label>Lọc theo ngày</label>
+      <div class="session-date-jump-row">
+        <input type="date" id="customerDateJump" class="date-input">
+        <button type="button" class="btn-mini" id="customerDateJumpClear">Tất cả</button>
+      </div>
+    </div>
+    <div class="customer-list" id="customerListBody">
+      <div class="empty-note">Chưa có khách hàng nào. Bấm "🖨️ In phiếu" ở 1 bình luận để thêm khách hàng + sản phẩm vào giỏ.</div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: LỊCH SỬ PHIÊN LIVE (xem lại toàn bộ comment đã lưu, in bù nếu quên) -->
+<div class="tab-view" id="viewSessions" style="display:none;">
+  <div class="customers-page">
+    <h2>Lịch Sử Phiên Live</h2>
+    <div class="cust-summary">
+      <span><b id="summarySessionCount">0</b> phiên live</span>
+      <span><b id="summarySessionCommentCount">0</b> bình luận đã lưu</span>
+    </div>
+    <div class="field session-search-field">
+      <input id="sessionSearchInput" type="text" placeholder="Tìm theo tên, ID TikTok hoặc nội dung bình luận...">
+    </div>
+    <div class="field session-date-jump-field">
+      <label>Lọc theo ngày</label>
+      <div class="session-date-jump-row">
+        <input type="date" id="sessionDateJump" class="date-input">
+        <button type="button" class="btn-mini" id="sessionDateJumpClear">Tất cả</button>
+      </div>
+    </div>
+    <div class="customer-list" id="sessionListBody">
+      <div class="empty-note">Chưa có phiên live nào được lưu. Mỗi lần bấm "Kết Nối TikTok Live", toàn bộ bình luận nhận được sẽ tự động lưu lại ở đây để xem lại sau.</div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: BÁO CÁO -->
+<div class="tab-view" id="viewReport" style="display:none;">
+  <div class="report-page">
+    <div class="report-header">
+      <h2 style="margin:0;">Báo Cáo</h2>
+      <input type="date" id="reportDate" class="date-input">
+    </div>
+
+    <div class="report-stats">
+      <div class="stat-card">
+        <div class="stat-icon">💰</div>
+        <div class="stat-info">
+          <span class="stat-label">Doanh thu</span>
+          <span class="stat-value" id="repRevenue">0đ</span>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">👥</div>
+        <div class="stat-info">
+          <span class="stat-label">Khách hàng</span>
+          <span class="stat-value" id="repCustomers">0</span>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">🧾</div>
+        <div class="stat-info">
+          <span class="stat-label">Số đơn (comment đã in)</span>
+          <span class="stat-value" id="repOrders">0</span>
+        </div>
+      </div>
+    </div>
+
+    <h2 class="report-section-title" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+      <span>Doanh Thu Theo Tháng</span>
+      <input type="month" id="reportMonth" class="date-input">
+    </h2>
+    <div class="report-stats">
+      <div class="stat-card">
+        <div class="stat-icon">💰</div>
+        <div class="stat-info">
+          <span class="stat-label">Doanh thu</span>
+          <span class="stat-value" id="repRevenueMonth">0đ</span>
+        </div>
+      </div>
+    </div>
+
+    <h2 class="report-section-title">Doanh Thu Theo Ngày</h2>
+    <div class="daily-chart" id="dailyChart">
+      <div class="empty-note">Chưa có dữ liệu doanh thu.</div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB V2: ĐƠN HÀNG -->
+<div class="tab-view" id="viewOrders" style="display:none;">
+  <div class="management-page">
+    <div class="feed-panel-header">
+      <h2>Quản Lý Đơn Hàng</h2>
+      <button class="btn-print" id="btnExportOrders">⬇ Xuất Excel</button>
+    </div>
+    <div class="cust-summary">
+      <span><b id="orderCountSummary">0</b> đơn</span>
+      <span>Doanh thu hợp lệ: <b id="orderRevenueSummary">0đ</b></span>
+      <span>Chờ xử lý: <b id="orderPendingSummary">0</b></span>
+    </div>
+    <div class="toolbar">
+      <input id="orderSearch" placeholder="Tìm khách, mã SP, tên SP, SĐT...">
+      <select id="orderStatusFilter">
+        <option value="">Tất cả trạng thái</option><option value="new">Đơn mới</option>
+        <option value="confirmed">Đã xác nhận</option><option value="packing">Đóng gói</option>
+        <option value="shipped">Đang giao</option><option value="completed">Hoàn tất</option>
+        <option value="cancelled">Đã hủy</option><option value="returned">Hoàn hàng</option>
+      </select>
+      <input id="orderDateFilter" type="date">
+      <button class="btn-mini" id="btnNewManualOrder">＋ Đơn thủ công</button>
+      <button class="btn-mini" id="btnRefreshOrders">↻ Tải lại</button>
+    </div>
+    <div class="order-table" id="orderList"><div class="empty-note">Chưa có đơn hàng.</div></div>
+  </div>
+</div>
+
+<!-- TAB V2: DANH MỤC SẢN PHẨM -->
+<div class="tab-view" id="viewProducts" style="display:none;">
+  <div class="management-page">
+    <div class="feed-panel-header"><h2>Danh Mục & Quy Tắc Nhận Sản Phẩm</h2>
+      <button class="btn-print" id="btnNewProduct">＋ Thêm sản phẩm</button></div>
+    <div class="menu-hint">Khi comment chứa mã hoặc bí danh, hệ thống tự điền tên và giá. Ví dụ: mã A12, bí danh “váy hoa”.</div>
+    <div id="productList" style="margin-top:12px;"><div class="empty-note">Chưa có sản phẩm.</div></div>
+  </div>
+</div>
+
+<!-- TAB: QUẢN TRỊ (chỉ tài khoản admin mới thấy được nội dung, tab cũng bị ẩn
+     hoàn toàn với tài khoản thường ở phần JS bên dưới) -->
+<div class="tab-view" id="viewAdmin" style="display:none;">
+  <div class="customers-page">
+    <h2>Quản Trị Tài Khoản</h2>
+    <div class="cust-summary">
+      <span>Tổng số tài khoản: <b id="adminUserCount">0</b></span>
+      <button class="btn-print" id="btnRefreshAdmin" style="width:auto;">🔄 Tải lại</button>
+    </div>
+    <div class="auth-error" id="adminError" style="margin-top:10px;"></div>
+    <div class="customer-list" id="adminUserList"></div>
+
+    <h2 style="margin-top:22px;">Nhật Ký Chặn Tính Năng</h2>
+    <div class="cust-summary">
+      <span>Các lần tài khoản bị chặn xem Live / in phiếu vì chưa có gói hoặc gói đã hết hạn</span>
+      <button class="btn-print" id="btnRefreshLicenseLogs" style="width:auto;">🔄 Tải lại</button>
+    </div>
+    <div class="customer-list" id="adminLicenseLogList" style="margin-top:12px;"></div>
+  </div>
+</div>
+
+<!-- TAB: MENU (thông tin tài khoản, hạn dùng key, số phiên Live đã dùng) -->
+<div class="tab-view" id="viewMenu" style="display:none;">
+  <div class="menu-page">
+    <h2>Menu Tài Khoản</h2>
+
+    <div class="menu-card">
+      <div class="menu-row">
+        <span class="k">Tên tài khoản</span>
+        <span class="v mono" id="menuUsername">-</span>
+      </div>
+      <div class="menu-row">
+        <span class="k">Ngày đăng ký</span>
+        <span class="v mono" id="menuCreatedAt">-</span>
+      </div>
+      <div class="menu-row">
+        <span class="k">Loại tài khoản</span>
+        <span class="v" id="menuAdminFlag">Người dùng</span>
+      </div>
+    </div>
+
+    <div class="menu-card">
+      <div class="menu-row">
+        <span class="k">Mã Máy In riêng của bạn</span>
+        <span class="v mono" id="menuPrinterToken">-</span>
+      </div>
+      <div class="menu-row">
+        <span class="k">Trạng thái máy in</span>
+        <span class="v" id="menuPrinterConnected">-</span>
+      </div>
+      <div class="menu-hint">
+        Mỗi tài khoản có 1 Mã Máy In riêng, KHÔNG trùng với ai khác. Nạp đúng mã này vào firmware ESP32 của bạn
+        (thay cho PRINTER_TOKEN) thì lệnh in của bạn sẽ chỉ gửi tới đúng máy in của bạn, không lẫn sang tài khoản khác.
+        Không chia sẻ mã này cho người khác.
+      </div>
+    </div>
+
+    <div class="menu-card">
+      <div class="menu-row">
+        <span class="k">Gói / Key hiện tại</span>
+        <span class="v"><span class="license-pill" id="menuLicensePill">-</span></span>
+      </div>
+      <div class="menu-row">
+        <span class="k">Thời hạn còn lại</span>
+        <span class="v mono" id="menuLicenseCountdown">-</span>
+      </div>
+      <div class="menu-row">
+        <span class="k">Tính năng in phiếu</span>
+        <span class="v" id="menuCanPrint">-</span>
+      </div>
+      <div class="menu-row" id="menuLiveQuotaRow" style="display:none;">
+        <span class="k">Phiên Live đã dùng (miễn phí)</span>
+        <span class="v mono" id="menuLiveQuota">-</span>
+      </div>
+      <div class="menu-progress-wrap" id="menuLiveQuotaBarWrap" style="display:none;">
+        <div class="menu-progress-bar"><div class="menu-progress-fill" id="menuLiveQuotaFill" style="width:0%;"></div></div>
+      </div>
+      <div class="menu-hint" id="menuHint"></div>
+    </div>
+
+    <div class="menu-card">
+      <h2>Bảo mật & dữ liệu</h2>
+      <div class="toolbar">
+        <button class="btn-mini" id="btnChangePassword">🔑 Đổi mật khẩu</button>
+        <button class="btn-mini" id="btnManageSessions">📱 Thiết bị đăng nhập</button>
+        <button class="btn-mini" id="btnDownloadBackup">💾 Tải bản sao lưu</button>
+        <button class="btn-mini danger-text" id="btnRestoreBackup">↥ Khôi phục sao lưu</button>
+        <input type="file" id="backupFileInput" accept="application/json,.json" style="display:none;">
+      </div>
+      <div class="menu-hint">Đổi mật khẩu sẽ đăng xuất các thiết bị khác. Bản sao lưu chứa đơn, sản phẩm, khách hàng và lịch sử Live của tài khoản.</div>
+    </div>
+
+    <div class="menu-card">
+      <h2>Cài đặt phiếu in</h2>
+      <div class="form-grid">
+        <div class="field"><label>Tên shop trên phiếu</label><input id="settingShopName" placeholder="SHOP LIVE"></div>
+        <div class="field"><label>Khổ giấy</label><select id="settingPaperWidth"><option value="80">80 mm</option><option value="58">58 mm</option></select></div>
+        <div class="field"><label>Số bản mỗi lần in</label><input id="settingCopies" type="number" min="1" max="5" value="1"></div>
+        <div class="field"><label>Từ khóa nhận đơn (cách nhau bằng dấu phẩy)</label><input id="settingKeywords" placeholder="chốt, lấy, mua"></div>
+      </div>
+      <div class="toolbar"><button class="btn-mini" id="btnSaveSettings">Lưu cài đặt</button><button class="btn-mini" id="btnTestPrinter">🖨️ In thử</button></div>
+      <div class="status" id="settingStatus">Cài đặt được đồng bộ theo tài khoản.</div>
+    </div>
+  </div>
+</div>
+
+<!-- THANH TAB DƯỚI CÙNG -->
+<div class="bottom-nav">
+  <button class="nav-item active" id="navLive" data-tab="live">
+    <span class="nav-icon">📡</span>
+    <span class="nav-label">Phiên Live</span>
+  </button>
+  <button class="nav-item" id="navCustomers" data-tab="customers">
+    <span class="nav-icon">👥</span>
+    <span class="nav-label-row">
+      <span class="nav-label">Khách hàng</span>
+      <span class="badge-count" id="customerCountBadge">0</span>
+    </span>
+  </button>
+  <button class="nav-item" id="navSessions" data-tab="sessions">
+    <span class="nav-icon">🗂️</span>
+    <span class="nav-label-row">
+      <span class="nav-label">Lịch sử</span>
+      <span class="badge-count" id="sessionCountBadge">0</span>
+    </span>
+  </button>
+  <button class="nav-item" id="navReport" data-tab="report">
+    <span class="nav-icon">📊</span>
+    <span class="nav-label">Báo cáo</span>
+  </button>
+  <button class="nav-item" id="navOrders" data-tab="orders">
+    <span class="nav-icon">📦</span><span class="nav-label-row"><span class="nav-label">Đơn hàng</span><span class="badge-count" id="orderCountBadge">0</span></span>
+  </button>
+  <button class="nav-item" id="navProducts" data-tab="products">
+    <span class="nav-icon">🏷️</span><span class="nav-label">Sản phẩm</span>
+  </button>
+  <button class="nav-item" id="navMenu" data-tab="menu">
+    <span class="nav-icon">☰</span>
+    <span class="nav-label">Menu</span>
+  </button>
+  <button class="nav-item" id="navAdmin" data-tab="admin" style="display:none;">
+    <span class="nav-icon">🛡️</span>
+    <span class="nav-label">Quản trị</span>
+  </button>
+</div>
+
+</div> <!-- hết #appRoot -->
+
+<!-- MODAL: TÍNH NĂNG TẠM KHÓA (chưa có gói / hết hạn) -->
+<div class="locked-overlay" id="lockedOverlay">
+  <div class="locked-modal">
+    <div class="icon">🔒</div>
+    <h3>Tính năng đang tạm khóa</h3>
+    <p id="lockedModalMsg">Vui lòng mua gói để tiếp tục sử dụng.</p>
+    <button class="btn" id="lockedModalGoMenu">Xem thông tin gói của tôi</button>
+    <button class="btn-secondary" id="lockedModalClose">Đóng</button>
+  </div>
+</div>
+
+<!-- V2: BIÊN TẬP / XÁC NHẬN ĐƠN -->
+<div class="app-modal" id="orderModal">
+  <div class="app-modal-card">
+    <div class="modal-head"><h3 id="orderModalTitle">Xác nhận đơn hàng</h3><button class="btn-mini" id="orderModalClose">✕</button></div>
+    <div class="status" id="orderSourceComment" style="margin:0 0 12px;"></div>
+    <form id="orderForm" class="form-grid">
+      <div class="field"><label>ID TikTok *</label><input id="ordCustomerId" required></div>
+      <div class="field"><label>Tên khách *</label><input id="ordCustomerName" required></div>
+      <div class="field"><label>Mã sản phẩm</label><input id="ordProductCode" list="productCodeOptions"></div>
+      <div class="field"><label>Tên sản phẩm *</label><input id="ordProductName" required></div>
+      <div class="field"><label>Số lượng</label><input id="ordQuantity" type="number" min="1" value="1"></div>
+      <div class="field"><label>Đơn giá</label><input id="ordUnitPrice" type="number" min="0" value="0"></div>
+      <div class="field"><label>Phí vận chuyển</label><input id="ordShippingFee" type="number" min="0" value="0"></div>
+      <div class="field"><label>Tổng dự kiến</label><input id="ordTotalPreview" readonly></div>
+      <div class="field"><label>Số điện thoại</label><input id="ordPhone" inputmode="tel"></div>
+      <div class="field"><label>Thanh toán</label><select id="ordPaymentStatus"><option value="unpaid">Chưa thanh toán</option><option value="partial">Đặt cọc</option><option value="paid">Đã thanh toán</option><option value="refunded">Đã hoàn tiền</option></select></div>
+      <div class="field full"><label>Địa chỉ</label><textarea id="ordAddress"></textarea></div>
+      <div class="field full"><label>Ghi chú</label><textarea id="ordNote"></textarea></div>
+      <datalist id="productCodeOptions"></datalist>
+    </form>
+    <div class="auth-error" id="orderModalError"></div>
+    <div class="modal-actions">
+      <button class="btn-mini" id="orderModalCancel">Hủy</button>
+      <button class="btn" id="btnSaveOrder">Lưu đơn</button>
+      <button class="btn" id="btnSavePrintOrder">Lưu & In</button>
+    </div>
+  </div>
+</div>
+
+<!-- V2: BIÊN TẬP SẢN PHẨM -->
+<div class="app-modal" id="productModal">
+  <div class="app-modal-card">
+    <div class="modal-head"><h3 id="productModalTitle">Sản phẩm</h3><button class="btn-mini" id="productModalClose">✕</button></div>
+    <form id="productForm" class="form-grid">
+      <div class="field"><label>Mã *</label><input id="prdCode" required></div>
+      <div class="field"><label>Tên sản phẩm *</label><input id="prdName" required></div>
+      <div class="field"><label>Giá</label><input id="prdPrice" type="number" min="0" value="0"></div>
+      <div class="field"><label>Tồn kho (để trống nếu không quản lý)</label><input id="prdStock" type="number" min="0"></div>
+      <div class="field full"><label>Bí danh, cách nhau bằng dấu phẩy</label><input id="prdAliases" placeholder="váy hoa, vh, mẫu hoa"></div>
+    </form>
+    <div class="auth-error" id="productModalError"></div>
+    <div class="modal-actions"><button class="btn-mini" id="productModalCancel">Hủy</button><button class="btn" id="btnSaveProduct">Lưu sản phẩm</button></div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  let ws = null;
+  let wsReconnectTimer = null; // id của setTimeout đang chờ để kết nối lại WS
+  let currentUser = null; // tên tài khoản đang đăng nhập
+  let authToken = null;   // token phiên đăng nhập, lấy từ Bridge Server
+  let ordersV2 = [];
+  let productsV2 = [];
+  let editingOrderId = null;
+  let editingProductId = null;
+  let draftComment = null;
+  let printBusy = false;
+  let appSettings = { shopName: 'SHOP LIVE', paperWidth: 80, copies: 1, orderKeywords: ['chốt','lấy','mua'] };
+
+  // ===== TÀI KHOẢN (ĐĂNG NHẬP / ĐĂNG KÝ QUA BRIDGE SERVER) =====
+  // Tài khoản, mật khẩu và dữ liệu khách hàng giờ được lưu trong database
+  // (SQLite) trên Bridge Server, không còn phụ thuộc vào trình duyệt/máy tính.
+  const SESSION_KEY = 'tiktok_current_user';
+  const TOKEN_KEY = 'tiktok_auth_token';
+
+  function apiBase() {
+    return $('#bridgeUrl').value.trim().replace(/\/+$/, '');
+  }
+
+  async function apiFetch(path, options = {}) {
+    const base = apiBase();
+    if (!base) throw new Error('Vui lòng điền địa chỉ Bridge Server.');
+    const headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {});
+    if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+
+    let res;
+    try {
+      res = await fetch(base + path, Object.assign({}, options, { headers }));
+    } catch (err) {
+      throw new Error('Không kết nối được tới Bridge Server. Kiểm tra địa chỉ và mạng.');
+    }
+
+    let data = null;
+    try { data = await res.json(); } catch (e) {}
+
+    if (!res.ok) {
+      if (data && data.banned) {
+        // Tài khoản vừa bị admin khóa trong lúc đang dùng -> đăng xuất ngay
+        // tại thiết bị này, không đợi thao tác nào khác.
+        forceLogoutBanned(data.error);
+      }
+      throw new Error((data && data.error) || `Lỗi server (mã ${res.status})`);
+    }
+    return data;
+  }
+
+  // Đăng xuất bắt buộc khi phát hiện tài khoản đã bị khóa (báo về từ server).
+  function forceLogoutBanned(message) {
+    if (ws) { try { ws.close(); } catch (e) {} ws = null; }
+    currentUser = null;
+    authToken = null;
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(TOKEN_KEY);
+    $('#appRoot').style.display = 'none';
+    $('#authScreen').style.display = 'flex';
+    $('#bridgeUrl').readOnly = false;
+    setAuthTab('login');
+    $('#loginError').textContent = message || 'Tài khoản đã bị khóa.';
+  }
+
+  function setAuthTab(which) {
+    const isLogin = which === 'login';
+    $('#authTabLoginBtn').classList.toggle('active', isLogin);
+    $('#authTabRegisterBtn').classList.toggle('active', !isLogin);
+    $('#loginForm').classList.toggle('active', isLogin);
+    $('#registerForm').classList.toggle('active', !isLogin);
+    $('#loginError').textContent = '';
+    $('#registerError').textContent = '';
+  }
+
+  $('#authTabLoginBtn').addEventListener('click', () => setAuthTab('login'));
+  $('#authTabRegisterBtn').addEventListener('click', () => setAuthTab('register'));
+
+  $('#loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const username = $('#loginUsername').value.trim();
+    const password = $('#loginPassword').value;
+    $('#loginError').textContent = '';
+    if (!username || !password) { $('#loginError').textContent = 'Vui lòng nhập đủ tên đăng nhập và mật khẩu.'; return; }
+
+    try {
+      const data = await apiFetch('/api/login', {
+        method: 'POST',
+        body: JSON.stringify({ username, password })
+      });
+      await loginAs(data.username, data.token);
+    } catch (err) {
+      $('#loginError').textContent = err.message;
+    }
+  });
+
+  $('#registerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const username = $('#registerUsername').value.trim();
+    const password = $('#registerPassword').value;
+    const password2 = $('#registerPassword2').value;
+    $('#registerError').textContent = '';
+
+    if (!username || !password) { $('#registerError').textContent = 'Vui lòng nhập đủ tên đăng nhập và mật khẩu.'; return; }
+    if (password.length < 8) { $('#registerError').textContent = 'Mật khẩu cần tối thiểu 8 ký tự.'; return; }
+    if (password !== password2) { $('#registerError').textContent = 'Mật khẩu nhập lại không khớp.'; return; }
+
+    try {
+      const data = await apiFetch('/api/register', {
+        method: 'POST',
+        body: JSON.stringify({ username, password })
+      });
+      await loginAs(data.username, data.token);
+    } catch (err) {
+      $('#registerError').textContent = err.message;
+    }
+  });
+
+  $('#btnLogout').addEventListener('click', async () => {
+    if (ws) { try { ws.close(); } catch (e) {} ws = null; }
+    try { await apiFetch('/api/logout', { method: 'POST' }); } catch (e) {}
+    currentUser = null;
+    authToken = null;
+    currentSessionId = null;
+    currentSessionUsername = null;
+    openSessionIds.clear();
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(TOKEN_KEY);
+    isCurrentUserAdmin = false;
+    $('#navAdmin').style.display = 'none';
+    $('#appRoot').style.display = 'none';
+    $('#authScreen').style.display = 'flex';
+    $('#bridgeUrl').readOnly = false;
+    $('#loginUsername').value = '';
+    $('#loginPassword').value = '';
+    setAuthTab('login');
+  });
+
+  async function loginAs(username, token) {
+    currentUser = username;
+    authToken = token;
+    localStorage.setItem(SESSION_KEY, username);
+    localStorage.setItem(TOKEN_KEY, token);
+    $('#currentUserLabel').textContent = username;
+    $('#authScreen').style.display = 'none';
+    $('#appRoot').style.display = 'block';
+    $('#bridgeUrl').readOnly = true;
+
+    await loadCustomers();
+    renderCustomerBadge();
+    await loadSavedTiktokIds();
+    await loadSessions();
+    renderSessionBadge();
+    await Promise.all([loadOrdersV2(), loadProductsV2(), loadSettingsV2()]);
+    await refreshAdminFlag();
+    initWS();
+  }
+
+  // Tự đăng nhập lại nếu trình duyệt còn token hợp lệ (phiên sống 90 ngày)
+  async function tryAutoLogin() {
+    const savedUser = localStorage.getItem(SESSION_KEY);
+    const savedToken = localStorage.getItem(TOKEN_KEY);
+    if (!savedUser || !savedToken) return false;
+
+    authToken = savedToken;
+    currentUser = savedUser;
+    try {
+      await loadCustomers(); // dùng luôn để vừa kiểm tra token vừa tải dữ liệu
+    } catch (err) {
+      // Token sai/hết hạn -> quay lại màn hình đăng nhập
+      authToken = null;
+      currentUser = null;
+      localStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(TOKEN_KEY);
+      return false;
+    }
+
+    $('#currentUserLabel').textContent = savedUser;
+    $('#authScreen').style.display = 'none';
+    $('#appRoot').style.display = 'block';
+    $('#bridgeUrl').readOnly = true;
+    renderCustomerBadge();
+    await loadSavedTiktokIds();
+    await loadSessions();
+    renderSessionBadge();
+    await Promise.all([loadOrdersV2(), loadProductsV2(), loadSettingsV2()]);
+    await refreshAdminFlag();
+    initWS();
+    return true;
+  }
+  // ===== HẾT PHẦN TÀI KHOẢN =====
+
+  // ===== DANH SÁCH ID TIKTOK LIVE ĐÃ LƯU (chọn nhanh, không cần gõ lại) =====
+  // Cấu trúc: [{ id: 'username', addedAt: number }, ...], mới dùng gần đây nhất ở đầu danh sách
+  let savedTiktokIds = [];
+
+  async function loadSavedTiktokIds() {
+    try {
+      const data = await apiFetch('/api/tiktok-ids', { method: 'GET' });
+      savedTiktokIds = (data && data.tiktokIds) || [];
+    } catch (err) {
+      console.error('Không tải được danh sách ID TikTok đã lưu:', err);
+      savedTiktokIds = [];
+    }
+    renderSavedTiktokIds();
+  }
+
+  async function saveTiktokIdsToServer() {
+    try {
+      await apiFetch('/api/tiktok-ids', {
+        method: 'POST',
+        body: JSON.stringify({ tiktokIds: savedTiktokIds })
+      });
+    } catch (err) {
+      console.error('Không lưu được danh sách ID TikTok lên Bridge Server:', err);
+    }
+  }
+
+  // Thêm 1 username vào đầu danh sách (đưa lên trước nếu đã có sẵn), rồi lưu lên server
+  function rememberTiktokId(username) {
+    const clean = (username || '').trim();
+    if (!clean) return;
+    savedTiktokIds = savedTiktokIds.filter(item => item.id.toLowerCase() !== clean.toLowerCase());
+    savedTiktokIds.unshift({ id: clean, addedAt: Date.now() });
+    renderSavedTiktokIds();
+    saveTiktokIdsToServer();
+  }
+
+  function removeTiktokId(username) {
+    savedTiktokIds = savedTiktokIds.filter(item => item.id !== username);
+    renderSavedTiktokIds();
+    saveTiktokIdsToServer();
+  }
+
+  function renderSavedTiktokIds() {
+    const box = $('#savedIdList');
+    if (!box) return;
+    box.innerHTML = '';
+
+    const currentValue = $('#tiktokUsername').value.trim().replace('@', '');
+
+    savedTiktokIds.forEach(item => {
+      const chip = document.createElement('div');
+      chip.className = 'saved-id-chip' + (item.id.toLowerCase() === currentValue.toLowerCase() ? ' active' : '');
+      chip.innerHTML = `
+        <span class="chip-id">@${escapeHtml(item.id)}</span>
+        <button class="chip-del" title="Xóa khỏi danh sách">✕</button>
+      `;
+
+      // Bấm vào chip = điền + kết nối luôn tới ID này, khỏi phải gõ tay
+      chip.addEventListener('click', () => {
+        $('#tiktokUsername').value = item.id;
+        $('#btnConnectTikTok').click();
+      });
+
+      chip.querySelector('.chip-del').addEventListener('click', (e) => {
+        e.stopPropagation(); // để không kích hoạt luôn việc kết nối khi chỉ muốn xóa
+        removeTiktokId(item.id);
+      });
+
+      box.appendChild(chip);
+    });
+  }
+  // ===== HẾT PHẦN DANH SÁCH ID TIKTOK =====
+
+  // ===== QUẢN LÝ KHÁCH HÀNG / GIỎ HÀNG =====
+  // Cấu trúc: { uniqueId: { nickname, uniqueId, avatar, items: [{id, comment, price, time}] } }
+  let customers = {};
+
+  async function loadCustomers() {
+    const data = await apiFetch('/api/customers', { method: 'GET' });
+    customers = (data && data.customers) || {};
+  }
+
+  async function saveCustomers() {
+    try {
+      await apiFetch('/api/customers', {
+        method: 'POST',
+        body: JSON.stringify({ customers })
+      });
+    } catch (err) {
+      console.error('Không lưu được dữ liệu khách hàng lên Bridge Server:', err);
+    }
+  }
+
+  // Đọc số tiền từ nội dung comment. Hỗ trợ các kiểu: "50k", "2tr", "150.000", "150000", "20 nghìn"...
+  function parseGiaTien(text) {
+    if (!text) return 0;
+    const t = text.toLowerCase();
+
+    let m = t.match(/(\d+(?:[.,]\d+)?)\s*(tr|triệu|trieu)/);
+    if (m) return Math.round(parseFloat(m[1].replace(',', '.')) * 1000000);
+
+    m = t.match(/(\d+(?:[.,]\d+)?)\s*(k|nghìn|nghin|ngàn|ngan)/);
+    if (m) return Math.round(parseFloat(m[1].replace(',', '.')) * 1000);
+
+    m = t.match(/(\d{1,3}(?:[.,]\d{3})+|\d+)\s*(đ|vnd|d)?/);
+    if (m) {
+      const numStr = m[1].replace(/[.,]/g, '');
+      const value = parseInt(numStr, 10);
+      return isNaN(value) ? 0 : value;
+    }
+
+    return 0;
+  }
+
+  function formatTien(n) {
+    return (n || 0).toLocaleString('vi-VN') + 'đ';
+  }
+
+  function formatGio(isoOrDate) {
+    const d = isoOrDate ? new Date(isoOrDate) : new Date();
+    return d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  function dateKeyLocal(isoOrDate) {
+    const d = isoOrDate ? new Date(isoOrDate) : new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+
+  function formatTienNgan(n) {
+    if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'tr';
+    if (n >= 1000) return Math.round(n / 1000) + 'k';
+    return String(n || 0);
+  }
+
+  function addToCart(cmt) {
+    const id = cmt.uniqueId || 'unknown';
+    const price = cmt.orderPrice != null ? Math.max(0, Number(cmt.orderPrice) || 0) : parseGiaTien(cmt.comment);
+
+    if (!customers[id]) {
+      customers[id] = { nickname: cmt.nickname, uniqueId: id, avatar: cmt.avatar, items: [] };
+    } else {
+      customers[id].nickname = cmt.nickname; // cập nhật tên hiển thị mới nhất
+      customers[id].avatar = cmt.avatar;
+    }
+
+    customers[id].items.push({
+      id: 'item_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+      comment: cmt.comment,
+      price,
+      time: cmt.receivedAt || new Date().toISOString()
+    });
+
+    saveCustomers();
+    renderCustomerBadge();
+    if ($('#viewCustomers').style.display !== 'none') renderCustomerList();
+    if ($('#viewReport').style.display !== 'none') renderReport($('#reportDate').value || dateKeyLocal());
+  }
+
+  function removeCartItem(customerId, itemId) {
+    const cust = customers[customerId];
+    if (!cust) return;
+    cust.items = cust.items.filter(it => it.id !== itemId);
+    if (cust.items.length === 0) delete customers[customerId];
+    renderCustomerBadge();
+    renderCustomerList();
+    if ($('#viewReport').style.display !== 'none') renderReport($('#reportDate').value || dateKeyLocal());
+    // Gửi yêu cầu xóa THẲNG trên server qua WebSocket, đồng bộ ngay cho mọi
+    // thiết bị khác đang mở trang (xem giải thích chi tiết ở deleteSession()).
+    if (ws && ws.readyState === WebSocket.OPEN && authToken) {
+      ws.send(JSON.stringify({ type: 'DELETE_CART_ITEM', customerId, itemId, token: authToken }));
+    } else {
+      saveCustomers();
+    }
+  }
+
+  function renderCustomerBadge() {
+    const count = Object.keys(customers).length;
+    const badge = $('#customerCountBadge');
+    if (badge) badge.textContent = count;
+  }
+
+  function renderCustomerList() {
+    const body = $('#customerListBody');
+
+    // Lọc theo ngày đã chọn ở ô "Lọc theo ngày" (giống cách tab Lịch Sử Phiên Live
+    // và tab Báo Cáo lọc dữ liệu theo ngày). Không chọn ngày nào ("") thì hiển thị
+    // đầy đủ tất cả khách hàng như cũ.
+    const selectedDate = $('#customerDateJump').value;
+
+    // Với mỗi khách hàng, chỉ giữ lại các sản phẩm thuộc đúng ngày đã chọn (nếu có
+    // chọn ngày); khách hàng không còn sản phẩm nào trong ngày đó thì ẩn luôn.
+    const list = Object.values(customers)
+      .map(cust => {
+        const items = selectedDate
+          ? cust.items.filter(it => dateKeyLocal(it.time) === selectedDate)
+          : cust.items;
+        return { ...cust, items };
+      })
+      .filter(cust => cust.items.length > 0)
+      .sort((a, b) => {
+        const totalA = a.items.reduce((s, it) => s + it.price, 0);
+        const totalB = b.items.reduce((s, it) => s + it.price, 0);
+        return totalB - totalA;
+      });
+
+    let totalItems = 0;
+    let totalRevenue = 0;
+    list.forEach(c => { totalItems += c.items.length; totalRevenue += c.items.reduce((s, it) => s + it.price, 0); });
+
+    $('#summaryCustomerCount').textContent = list.length;
+    $('#summaryItemCount').textContent = totalItems;
+    $('#summaryRevenue').textContent = formatTien(totalRevenue);
+
+    if (list.length === 0) {
+      body.innerHTML = selectedDate
+        ? '<div class="empty-note">Không có khách hàng nào trong ngày đã chọn.</div>'
+        : '<div class="empty-note">Chưa có khách hàng nào. Bấm "🖨️ In phiếu" ở 1 bình luận để thêm khách hàng + sản phẩm vào giỏ.</div>';
+      return;
+    }
+
+    body.innerHTML = '';
+    list.forEach(cust => {
+      const total = cust.items.reduce((s, it) => s + it.price, 0);
+      const card = document.createElement('div');
+      card.className = 'customer-card';
+      card.innerHTML = `
+        <div class="customer-head">
+          <div class="left">
+            <span class="user-name">${escapeHtml(cust.nickname)}</span>
+            <span class="user-id">@${escapeHtml(cust.uniqueId)} · ${cust.items.length} sản phẩm</span>
+          </div>
+          <span class="cust-total">${formatTien(total)}</span>
+        </div>
+        <div class="customer-items"></div>
+      `;
+
+      const itemsBox = card.querySelector('.customer-items');
+      cust.items.forEach(it => {
+        const row = document.createElement('div');
+        row.className = 'cart-item';
+        row.innerHTML = `
+          <span class="item-text">${escapeHtml(it.comment)}</span>
+          <span class="item-meta">
+            <span class="item-time">${formatGio(it.time)}</span>
+            <span class="item-price">${formatTien(it.price)}</span>
+          </span>
+          <button class="btn-del-item" title="Xóa sản phẩm này">✕</button>
+        `;
+        row.querySelector('.btn-del-item').addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (!confirm(`Xóa đơn "${it.comment}" (${formatTien(it.price)}) của @${cust.uniqueId}?`)) return;
+          removeCartItem(cust.uniqueId, it.id);
+        });
+        itemsBox.appendChild(row);
+      });
+
+      card.querySelector('.customer-head').addEventListener('click', () => {
+        itemsBox.classList.toggle('open');
+      });
+
+      body.appendChild(card);
+    });
+  }
+
+  // Chọn 1 ngày ở ô "Lọc theo ngày" -> chỉ hiện khách hàng/sản phẩm của đúng
+  // ngày đó (và cập nhật lại số liệu tổng kết ở trên). Bấm "Tất cả" để xoá lọc,
+  // xem lại đầy đủ khách hàng như trước.
+  $('#customerDateJump').addEventListener('change', () => renderCustomerList());
+  $('#customerDateJumpClear').addEventListener('click', () => {
+    $('#customerDateJump').value = '';
+    renderCustomerList();
+  });
+
+  // ===== V2: ĐƠN HÀNG CHUẨN HÓA + DANH MỤC SẢN PHẨM =====
+  const ORDER_STATUS_LABELS = {
+    new: 'Đơn mới', confirmed: 'Đã xác nhận', packing: 'Đóng gói',
+    shipped: 'Đang giao', completed: 'Hoàn tất', cancelled: 'Đã hủy', returned: 'Hoàn hàng'
+  };
+  const PAYMENT_LABELS = { unpaid: 'Chưa TT', partial: 'Đặt cọc', paid: 'Đã TT', refunded: 'Hoàn tiền' };
+
+  async function loadOrdersV2() {
+    if (!authToken) return;
+    try {
+      const data = await apiFetch('/api/orders');
+      ordersV2 = data.orders || [];
+      renderOrdersV2();
+    } catch (err) {
+      console.error('Không tải được đơn hàng:', err);
+    }
+  }
+
+  async function loadProductsV2() {
+    if (!authToken) return;
+    try {
+      const data = await apiFetch('/api/products');
+      productsV2 = data.products || [];
+      renderProductsV2();
+      renderProductOptions();
+    } catch (err) {
+      console.error('Không tải được sản phẩm:', err);
+    }
+  }
+
+  async function loadSettingsV2() {
+    if (!authToken) return;
+    try {
+      const data = await apiFetch('/api/settings');
+      appSettings = Object.assign({}, appSettings, data.settings || {});
+      $('#settingShopName').value = appSettings.shopName || 'SHOP LIVE';
+      $('#settingPaperWidth').value = String(appSettings.paperWidth || 80);
+      $('#settingCopies').value = appSettings.copies || 1;
+      $('#settingKeywords').value = (appSettings.orderKeywords || []).join(', ');
+    } catch (err) { console.error('Không tải được cài đặt:', err); }
+  }
+
+  async function saveSettingsV2() {
+    appSettings = {
+      shopName: $('#settingShopName').value.trim() || 'SHOP LIVE',
+      paperWidth: parseInt($('#settingPaperWidth').value, 10) === 58 ? 58 : 80,
+      copies: Math.max(1, Math.min(5, parseInt($('#settingCopies').value, 10) || 1)),
+      orderKeywords: $('#settingKeywords').value.split(',').map(x => x.trim()).filter(Boolean).slice(0, 30)
+    };
+    try {
+      await apiFetch('/api/settings', {method:'PUT',body:JSON.stringify({settings:appSettings})});
+      $('#settingStatus').textContent = '✅ Đã lưu và đồng bộ cài đặt.';
+    } catch(err){ $('#settingStatus').textContent = '❌ '+err.message; }
+  }
+
+  function renderProductOptions() {
+    const box = $('#productCodeOptions');
+    if (box) box.innerHTML = productsV2.filter(p => p.active).map(p =>
+      `<option value="${escapeHtml(p.code)}">${escapeHtml(p.name)} — ${formatTien(p.price)}</option>`
+    ).join('');
+  }
+
+  function findProductFromText(text) {
+    const raw = String(text || '').toLowerCase();
+    return productsV2.find(p => {
+      if (!p.active) return false;
+      const keys = [p.code, ...(p.aliases || [])].map(x => String(x).toLowerCase()).filter(Boolean);
+      return keys.some(k => raw.includes(k));
+    }) || null;
+  }
+
+  function guessQuantity(text) {
+    const raw = String(text || '').toLowerCase();
+    const m = raw.match(/(?:x|sl\s*[:=]?|số lượng\s*[:=]?)\s*(\d+)/) || raw.match(/(\d+)\s*(?:cái|sp|chiếc)/);
+    return m ? Math.max(1, Math.min(9999, parseInt(m[1], 10))) : 1;
+  }
+
+  function updateOrderTotalPreview() {
+    const qty = Math.max(1, parseInt($('#ordQuantity').value, 10) || 1);
+    const price = Math.max(0, parseInt($('#ordUnitPrice').value, 10) || 0);
+    const ship = Math.max(0, parseInt($('#ordShippingFee').value, 10) || 0);
+    $('#ordTotalPreview').value = formatTien(qty * price + ship);
+  }
+
+  function openOrderModal(cmt, order) {
+    editingOrderId = order ? order.id : null;
+    draftComment = cmt || null;
+    const matched = !order ? findProductFromText(cmt?.comment) : null;
+    $('#orderModalTitle').textContent = order ? `Sửa đơn ${order.id}` : 'Xác nhận đơn từ bình luận';
+    $('#orderSourceComment').textContent = order
+      ? `Tạo lúc ${new Date(order.createdAt).toLocaleString('vi-VN')}`
+      : (cmt ? `@${cmt.uniqueId || ''}: ${cmt.comment || ''}` : 'Đơn nhập thủ công');
+    $('#ordCustomerId').value = order?.customerId || cmt?.uniqueId || '';
+    $('#ordCustomerName').value = order?.customerName || cmt?.nickname || '';
+    $('#ordProductCode').value = order?.productCode || matched?.code || '';
+    $('#ordProductName').value = order?.productName || matched?.name || cmt?.comment || '';
+    $('#ordQuantity').value = order?.quantity || guessQuantity(cmt?.comment);
+    $('#ordUnitPrice').value = order?.unitPrice ?? matched?.price ?? parseGiaTien(cmt?.comment || '');
+    $('#ordShippingFee').value = order?.shippingFee || 0;
+    $('#ordPhone').value = order?.phone || '';
+    $('#ordAddress').value = order?.address || '';
+    $('#ordNote').value = order?.note || '';
+    $('#ordPaymentStatus').value = order?.paymentStatus || 'unpaid';
+    $('#orderModalError').textContent = '';
+    $('#btnSavePrintOrder').style.display = order ? 'none' : '';
+    updateOrderTotalPreview();
+    $('#orderModal').classList.add('open');
+  }
+
+  function closeOrderModal() {
+    $('#orderModal').classList.remove('open');
+    editingOrderId = null;
+    draftComment = null;
+  }
+
+  function orderFormPayload() {
+    return {
+      sourceCommentId: editingOrderId ? undefined : (draftComment?.id || null),
+      sourceSessionId: editingOrderId ? undefined : currentSessionId,
+      customerId: $('#ordCustomerId').value.trim(),
+      customerName: $('#ordCustomerName').value.trim(),
+      productCode: $('#ordProductCode').value.trim().toUpperCase(),
+      productName: $('#ordProductName').value.trim(),
+      quantity: parseInt($('#ordQuantity').value, 10) || 1,
+      unitPrice: parseInt($('#ordUnitPrice').value, 10) || 0,
+      shippingFee: parseInt($('#ordShippingFee').value, 10) || 0,
+      phone: $('#ordPhone').value.trim(),
+      address: $('#ordAddress').value.trim(),
+      note: $('#ordNote').value.trim(),
+      paymentStatus: $('#ordPaymentStatus').value
+    };
+  }
+
+  async function saveOrderV2(printAfter) {
+    const payload = orderFormPayload();
+    const sourceCommentIdToMark = draftComment?.id || null;
+    if (!payload.customerId || !payload.customerName || !payload.productName) {
+      $('#orderModalError').textContent = 'Vui lòng nhập đủ ID TikTok, tên khách và sản phẩm.';
+      return;
+    }
+    const buttons = [$('#btnSaveOrder'), $('#btnSavePrintOrder')];
+    buttons.forEach(b => { b.disabled = true; });
+    $('#orderModalError').textContent = '';
+    try {
+      const data = await apiFetch(editingOrderId ? `/api/orders/${editingOrderId}` : '/api/orders', {
+        method: editingOrderId ? 'PUT' : 'POST',
+        body: JSON.stringify(payload)
+      });
+      const savedOrder = data.order;
+      closeOrderModal();
+      await loadOrdersV2();
+      if (printAfter && savedOrder) await printOrderV2(savedOrder);
+      if (sourceCommentIdToMark) markSessionCommentAdded(sourceCommentIdToMark);
+    } catch (err) {
+      $('#orderModalError').textContent = err.message;
+    } finally {
+      buttons.forEach(b => { b.disabled = false; });
+    }
+  }
+
+  async function printOrderV2(order) {
+    const pseudo = {
+      nickname: order.customerName,
+      uniqueId: order.customerId,
+      comment: `${order.productCode ? order.productCode + ' - ' : ''}${order.productName} x${order.quantity} | ${formatTien(order.total)}`,
+      receivedAt: new Date(order.createdAt).toISOString()
+    };
+    let ok = false;
+    let error = '';
+    try {
+      ok = await printComment(pseudo);
+      if (!ok) error = 'Máy in không xác nhận thành công.';
+    } catch (err) {
+      error = err.message;
+    }
+    try {
+      await apiFetch(`/api/orders/${order.id}/print-result`, {
+        method: 'POST', body: JSON.stringify({ ok, error })
+      });
+      await loadOrdersV2();
+    } catch (e) {}
+    return ok;
+  }
+
+  async function quickPrintAndOrder(cmt, button) {
+    if (!cmt?.uniqueId) return alert('Bình luận không có ID TikTok hợp lệ.');
+    if (ordersV2.some(o => o.sourceCommentId && o.sourceCommentId === cmt.id)) {
+      return alert('Bình luận này đã được thêm đơn. Muốn in lại, hãy vào tab Đơn hàng.');
+    }
+    const matched = findProductFromText(cmt.comment);
+    const quantity = guessQuantity(cmt.comment);
+    const unitPrice = matched?.price ?? parseGiaTien(cmt.comment);
+    const payload = {
+      sourceCommentId: cmt.id || null,
+      sourceSessionId: currentSessionId,
+      customerId: cmt.uniqueId,
+      customerName: cmt.nickname || cmt.uniqueId,
+      productCode: matched?.code || '',
+      productName: matched?.name || cmt.comment || 'Sản phẩm từ Live',
+      quantity, unitPrice, shippingFee: 0, paymentStatus: 'unpaid',
+      note: `Comment gốc: ${cmt.comment || ''}`
+    };
+    await withButtonBusy(button, async () => {
+      try {
+        const data = await apiFetch('/api/orders', {method:'POST',body:JSON.stringify(payload)});
+        const order = data.order;
+        const printed = await printOrderV2(order);
+        addToCart(Object.assign({}, cmt, {
+          comment: `${payload.productCode ? payload.productCode + ' - ' : ''}${payload.productName} x${quantity}`,
+          orderPrice: order.total
+        }));
+        if (cmt.id) markSessionCommentAdded(cmt.id);
+        await loadOrdersV2();
+        if (!printed) alert('Đơn đã được thêm vào giỏ khách hàng nhưng máy in báo lỗi. Vào tab Đơn hàng để bấm In lại.');
+      } catch (err) { alert(err.message); }
+    });
+  }
+
+  function renderOrdersV2() {
+    const box = $('#orderList');
+    if (!box) return;
+    const q = ($('#orderSearch')?.value || '').trim().toLowerCase();
+    const status = $('#orderStatusFilter')?.value || '';
+    const date = $('#orderDateFilter')?.value || '';
+    const list = ordersV2.filter(o => {
+      if (status && o.status !== status) return false;
+      if (date && dateKeyLocal(o.createdAt) !== date) return false;
+      if (q && ![o.customerId,o.customerName,o.productCode,o.productName,o.phone].join(' ').toLowerCase().includes(q)) return false;
+      return true;
+    });
+    const valid = list.filter(o => !['cancelled','returned'].includes(o.status));
+    const revenue = valid.reduce((s,o) => s + o.total, 0);
+    $('#orderCountSummary').textContent = list.length;
+    $('#orderRevenueSummary').textContent = formatTien(revenue);
+    $('#orderPendingSummary').textContent = list.filter(o => ['new','confirmed','packing'].includes(o.status)).length;
+    $('#orderCountBadge').textContent = ordersV2.filter(o => o.status === 'new').length;
+    if (!list.length) { box.innerHTML = '<div class="empty-note">Không có đơn phù hợp bộ lọc.</div>'; return; }
+    box.innerHTML = '';
+    list.forEach(o => {
+      const card = document.createElement('div');
+      card.className = 'order-card';
+      card.innerHTML = `
+        <div class="order-head">
+          <div><span class="order-main">@${escapeHtml(o.customerId)} · ${escapeHtml(o.productCode || '')} ${escapeHtml(o.productName)}</span>
+          <div class="order-meta">${escapeHtml(o.customerName)} · SL ${o.quantity} · ${new Date(o.createdAt).toLocaleString('vi-VN')}<br>
+          ${o.phone ? '☎ ' + escapeHtml(o.phone) + ' · ' : ''}${o.address ? escapeHtml(o.address) : ''}</div></div>
+          <div><div class="order-total">${formatTien(o.total)}</div><span class="status-pill status-${o.status}">${ORDER_STATUS_LABELS[o.status] || o.status}</span></div>
+        </div>
+        <div class="order-actions">
+          <select class="order-status-select">${Object.entries(ORDER_STATUS_LABELS).map(([k,v]) => `<option value="${k}"${o.status===k?' selected':''}>${v}</option>`).join('')}</select>
+          <span class="status-pill">${PAYMENT_LABELS[o.paymentStatus] || o.paymentStatus}</span>
+          <span class="status-pill">${o.printStatus === 'printed' ? '🖨️ Đã in' : o.printStatus === 'failed' ? '⚠️ In lỗi' : 'Chưa in'}</span>
+          <button class="btn-mini edit-order">Sửa</button><button class="btn-mini print-order">In${o.printStatus==='printed'?' lại':''}</button>
+          <button class="btn-mini danger-text delete-order">Xóa</button>
+        </div>`;
+      card.querySelector('.order-status-select').addEventListener('change', async e => {
+        try { await apiFetch(`/api/orders/${o.id}`, { method:'PUT', body:JSON.stringify({...o,status:e.target.value}) }); await loadOrdersV2(); }
+        catch(err){ alert(err.message); }
+      });
+      card.querySelector('.edit-order').addEventListener('click', () => openOrderModal(null, o));
+      card.querySelector('.print-order').addEventListener('click', e => withButtonBusy(e.currentTarget, () => printOrderV2(o)));
+      card.querySelector('.delete-order').addEventListener('click', async () => {
+        if (!confirm(`Xóa đơn của @${o.customerId}?`)) return;
+        try { await apiFetch(`/api/orders/${o.id}`, {method:'DELETE'}); await loadOrdersV2(); } catch(err){ alert(err.message); }
+      });
+      box.appendChild(card);
+    });
+  }
+
+  async function withButtonBusy(button, fn) {
+    if (button.disabled) return;
+    const old = button.textContent;
+    button.disabled = true; button.textContent = 'Đang xử lý...';
+    try { await fn(); } finally { button.disabled = false; button.textContent = old; }
+  }
+
+  function renderProductsV2() {
+    const box = $('#productList');
+    if (!box) return;
+    if (!productsV2.length) { box.innerHTML = '<div class="empty-note">Chưa có sản phẩm. Hãy thêm mã để tự nhận diện comment.</div>'; return; }
+    box.innerHTML = '';
+    productsV2.forEach(p => {
+      const row = document.createElement('div');
+      row.className = 'product-row';
+      row.innerHTML = `<b>${escapeHtml(p.code)}</b><span class="product-name">${escapeHtml(p.name)}<small style="display:block;color:var(--muted)">${escapeHtml((p.aliases||[]).join(', '))}</small></span>
+        <span>${formatTien(p.price)}</span><span>${p.stock == null ? '∞' : p.stock}</span>
+        <span><button class="btn-mini edit-product">Sửa</button> <button class="btn-mini danger-text delete-product">Xóa</button></span>`;
+      row.querySelector('.edit-product').addEventListener('click', () => openProductModal(p));
+      row.querySelector('.delete-product').addEventListener('click', async () => {
+        if (!confirm(`Xóa sản phẩm ${p.code}?`)) return;
+        try { await apiFetch(`/api/products/${p.id}`, {method:'DELETE'}); await loadProductsV2(); } catch(err){ alert(err.message); }
+      });
+      box.appendChild(row);
+    });
+  }
+
+  function openProductModal(p) {
+    editingProductId = p?.id || null;
+    $('#productModalTitle').textContent = p ? `Sửa ${p.code}` : 'Thêm sản phẩm';
+    $('#prdCode').value = p?.code || ''; $('#prdName').value = p?.name || '';
+    $('#prdPrice').value = p?.price || 0; $('#prdStock').value = p?.stock ?? '';
+    $('#prdAliases').value = (p?.aliases || []).join(', ');
+    $('#productModalError').textContent = ''; $('#productModal').classList.add('open');
+  }
+  function closeProductModal(){ $('#productModal').classList.remove('open'); editingProductId = null; }
+  async function saveProductV2() {
+    const payload = { code:$('#prdCode').value.trim(), name:$('#prdName').value.trim(),
+      price:parseInt($('#prdPrice').value,10)||0, stock:$('#prdStock').value,
+      aliases:$('#prdAliases').value.split(',').map(x=>x.trim()).filter(Boolean), active:true };
+    if (!payload.code || !payload.name) { $('#productModalError').textContent='Vui lòng nhập mã và tên.'; return; }
+    try {
+      await apiFetch(editingProductId ? `/api/products/${editingProductId}` : '/api/products',
+        {method:editingProductId?'PUT':'POST', body:JSON.stringify(payload)});
+      closeProductModal(); await loadProductsV2();
+    } catch(err){ $('#productModalError').textContent=err.message; }
+  }
+
+  function exportOrdersV2() {
+    if (!ordersV2.length) return alert('Chưa có đơn để xuất.');
+    const rows = ordersV2.map(o => ({
+      'Mã đơn':o.id,'Ngày':new Date(o.createdAt).toLocaleString('vi-VN'),'ID TikTok':o.customerId,
+      'Tên khách':o.customerName,'Mã SP':o.productCode,'Sản phẩm':o.productName,'SL':o.quantity,
+      'Đơn giá':o.unitPrice,'Phí ship':o.shippingFee,'Tổng':o.total,'SĐT':o.phone,'Địa chỉ':o.address,
+      'Trạng thái':ORDER_STATUS_LABELS[o.status]||o.status,'Thanh toán':PAYMENT_LABELS[o.paymentStatus]||o.paymentStatus,
+      'In':o.printStatus,'Ghi chú':o.note
+    }));
+    const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rows),'Đơn hàng');
+    XLSX.writeFile(wb,`don-hang-${dateKeyLocal()}.xlsx`);
+  }
+
+  ['ordQuantity','ordUnitPrice','ordShippingFee'].forEach(id => $('#'+id).addEventListener('input', updateOrderTotalPreview));
+  $('#ordProductCode').addEventListener('change', () => {
+    const p=productsV2.find(x=>x.code.toLowerCase()===$('#ordProductCode').value.trim().toLowerCase());
+    if(p){ $('#ordProductName').value=p.name; $('#ordUnitPrice').value=p.price; updateOrderTotalPreview(); }
+  });
+  $('#orderModalClose').addEventListener('click', closeOrderModal); $('#orderModalCancel').addEventListener('click', closeOrderModal);
+  $('#btnSaveOrder').addEventListener('click', () => saveOrderV2(false)); $('#btnSavePrintOrder').addEventListener('click', () => saveOrderV2(true));
+  $('#btnNewManualOrder').addEventListener('click', () => openOrderModal(null,null));
+  $('#btnRefreshOrders').addEventListener('click', loadOrdersV2);
+  ['orderSearch','orderStatusFilter','orderDateFilter'].forEach(id => $('#'+id).addEventListener(id==='orderSearch'?'input':'change',renderOrdersV2));
+  $('#btnExportOrders').addEventListener('click', exportOrdersV2);
+  $('#btnNewProduct').addEventListener('click',()=>openProductModal(null));
+  $('#productModalClose').addEventListener('click',closeProductModal); $('#productModalCancel').addEventListener('click',closeProductModal);
+  $('#btnSaveProduct').addEventListener('click',saveProductV2);
+  $('#btnSaveSettings').addEventListener('click',saveSettingsV2);
+  $('#btnTestPrinter').addEventListener('click', e => withButtonBusy(e.currentTarget, () => printComment({
+    nickname:'KIỂM TRA MÁY IN', uniqueId:currentUser || 'shop',
+    comment:'Máy in đã kết nối và nhận lệnh thành công.', receivedAt:new Date().toISOString()
+  })));
+
+  // ===== LỊCH SỬ PHIÊN LIVE (LƯU TOÀN BỘ COMMENT ĐỂ XEM LẠI / IN BÙ) =====
+  // Cấu trúc: { sessionId: { username, startedAt, comments: [{id, nickname, uniqueId, avatar, comment, receivedAt, added}] } }
+  // Mỗi lần bấm "Kết Nối TikTok Live" sẽ tạo 1 phiên (session) mới, mọi comment
+  // nhận được qua WebSocket trong lúc phiên đó đang mở sẽ được lưu vào đây,
+  // dù bạn có bấm "In phiếu" lúc live hay không. Sau khi live xong, vào tab
+  // "Lịch sử" để xem lại toàn bộ comment theo ngày giờ, ID TikTok, tên TikTok —
+  // và có thể bấm in + thêm đơn bù cho những comment lúc live quên bấm.
+  let liveSessions = {};
+  let currentSessionId = null;
+  let currentSessionUsername = null; // dùng để đối chiếu roomUsername server gửi về, chặn lẫn comment phiên cũ
+  let sessionSaveTimer = null;
+  const openSessionIds = new Set(); // các phiên đang được mở (expand) trong tab Lịch sử — giữ nguyên khi render lại
+
+  async function loadSessions() {
+    try {
+      const data = await apiFetch('/api/sessions', { method: 'GET' });
+      liveSessions = (data && data.sessions) || {};
+    } catch (err) {
+      console.error('Không tải được lịch sử phiên live:', err);
+      liveSessions = {};
+    }
+  }
+
+  function scheduleSaveSessions() {
+    if (sessionSaveTimer) clearTimeout(sessionSaveTimer);
+    // Giảm từ 1200ms xuống 500ms: vẫn đủ để gộp nhiều comment liên tiếp thành
+    // 1 request (tránh spam server khi live đang chạy nhanh), nhưng rút ngắn
+    // khoảng thời gian "cửa sổ rủi ro" nếu người dùng đóng tab/tắt máy ngay
+    // sau khi vừa nhận comment cuối cùng.
+    sessionSaveTimer = setTimeout(saveSessions, 500);
+  }
+
+  async function saveSessions() {
+    sessionSaveTimer = null;
+    try {
+      await apiFetch('/api/sessions', {
+        method: 'POST',
+        body: JSON.stringify({ sessions: liveSessions })
+      });
+    } catch (err) {
+      console.error('Không lưu được lịch sử phiên live lên Bridge Server:', err);
+    }
+  }
+
+  // Lưu NGAY LẬP TỨC (bỏ qua debounce), dùng khi trang sắp bị ẩn/đóng — ví dụ
+  // người dùng chuyển tab, khóa màn hình điện thoại, hoặc đóng hẳn trình
+  // duyệt. Dùng keepalive:true để trình duyệt vẫn cố gắng gửi xong request
+  // này ngay cả khi trang đã bắt đầu unload, thay vì hủy ngang giữa chừng
+  // như fetch thường — đây là điểm mấu chốt để không mất nốt vài comment
+  // cuối chưa kịp lưu do debounce phía trên.
+  function flushSessionsNow() {
+    if (sessionSaveTimer) { clearTimeout(sessionSaveTimer); sessionSaveTimer = null; }
+    if (!authToken || !Object.keys(liveSessions).length) return;
+    const base = apiBase();
+    if (!base) return;
+    try {
+      fetch(base + '/api/sessions', {
+        method: 'POST',
+        keepalive: true,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + authToken
+        },
+        body: JSON.stringify({ sessions: liveSessions })
+      }).catch(() => {});
+    } catch (e) {}
+  }
+
+  function startNewSession(username) {
+    // Tạo tạm 1 ID cục bộ để hiện ngay lên giao diện trong lúc chờ server xác
+    // nhận kết nối thành công. ID THẬT SỰ dùng để lưu bền vào DB sẽ do server
+    // phát về (xem adoptServerSessionId) — vì chỉ có server mới biết chắc đây
+    // là phiên Live nào và phát cùng 1 ID đó cho MỌI thiết bị đang xem.
+    const sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+    liveSessions[sessionId] = {
+      username,
+      startedAt: new Date().toISOString(),
+      comments: []
+    };
+    currentSessionId = sessionId;
+    currentSessionUsername = (username || '').toLowerCase();
+    renderSessionBadge();
+    // Phiên mới toanh, chưa có card trong DOM -> chỉ full-render khi đang mở tab Lịch sử
+    if ($('#viewSessions').style.display !== 'none') renderSessionList();
+    scheduleSaveSessions();
+  }
+
+  // Đồng bộ theo sessionId do SERVER phát ra (kèm trong STATUS/HISTORY/COMMENT).
+  // Trước đây mỗi trình duyệt tự sinh 1 sessionId riêng trong startNewSession(),
+  // nên chỉ đúng trên chính thiết bị vừa bấm "Kết Nối" — thiết bị nào mở trang
+  // SAU (F5 lại giữa chừng, hoặc điện thoại mở lên khi laptop đã kết nối sẵn)
+  // sẽ không có sessionId đó, khiến comment vẫn chạy trong feed Live (do server
+  // vẫn broadcast) nhưng KHÔNG được đẩy vào liveSessions -> KHÔNG lưu vào DB,
+  // chỉ tồn tại tạm trong bộ nhớ của feed cho tới khi rời trang là mất. Nay mọi
+  // thiết bị đều dùng chung đúng 1 sessionId do server cấp, nên comment về sau
+  // luôn được lưu đúng vào 1 phiên duy nhất, bền trên DB.
+  function adoptServerSessionId(sessionId, username, roomUsername) {
+    if (!sessionId || currentSessionId === sessionId) return;
+
+    // Nếu thiết bị này vừa có 1 phiên "tạm" (do chính nó bấm Kết Nối tạo ra,
+    // chưa kịp có comment nào) trùng username -> dọn phiên tạm đó đi, tránh để
+    // lại 1 mục rỗng thừa trong Lịch sử.
+    if (
+      currentSessionId &&
+      liveSessions[currentSessionId] &&
+      liveSessions[currentSessionId].comments.length === 0 &&
+      (liveSessions[currentSessionId].username || '').toLowerCase() === (roomUsername || '').toLowerCase()
+    ) {
+      delete liveSessions[currentSessionId];
+    }
+
+    if (!liveSessions[sessionId]) {
+      liveSessions[sessionId] = {
+        username: roomUsername || username || '',
+        startedAt: new Date().toISOString(),
+        comments: []
+      };
+    }
+    currentSessionId = sessionId;
+    renderSessionBadge();
+    if ($('#viewSessions').style.display !== 'none') renderSessionList();
+    scheduleSaveSessions();
+  }
+
+  function renderSessionBadge() {
+    const badge = $('#sessionCountBadge');
+    if (badge) badge.textContent = Object.keys(liveSessions).length;
+  }
+
+  function deleteSession(sessionId) {
+    delete liveSessions[sessionId];
+    openSessionIds.delete(sessionId);
+    if (currentSessionId === sessionId) { currentSessionId = null; currentSessionUsername = null; }
+    renderSessionBadge();
+    renderSessionList();
+    // Gửi yêu cầu xóa THẲNG trên server qua WebSocket (không chỉ ghi đè toàn
+    // bộ dữ liệu cục bộ lên) — để các thiết bị khác (điện thoại...) đang mở
+    // trang cũng tự xóa ngay lập tức, và tránh việc 1 thiết bị khác lỡ ghi đè
+    // "hồi sinh" lại phiên vừa xóa nếu nó đang giữ bản dữ liệu cũ.
+    if (ws && ws.readyState === WebSocket.OPEN && authToken) {
+      ws.send(JSON.stringify({ type: 'DELETE_SESSION', sessionId, token: authToken }));
+    } else {
+      // Không có kết nối WS lúc này thì tạm lưu theo cách cũ (ghi đè toàn bộ),
+      // để ít nhất dữ liệu trên chính thiết bị này không bị mất.
+      scheduleSaveSessions();
+    }
+  }
+
+  // Tạo phần tử DOM cho 1 dòng bình luận trong lịch sử (dùng chung cho cả
+  // render toàn bộ lẫn chèn thêm 1 dòng mới), để 2 chỗ luôn hiển thị giống nhau.
+  function buildSessionCommentRowEl(sessionId, c) {
+    const row = document.createElement('div');
+    row.className = 'session-comment-item';
+    if (c.id) row.dataset.commentId = c.id;
+    const dt = c.receivedAt ? new Date(c.receivedAt) : new Date();
+    row.innerHTML = `
+      <div class="session-comment-top">
+        <span class="session-comment-user">${escapeHtml(c.nickname || '')} <span class="session-comment-id">@${escapeHtml(c.uniqueId || '')}</span></span>
+        <span class="session-comment-time">${dt.toLocaleDateString('vi-VN')} · ${formatGio(dt)}</span>
+      </div>
+      <div class="session-comment-text">${escapeHtml(c.comment || '')}</div>
+      <div class="session-comment-actions">
+        <button class="btn-mini btn-print-history">⚡ ${c.added ? 'Đã thêm đơn' : 'In & thêm đơn'}</button>
+        <button class="btn-mini btn-review-history">✏️ Kiểm tra</button>
+        <span class="added-note" style="display:${c.added ? '' : 'none'}; color:var(--teal); font-size:11.5px; font-weight:600; align-self:center;">✔ Đã in / thêm đơn</span>
+      </div>
+    `;
+
+    row.querySelector('.btn-print-history').addEventListener('click', (e) => {
+      e.preventDefault();
+      quickPrintAndOrder(c, e.currentTarget);
+    });
+    row.querySelector('.btn-review-history').addEventListener('click', () => openOrderModal(c, null));
+
+    return row;
+  }
+
+  // Gom các session (mỗi lần bấm "Kết Nối") lại theo NGÀY, rồi trong từng ngày
+  // gom tiếp theo ID TikTok (không phân biệt session-comment theo giờ coi live
+  // từng lần) — để nếu 1 ngày coi live cùng 1 kênh nhiều lần thì toàn bộ cmt
+  // được cộng dồn vào chung 1 khối duy nhất, không tách vụn theo từng lần bấm
+  // "Kết Nối". Khác ngày thì luôn tách riêng, không bao giờ gộp lẫn vào nhau.
+  function groupSessionsByDayAndUsername(filteredList) {
+    const dayMap = {}; // dateKey -> { dateKey, sessionCount, groups: { usernameLower -> {...} } }
+    filteredList.forEach(({ sessionId, session, commentsToShow }) => {
+      const dateKey = dateKeyLocal(session.startedAt);
+      if (!dayMap[dateKey]) dayMap[dateKey] = { dateKey, sessionIds: new Set(), groups: {} };
+      const day = dayMap[dateKey];
+      day.sessionIds.add(sessionId);
+
+      const uKey = (session.username || '').toLowerCase();
+      if (!day.groups[uKey]) {
+        day.groups[uKey] = { username: session.username, sessionIds: [], sessionCount: 0, comments: [], firstStartedAt: session.startedAt, lastStartedAt: session.startedAt };
+      }
+      const grp = day.groups[uKey];
+      grp.sessionIds.push(sessionId);
+      grp.sessionCount += 1;
+      if (new Date(session.startedAt) < new Date(grp.firstStartedAt)) grp.firstStartedAt = session.startedAt;
+      if (new Date(session.startedAt) > new Date(grp.lastStartedAt)) grp.lastStartedAt = session.startedAt;
+      commentsToShow.forEach(c => grp.comments.push(Object.assign({ __sessionId: sessionId }, c)));
+    });
+
+    // Sau khi gom xong, loại bỏ các bình luận trùng lặp CÙNG 1 ID TikTok trong
+    // từng nhóm (ngày + kênh live) — ví dụ do bridge gửi trùng sự kiện comment.
+    // Khác ID TikTok thì dù nội dung giống hệt nhau vẫn giữ nguyên, không gộp.
+    Object.values(dayMap).forEach(day => {
+      Object.values(day.groups).forEach(grp => {
+        grp.comments = dedupeCommentsSameId(grp.comments);
+      });
+    });
+
+    return dayMap;
+  }
+
+  // Loại bỏ bình luận trùng lặp: cùng 1 ID TikTok (uniqueId) + cùng nội dung
+  // bình luận thì chỉ giữ lại 1 bản (ưu tiên giữ bản nhận sớm nhất). Nếu khác
+  // ID TikTok thì vẫn cho lặp nội dung bình thường, không coi là trùng.
+  function dedupeCommentsSameId(comments) {
+    const sorted = [...comments].sort((a, b) => new Date(a.receivedAt) - new Date(b.receivedAt));
+    const seen = new Set();
+    const result = [];
+    sorted.forEach(c => {
+      const key = (c.uniqueId || '').toLowerCase() + '||' + (c.comment || '').trim();
+      if (seen.has(key)) return;
+      seen.add(key);
+      result.push(c);
+    });
+    return result;
+  }
+
+  function renderSessionList() {
+    const body = $('#sessionListBody');
+    const searchTerm = ($('#sessionSearchInput').value || '').trim().toLowerCase();
+    const savedScrollTop = body.scrollTop; // giữ vị trí cuộn để không bị "giật" về đầu trang mỗi lần render lại
+
+    const entries = Object.entries(liveSessions).sort(
+      (a, b) => new Date(b[1].startedAt) - new Date(a[1].startedAt)
+    );
+
+    let totalComments = 0;
+    Object.values(liveSessions).forEach(s => totalComments += (s.comments || []).length);
+    $('#summarySessionCount').textContent = entries.length;
+    $('#summarySessionCommentCount').textContent = totalComments;
+
+    if (entries.length === 0) {
+      body.innerHTML = '<div class="empty-note">Chưa có phiên live nào được lưu. Mỗi lần bấm "Kết Nối TikTok Live", toàn bộ bình luận nhận được sẽ tự động lưu lại ở đây để xem lại sau.</div>';
+      return;
+    }
+
+    // Lọc theo từ khóa tìm kiếm trước (giữ nguyên logic cũ), sau đó mới gom nhóm.
+    const filteredList = [];
+    entries.forEach(([sessionId, session]) => {
+      const allComments = session.comments || [];
+      let commentsToShow = allComments;
+
+      if (searchTerm) {
+        const matchesSessionName = (session.username || '').toLowerCase().includes(searchTerm);
+        commentsToShow = allComments.filter(c =>
+          (c.nickname || '').toLowerCase().includes(searchTerm) ||
+          (c.uniqueId || '').toLowerCase().includes(searchTerm) ||
+          (c.comment || '').toLowerCase().includes(searchTerm)
+        );
+        if (!matchesSessionName && commentsToShow.length === 0) return; // phiên này không khớp tìm kiếm
+        if (matchesSessionName && commentsToShow.length === 0) commentsToShow = allComments;
+      }
+
+      filteredList.push({ sessionId, session, commentsToShow });
+    });
+
+    if (filteredList.length === 0) {
+      body.innerHTML = '<div class="empty-note">Không tìm thấy bình luận hoặc phiên live nào khớp từ khóa.</div>';
+      return;
+    }
+
+    const dayMap = groupSessionsByDayAndUsername(filteredList);
+    let dayKeysSorted = Object.keys(dayMap).sort((a, b) => b.localeCompare(a)); // ngày mới nhất lên trước
+
+    // Lọc theo ngày đã chọn ở ô ngày (giống cách phần Báo Cáo lọc theo reportDate).
+    // Không chọn ngày nào ("") thì hiển thị đầy đủ tất cả các ngày như cũ.
+    const selectedDate = $('#sessionDateJump').value;
+    if (selectedDate) dayKeysSorted = dayKeysSorted.filter(dk => dk === selectedDate);
+
+    body.innerHTML = '';
+
+    if (dayKeysSorted.length === 0) {
+      body.innerHTML = '<div class="empty-note">Không có bình luận nào trong ngày đã chọn.</div>';
+      return;
+    }
+
+    dayKeysSorted.forEach(dateKey => {
+      const day = dayMap[dateKey];
+      const groupKeys = Object.keys(day.groups).sort(
+        (a, b) => new Date(day.groups[b].lastStartedAt) - new Date(day.groups[a].lastStartedAt)
+      );
+
+      let dayCmtCount = 0;
+      groupKeys.forEach(k => dayCmtCount += day.groups[k].comments.length);
+
+      const dayEl = document.createElement('div');
+      dayEl.className = 'day-group';
+      dayEl.dataset.dayKey = dateKey;
+      dayEl.innerHTML = `
+        <div class="day-group-header">
+          <span class="day-group-date">📅 ${humanizeDateKey(dateKey)}</span>
+          <span class="day-group-stats"><b class="day-live-count">${day.sessionIds.size}</b> phiên live · <b class="day-cmt-count">${dayCmtCount}</b> bình luận</span>
+        </div>
+      `;
+
+      groupKeys.forEach(uKey => {
+        const grp = day.groups[uKey];
+        dayEl.appendChild(buildUserGroupCardEl(dateKey, uKey, grp, !!searchTerm));
+      });
+
+      body.appendChild(dayEl);
+    });
+
+    body.scrollTop = savedScrollTop; // khôi phục vị trí cuộn sau khi dựng lại danh sách
+  }
+
+  // Chuyển 'YYYY-MM-DD' thành chữ dễ đọc kiểu "Thứ Tư, 24/07/2026" (+ "Hôm nay" / "Hôm qua").
+  function humanizeDateKey(dateKey) {
+    const [y, m, d] = dateKey.split('-').map(Number);
+    const dt = new Date(y, m - 1, d);
+    const todayKey = dateKeyLocal(new Date());
+    const yesterdayKey = dateKeyLocal(new Date(Date.now() - 86400000));
+    const weekday = dt.toLocaleDateString('vi-VN', { weekday: 'long' });
+    const ddmmyyyy = dt.toLocaleDateString('vi-VN');
+    let prefix = weekday.charAt(0).toUpperCase() + weekday.slice(1);
+    if (dateKey === todayKey) prefix = 'Hôm nay';
+    else if (dateKey === yesterdayKey) prefix = 'Hôm qua';
+    return `${prefix}, ${ddmmyyyy}`;
+  }
+
+  // Dựng 1 khối "live" đã gộp toàn bộ session cùng ID TikTok trong cùng 1 ngày.
+  function buildUserGroupCardEl(dateKey, uKey, grp, forceOpen) {
+    const groupKey = `${dateKey}__${uKey}`;
+    const comments = [...grp.comments].sort((a, b) => new Date(b.receivedAt) - new Date(a.receivedAt));
+    const firstTime = new Date(grp.firstStartedAt).toLocaleTimeString('vi-VN');
+
+    const card = document.createElement('div');
+    card.className = 'session-card';
+    card.dataset.groupKey = groupKey;
+    card.innerHTML = `
+      <div class="session-head">
+        <div class="left">
+          <span class="session-title">@${escapeHtml(grp.username)}</span>
+          <span class="session-meta">Coi live lúc ${firstTime}${grp.sessionCount > 1 ? ` · <span class="live-count-tag">gộp ${grp.sessionCount} lần coi trong ngày</span>` : ''}</span>
+        </div>
+        <div class="session-head-actions">
+          <span class="session-count">${comments.length} cmt</span>
+          <button class="btn-export-session" title="Xuất bình luận ra Excel">⬇️ Excel</button>
+          <button class="btn-del-session" title="Xóa toàn bộ bình luận nhóm này">✕</button>
+        </div>
+      </div>
+      <div class="session-comments"></div>
+    `;
+
+    card.querySelector('.btn-export-session').addEventListener('click', (e) => {
+      e.stopPropagation();
+      exportGroupToExcel(grp.username, dateKey, comments);
+    });
+
+    card.querySelector('.btn-del-session').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const soLan = grp.sessionCount > 1 ? ` (gộp ${grp.sessionCount} lần coi)` : '';
+      if (confirm(`Xóa toàn bộ ${comments.length} bình luận của @${grp.username} ngày ${humanizeDateKey(dateKey).replace('Hôm nay, ', '').replace('Hôm qua, ', '')}${soLan}?`)) {
+        grp.sessionIds.forEach(sid => deleteSession(sid));
+      }
+    });
+
+    const commentsBox = card.querySelector('.session-comments');
+    if (comments.length === 0) {
+      commentsBox.innerHTML = '<div class="empty-note">Không có bình luận nào khớp tìm kiếm.</div>';
+    } else {
+      comments.forEach(c => commentsBox.appendChild(buildSessionCommentRowEl(c.__sessionId, c)));
+    }
+
+    if (forceOpen || openSessionIds.has(groupKey)) commentsBox.classList.add('open');
+
+    card.querySelector('.session-head').addEventListener('click', (e) => {
+      if (e.target.closest('.btn-del-session') || e.target.closest('.btn-export-session')) return;
+      commentsBox.classList.toggle('open');
+      if (commentsBox.classList.contains('open')) openSessionIds.add(groupKey);
+      else openSessionIds.delete(groupKey);
+    });
+
+    return card;
+  }
+
+  // Xuất danh sách bình luận (của 1 khối live đã gộp) ra file Excel thật (.xlsx)
+  // gồm 4 cột: Giờ, Tên, ID TikTok, Bình luận — sắp theo thời gian tăng dần.
+  function exportGroupToExcel(username, dateKey, comments) {
+    if (typeof XLSX === 'undefined') {
+      alert('Không tải được thư viện xuất Excel (cần có mạng internet). Vui lòng thử lại.');
+      return;
+    }
+    const sorted = [...comments].sort((a, b) => new Date(a.receivedAt) - new Date(b.receivedAt));
+    const rows = sorted.map(c => ({
+      'Giờ': c.receivedAt ? new Date(c.receivedAt).toLocaleTimeString('vi-VN') : '',
+      'Tên': c.nickname || '',
+      'ID TikTok': '@' + (c.uniqueId || ''),
+      'Bình luận': c.comment || ''
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{ wch: 12 }, { wch: 22 }, { wch: 22 }, { wch: 60 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Binh luan');
+
+    const fileName = `binh-luan_${username}_${dateKey}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+  }
+
+  // Chèn thêm 1 bình luận mới vào ĐÚNG khối (ngày + ID TikTok) đang hiển thị
+  // trong tab Lịch sử mà KHÔNG dựng lại toàn bộ danh sách. Đây là điểm mấu
+  // chốt để sửa lỗi "đang xem/mở 1 thẻ trong Lịch sử thì bị giật văng/đóng
+  // lại" khi có bình luận mới liên tục đổ về lúc đang live.
+  // Trả về true nếu chèn thành công; false thì nơi gọi sẽ tự render lại toàn bộ.
+  function appendCommentToSessionDOM(sessionId, c) {
+    if (($('#sessionSearchInput').value || '').trim()) return false; // đang tìm kiếm thì để nguyên, tránh hiện sai kết quả lọc
+
+    const body = $('#sessionListBody');
+    if (!body) return false;
+
+    const dateKey = dateKeyLocal(c.receivedAt || new Date());
+    const uKey = (currentSessionUsername || '').toLowerCase();
+    const groupKey = `${dateKey}__${uKey}`;
+    const card = body.querySelector(`.session-card[data-group-key="${groupKey}"]`);
+    if (!card) return false; // khối chưa tồn tại trong DOM (vd vừa render lần đầu, hoặc phiên live mới trong ngày) -> để renderSessionList() lo
+
+    const countBadge = card.querySelector('.session-count');
+    const totalNow = parseInt((countBadge && countBadge.textContent) || '0', 10) + 1;
+    if (countBadge) countBadge.textContent = `${totalNow} cmt`;
+
+    const commentsBox = card.querySelector('.session-comments');
+    if (!commentsBox) return false;
+    const emptyNote = commentsBox.querySelector('.empty-note');
+    if (emptyNote) emptyNote.remove();
+
+    commentsBox.prepend(buildSessionCommentRowEl(sessionId, c));
+
+    // Cập nhật số cmt của cả ngày + tổng toàn bộ.
+    const dayEl = card.closest('.day-group');
+    if (dayEl) {
+      const dayCmtEl = dayEl.querySelector('.day-cmt-count');
+      if (dayCmtEl) dayCmtEl.textContent = String((parseInt(dayCmtEl.textContent, 10) || 0) + 1);
+    }
+    const totalEl = $('#summarySessionCommentCount');
+    if (totalEl) totalEl.textContent = String((parseInt(totalEl.textContent, 10) || 0) + 1);
+
+    return true;
+  }
+
+  // Chọn 1 ngày trong ô ngày -> lọc danh sách chỉ còn đúng ngày đó (giống hệt
+  // cách ô ngày ở tab Báo Cáo lọc dữ liệu theo ngày). Bấm "Tất cả" để xoá lọc,
+  // xem lại đầy đủ mọi ngày như trước.
+  $('#sessionDateJump').addEventListener('change', () => renderSessionList());
+  $('#sessionDateJumpClear').addEventListener('click', () => {
+    $('#sessionDateJump').value = '';
+    renderSessionList();
+  });
+
+  $('#sessionSearchInput').addEventListener('input', () => renderSessionList());
+  // ===== HẾT PHẦN LỊCH SỬ PHIÊN LIVE =====
+
+  // ===== BÁO CÁO =====
+  function getThongKeTheoNgay() {
+    // { 'YYYY-MM-DD': { revenue, orders, customerSet:Set } }
+    const map = {};
+    Object.values(customers).forEach(cust => {
+      cust.items.forEach(it => {
+        const key = dateKeyLocal(it.time);
+        if (!map[key]) map[key] = { revenue: 0, orders: 0, customerSet: new Set() };
+        map[key].revenue += it.price;
+        map[key].orders += 1;
+        map[key].customerSet.add(cust.uniqueId);
+      });
+    });
+    return map;
+  }
+
+  // Giống getThongKeTheoNgay() nhưng gộp theo tháng (key 'YYYY-MM') thay vì theo ngày.
+  function getThongKeTheoThang() {
+    // { 'YYYY-MM': { revenue, orders, customerSet:Set } }
+    const map = {};
+    Object.values(customers).forEach(cust => {
+      cust.items.forEach(it => {
+        const monthKey = dateKeyLocal(it.time).slice(0, 7);
+        if (!map[monthKey]) map[monthKey] = { revenue: 0, orders: 0, customerSet: new Set() };
+        map[monthKey].revenue += it.price;
+        map[monthKey].orders += 1;
+        map[monthKey].customerSet.add(cust.uniqueId);
+      });
+    });
+    return map;
+  }
+
+  function renderReportMonth(selectedMonth) {
+    const stats = getThongKeTheoThang();
+    const month = stats[selectedMonth] || { revenue: 0, orders: 0, customerSet: new Set() };
+
+    $('#repRevenueMonth').textContent = formatTien(month.revenue);
+  }
+
+  function renderReport(selectedDate) {
+    const stats = getThongKeTheoNgay();
+    const day = stats[selectedDate] || { revenue: 0, orders: 0, customerSet: new Set() };
+
+    $('#repRevenue').textContent = formatTien(day.revenue);
+    $('#repCustomers').textContent = day.customerSet.size;
+    $('#repOrders').textContent = day.orders;
+
+    // Cập nhật luôn phần thống kê theo tháng mỗi khi Báo Cáo được render lại,
+    // để 2 khối ngày/tháng luôn khớp dữ liệu mới nhất.
+    renderReportMonth($('#reportMonth').value || dateKeyLocal().slice(0, 7));
+
+    const allDates = Object.keys(stats).sort();
+    const chartBox = $('#dailyChart');
+
+    if (allDates.length === 0) {
+      chartBox.innerHTML = '<div class="empty-note">Chưa có dữ liệu doanh thu.</div>';
+      return;
+    }
+
+    const recentDates = allDates.slice(-14); // hiện tối đa 14 ngày gần nhất có dữ liệu
+    const maxRevenue = Math.max(1, ...recentDates.map(d => stats[d].revenue));
+
+    chartBox.innerHTML = '';
+    recentDates.forEach(d => {
+      const rev = stats[d].revenue;
+      const barHeight = Math.max(4, Math.round((rev / maxRevenue) * 120));
+      const wrap = document.createElement('div');
+      wrap.className = 'chart-bar-wrap';
+      const labelDay = d.slice(5).split('-').reverse().join('/'); // dd/mm
+      wrap.innerHTML = `
+        <div class="chart-bar-value">${formatTienNgan(rev)}</div>
+        <div class="chart-bar${d === selectedDate ? ' active' : ''}" style="height:${barHeight}px;"></div>
+        <div class="chart-bar-label">${labelDay}</div>
+      `;
+      wrap.addEventListener('click', () => {
+        $('#reportDate').value = d;
+        renderReport(d);
+      });
+      chartBox.appendChild(wrap);
+    });
+  }
+
+  $('#reportDate').value = dateKeyLocal();
+  $('#reportDate').addEventListener('change', () => {
+    renderReport($('#reportDate').value || dateKeyLocal());
+  });
+
+  $('#reportMonth').value = dateKeyLocal().slice(0, 7);
+  $('#reportMonth').addEventListener('change', () => {
+    renderReportMonth($('#reportMonth').value || dateKeyLocal().slice(0, 7));
+  });
+  // ===== HẾT PHẦN BÁO CÁO =====
+
+  // ===== CHUYỂN TAB =====
+  function switchTab(tab) {
+    $('#viewLive').style.display = tab === 'live' ? '' : 'none';
+    $('#viewCustomers').style.display = tab === 'customers' ? '' : 'none';
+    $('#viewSessions').style.display = tab === 'sessions' ? '' : 'none';
+    $('#viewReport').style.display = tab === 'report' ? '' : 'none';
+    $('#viewOrders').style.display = tab === 'orders' ? '' : 'none';
+    $('#viewProducts').style.display = tab === 'products' ? '' : 'none';
+    $('#viewMenu').style.display = tab === 'menu' ? '' : 'none';
+    $('#viewAdmin').style.display = tab === 'admin' ? '' : 'none';
+    $('#navLive').classList.toggle('active', tab === 'live');
+    $('#navCustomers').classList.toggle('active', tab === 'customers');
+    $('#navSessions').classList.toggle('active', tab === 'sessions');
+    $('#navReport').classList.toggle('active', tab === 'report');
+    $('#navOrders').classList.toggle('active', tab === 'orders');
+    $('#navProducts').classList.toggle('active', tab === 'products');
+    $('#navMenu').classList.toggle('active', tab === 'menu');
+    $('#navAdmin').classList.toggle('active', tab === 'admin');
+    if (tab === 'customers') renderCustomerList();
+    if (tab === 'sessions') renderSessionList();
+    if (tab === 'report') renderReport($('#reportDate').value || dateKeyLocal());
+    if (tab === 'orders') loadOrdersV2();
+    if (tab === 'products') loadProductsV2();
+    if (tab === 'menu') loadMenuInfo();
+    if (tab === 'admin') { loadAdminUsers(); loadLicenseLogs(); }
+  }
+
+  $('#navLive').addEventListener('click', () => switchTab('live'));
+  $('#navCustomers').addEventListener('click', () => switchTab('customers'));
+  $('#navSessions').addEventListener('click', () => switchTab('sessions'));
+  $('#navReport').addEventListener('click', () => switchTab('report'));
+  $('#navOrders').addEventListener('click', () => switchTab('orders'));
+  $('#navProducts').addEventListener('click', () => switchTab('products'));
+  $('#navMenu').addEventListener('click', () => switchTab('menu'));
+  $('#navAdmin').addEventListener('click', () => switchTab('admin'));
+  // ===== HẾT PHẦN KHÁCH HÀNG / GIỎ HÀNG =====
+
+  // ===== TAB MENU: thông tin tài khoản + hạn dùng gói/key =====
+  // Dữ liệu lấy từ /api/me (đã có sẵn ở Bridge Server: license, ngày tạo,
+  // số phiên Live miễn phí đã dùng...), không cần thêm API mới.
+  async function loadMenuInfo() {
+    try {
+      const data = await apiFetch('/api/me');
+      renderMenuInfo(data);
+    } catch (err) {
+      $('#menuHint').textContent = 'Không tải được thông tin tài khoản: ' + err.message;
+    }
+  }
+
+  function renderMenuInfo(data) {
+    $('#menuUsername').textContent = '@' + data.username;
+    $('#menuCreatedAt').textContent = data.createdAt ? new Date(data.createdAt).toLocaleString('vi-VN') : '-';
+    $('#menuAdminFlag').textContent = data.isAdmin ? 'Quản trị viên' : 'Người dùng';
+    $('#menuPrinterToken').textContent = data.printerToken || '-';
+    $('#menuPrinterConnected').textContent = data.printerConnected ? '✅ Đã kết nối' : '⚠️ Chưa có ESP32 nào kết nối bằng mã này';
+
+    const lic = data.license || { type: 'free', label: 'Miễn phí', canPrint: false, isExpired: false, daysLeft: null };
+    const pill = $('#menuLicensePill');
+    pill.textContent = lic.label;
+    pill.className = 'license-pill ' + (
+      lic.type === 'lifetime' ? 'lifetime' :
+      lic.type === 'free' ? 'free' :
+      lic.isExpired ? 'expired' : 'paid'
+    );
+
+    const countdownEl = $('#menuLicenseCountdown');
+    if (lic.type === 'lifetime') {
+      countdownEl.textContent = 'Vĩnh viễn';
+    } else if (lic.type === 'free') {
+      countdownEl.textContent = 'Chưa mua gói';
+    } else if (lic.isExpired) {
+      countdownEl.textContent = 'Đã hết hạn';
+    } else {
+      const expDate = lic.expiresAt ? new Date(lic.expiresAt).toLocaleDateString('vi-VN') : '-';
+      countdownEl.textContent = `Còn ${lic.daysLeft} ngày (hết hạn ${expDate})`;
+    }
+
+    $('#menuCanPrint').textContent = lic.canPrint ? '✅ Đang mở' : '🔒 Đang khóa';
+
+    const quotaRow = $('#menuLiveQuotaRow');
+    const quotaBarWrap = $('#menuLiveQuotaBarWrap');
+    const hintEl = $('#menuHint');
+    if (lic.type === 'free') {
+      const used = data.liveSessionsUsed || 0;
+      const limit = data.freeLiveSessionLimit || 3;
+      quotaRow.style.display = '';
+      quotaBarWrap.style.display = '';
+      $('#menuLiveQuota').textContent = `${used}/${limit}`;
+      $('#menuLiveQuotaFill').style.width = Math.min(100, Math.round((used / limit) * 100)) + '%';
+      hintEl.textContent = 'Tài khoản miễn phí chỉ xem được tối đa ' + limit + ' phiên Live và chưa dùng được tính năng in phiếu. Liên hệ quản trị viên để nâng cấp gói (1 tháng / 3 tháng / 6 tháng / 12 tháng / vĩnh viễn).';
+    } else {
+      quotaRow.style.display = 'none';
+      quotaBarWrap.style.display = 'none';
+      hintEl.textContent = lic.canPrint
+        ? 'Tài khoản của bạn đang mở đầy đủ tính năng xem Live và in phiếu.'
+        : 'Gói của bạn đã hết hạn. Liên hệ quản trị viên để gia hạn.';
+    }
+  }
+
+  // ===== MODAL: TÍNH NĂNG TẠM KHÓA =====
+  function showLockedModal(msg) {
+    $('#lockedModalMsg').textContent = msg || 'Vui lòng mua gói để tiếp tục sử dụng.';
+    $('#lockedOverlay').classList.add('open');
+  }
+  function hideLockedModal() {
+    $('#lockedOverlay').classList.remove('open');
+  }
+  $('#lockedModalClose').addEventListener('click', hideLockedModal);
+  $('#lockedModalGoMenu').addEventListener('click', () => {
+    hideLockedModal();
+    switchTab('menu');
+  });
+
+  $('#btnChangePassword').addEventListener('click', async () => {
+    const oldPassword = prompt('Nhập mật khẩu hiện tại:');
+    if (oldPassword === null) return;
+    const newPassword = prompt('Nhập mật khẩu mới (ít nhất 8 ký tự):');
+    if (newPassword === null) return;
+    const confirmPassword = prompt('Nhập lại mật khẩu mới:');
+    if (newPassword !== confirmPassword) return alert('Mật khẩu nhập lại không khớp.');
+    try {
+      await apiFetch('/api/account/change-password', {
+        method:'POST', body:JSON.stringify({oldPassword,newPassword})
+      });
+      alert('Đã đổi mật khẩu và đăng xuất các thiết bị khác.');
+    } catch(err){ alert(err.message); }
+  });
+
+  $('#btnManageSessions').addEventListener('click', async () => {
+    try {
+      const data = await apiFetch('/api/account/sessions');
+      const lines=(data.sessions||[]).map((s,i)=>`${i+1}. ${s.current?'[Máy này] ':''}${s.deviceName||s.userAgent||'Thiết bị'} — ${new Date(s.lastSeenAt||s.createdAt).toLocaleString('vi-VN')}`);
+      const removeOthers=confirm(`Các thiết bị đang đăng nhập:\n\n${lines.join('\n')||'Không có'}\n\nBạn có muốn đăng xuất tất cả thiết bị khác không?`);
+      if(removeOthers){ const result=await apiFetch('/api/account/logout-others',{method:'POST'}); alert(`Đã đăng xuất ${result.removed||0} thiết bị khác.`); }
+    } catch(err){ alert(err.message); }
+  });
+
+  $('#btnDownloadBackup').addEventListener('click', async () => {
+    try {
+      const res=await fetch(apiBase()+'/api/backup',{headers:{Authorization:'Bearer '+authToken}});
+      if(!res.ok) throw new Error('Không tạo được bản sao lưu.');
+      const blob=await res.blob(), url=URL.createObjectURL(blob), a=document.createElement('a');
+      a.href=url; a.download=`tiktok-live-backup-${dateKeyLocal()}.json`; a.click();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+    } catch(err){ alert(err.message); }
+  });
+
+  $('#btnRestoreBackup').addEventListener('click', () => $('#backupFileInput').click());
+  $('#backupFileInput').addEventListener('change', async e => {
+    const file=e.target.files?.[0]; e.target.value=''; if(!file) return;
+    if(!confirm('Khôi phục sẽ thay thế toàn bộ đơn hàng, sản phẩm, khách hàng và lịch sử hiện tại bằng dữ liệu trong tệp. Tiếp tục?')) return;
+    try {
+      const backup=JSON.parse(await file.text());
+      const result=await apiFetch('/api/backup/restore',{method:'POST',body:JSON.stringify({backup})});
+      await Promise.all([loadCustomers(),loadSessions(),loadSavedTiktokIds(),loadOrdersV2(),loadProductsV2(),loadSettingsV2()]);
+      renderCustomerBadge(); renderSessionBadge();
+      alert(`Khôi phục thành công ${result.orders} đơn và ${result.products} sản phẩm.`);
+    } catch(err){ alert('Khôi phục thất bại: '+err.message); }
+  });
+
+  // ===== PHẦN QUẢN TRỊ (chỉ tài khoản admin) =====
+  let isCurrentUserAdmin = false;
+
+  // Gọi sau khi đăng nhập/tự đăng nhập thành công để biết tài khoản hiện tại
+  // có phải admin không, từ đó hiện/ẩn tab "Quản trị" trên thanh điều hướng.
+  async function refreshAdminFlag() {
+    try {
+      const data = await apiFetch('/api/me');
+      isCurrentUserAdmin = !!data.isAdmin;
+    } catch (err) {
+      isCurrentUserAdmin = false;
+    }
+    $('#navAdmin').style.display = isCurrentUserAdmin ? '' : 'none';
+  }
+
+  async function loadAdminUsers() {
+    const listBox = $('#adminUserList');
+    const errBox = $('#adminError');
+    errBox.textContent = '';
+    try {
+      const data = await apiFetch('/api/admin/users');
+      renderAdminUsers(data.users || []);
+    } catch (err) {
+      listBox.innerHTML = '';
+      errBox.textContent = err.message;
+    }
+  }
+
+  function renderAdminUsers(users) {
+    const listBox = $('#adminUserList');
+    $('#adminUserCount').textContent = users.length;
+    if (!users.length) {
+      listBox.innerHTML = '<div class="empty-note">Chưa có tài khoản nào.</div>';
+      return;
+    }
+    listBox.innerHTML = '';
+    users.forEach(u => {
+      const card = document.createElement('div');
+      card.className = 'admin-user-card';
+      const createdStr = u.createdAt ? new Date(u.createdAt).toLocaleString('vi-VN') : '';
+      const lic = u.license || { type: 'free', label: 'Miễn phí', canPrint: false, isExpired: false, daysLeft: null };
+      let licBadgeClass = 'badge-license-free';
+      let licBadgeText = lic.label;
+      if (lic.type === 'lifetime') {
+        licBadgeClass = 'badge-license-lifetime';
+      } else if (lic.isExpired) {
+        licBadgeClass = 'badge-license-expired';
+        licBadgeText = `${lic.label} (đã hết hạn)`;
+      } else if (lic.type !== 'free') {
+        licBadgeClass = 'badge-license-paid';
+        licBadgeText = `${lic.label} • còn ${lic.daysLeft} ngày`;
+      }
+      const liveQuotaStr = lic.type === 'free'
+        ? ` • Live: ${u.liveSessionsUsed || 0}/${u.freeLiveSessionLimit}`
+        : '';
+      card.innerHTML = `
+        <div class="admin-user-info">
+          <div class="admin-user-name">
+            @${escapeHtml(u.username)}
+            ${u.isAdmin ? '<span class="admin-badge badge-admin">ADMIN</span>' : ''}
+            ${u.isBanned ? '<span class="admin-badge badge-banned">ĐÃ KHÓA</span>' : ''}
+            <span class="admin-badge ${licBadgeClass}">${escapeHtml(licBadgeText)}</span>
+          </div>
+          <div class="admin-user-meta">Tạo lúc: ${createdStr}${liveQuotaStr}${u.isBanned && u.bannedReason ? ' • Lý do: ' + escapeHtml(u.bannedReason) : ''}</div>
+          <div class="license-select-row">
+            <select class="license-select">
+              <option value="free"${lic.type === 'free' ? ' selected' : ''}>Miễn phí (thu hồi gói)</option>
+              <option value="1m"${lic.type === '1m' ? ' selected' : ''}>1 tháng</option>
+              <option value="3m"${lic.type === '3m' ? ' selected' : ''}>3 tháng</option>
+              <option value="6m"${lic.type === '6m' ? ' selected' : ''}>6 tháng</option>
+              <option value="12m"${lic.type === '12m' ? ' selected' : ''}>12 tháng</option>
+              <option value="lifetime"${lic.type === 'lifetime' ? ' selected' : ''}>Vĩnh viễn</option>
+            </select>
+            <button class="btn-admin-action btn-grant-license">✅ Cấp gói</button>
+          </div>
+        </div>
+        <div class="admin-user-actions"></div>
+      `;
+      const actions = card.querySelector('.admin-user-actions');
+      const select = card.querySelector('.license-select');
+      card.querySelector('.btn-grant-license').addEventListener('click', () => adminGrantLicense(u.id, u.username, select.value));
+
+      if (u.username === currentUser) {
+        const note = document.createElement('span');
+        note.className = 'admin-user-meta';
+        note.textContent = '(Tài khoản đang đăng nhập)';
+        actions.appendChild(note);
+      } else {
+        if (u.isBanned) {
+          const btnUnban = document.createElement('button');
+          btnUnban.className = 'btn-admin-action';
+          btnUnban.textContent = '🔓 Mở khóa';
+          btnUnban.addEventListener('click', () => adminUnbanUser(u.id, u.username));
+          actions.appendChild(btnUnban);
+        } else {
+          const btnBan = document.createElement('button');
+          btnBan.className = 'btn-admin-action danger';
+          btnBan.textContent = '🔒 Khóa tài khoản';
+          btnBan.addEventListener('click', () => adminBanUser(u.id, u.username));
+          actions.appendChild(btnBan);
+        }
+
+        const btnDel = document.createElement('button');
+        btnDel.className = 'btn-admin-action danger';
+        btnDel.textContent = '🗑️ Xóa tài khoản';
+        btnDel.addEventListener('click', () => adminDeleteUser(u.id, u.username));
+        actions.appendChild(btnDel);
+      }
+
+      listBox.appendChild(card);
+    });
+  }
+
+  const LICENSE_CONFIRM_LABELS = {
+    free: 'Miễn phí (thu hồi gói hiện tại)',
+    '1m': '1 tháng',
+    '3m': '3 tháng',
+    '6m': '6 tháng',
+    '12m': '12 tháng',
+    lifetime: 'Vĩnh viễn'
+  };
+  async function adminGrantLicense(id, username, type) {
+    const label = LICENSE_CONFIRM_LABELS[type] || type;
+    if (!confirm(`Cấp gói "${label}" cho tài khoản @${username}?`)) return;
+    try {
+      await apiFetch(`/api/admin/users/${id}/license`, {
+        method: 'POST',
+        body: JSON.stringify({ type })
+      });
+      await loadAdminUsers();
+    } catch (err) {
+      $('#adminError').textContent = err.message;
+    }
+  }
+
+  async function adminBanUser(id, username) {
+    const reason = prompt(`Nhập lý do khóa tài khoản @${username} (có thể để trống):`, '');
+    if (reason === null) return; // bấm Hủy
+    try {
+      await apiFetch(`/api/admin/users/${id}/ban`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: reason || null })
+      });
+      await loadAdminUsers();
+    } catch (err) {
+      $('#adminError').textContent = err.message;
+    }
+  }
+
+  async function adminUnbanUser(id, username) {
+    if (!confirm(`Mở khóa lại tài khoản @${username}?`)) return;
+    try {
+      await apiFetch(`/api/admin/users/${id}/unban`, { method: 'POST' });
+      await loadAdminUsers();
+    } catch (err) {
+      $('#adminError').textContent = err.message;
+    }
+  }
+
+  async function adminDeleteUser(id, username) {
+    if (!confirm(`XÓA VĨNH VIỄN tài khoản @${username} cùng toàn bộ dữ liệu (khách hàng, lịch sử Live...)? Hành động này không thể hoàn tác.`)) return;
+    try {
+      await apiFetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+      await loadAdminUsers();
+    } catch (err) {
+      $('#adminError').textContent = err.message;
+    }
+  }
+
+  $('#btnRefreshAdmin').addEventListener('click', loadAdminUsers);
+
+  // ----- Nhật ký các lần tài khoản bị chặn tính năng (xem Live / in phiếu)
+  // vì chưa có gói hoặc gói đã hết hạn — giúp admin biết ai cần tư vấn mua gói.
+  async function loadLicenseLogs() {
+    const box = $('#adminLicenseLogList');
+    try {
+      const data = await apiFetch('/api/admin/license-logs');
+      renderLicenseLogs(data.logs || []);
+    } catch (err) {
+      box.innerHTML = '';
+      $('#adminError').textContent = err.message;
+    }
+  }
+
+  function renderLicenseLogs(logs) {
+    const box = $('#adminLicenseLogList');
+    if (!logs.length) {
+      box.innerHTML = '<div class="empty-note">Chưa có lần chặn tính năng nào.</div>';
+      return;
+    }
+    const featureLabel = { print: '🖨️ In phiếu', live_view: '📺 Xem Live' };
+    box.innerHTML = logs.map(log => `
+      <div class="admin-user-card">
+        <div class="admin-user-info">
+          <div class="admin-user-name">
+            @${escapeHtml(log.username)}
+            <span class="admin-badge badge-banned">${featureLabel[log.feature] || log.feature}</span>
+          </div>
+          <div class="admin-user-meta">${new Date(log.at).toLocaleString('vi-VN')} • ${escapeHtml(log.message)}</div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  $('#btnRefreshLicenseLogs').addEventListener('click', loadLicenseLogs);
+  // ===== HẾT PHẦN QUẢN TRỊ =====
+
+  function initWS() {
+    // Hủy timer kết nối lại cũ (nếu có) để không bị chồng nhiều kết nối
+    if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
+    // Đóng socket cũ (nếu có) trước khi mở cái mới
+    if (ws) { try { ws.onclose = null; ws.close(); } catch (e) {} ws = null; }
+
+    const raw = $('#bridgeUrl').value.trim();
+    const useSecure = raw.startsWith('https://');
+    const bridgeHost = raw.replace('http://', '').replace('https://', '').split('/')[0];
+    const wsProtocol = useSecure ? 'wss://' : 'ws://';
+    ws = new WebSocket(`${wsProtocol}${bridgeHost}`);
+
+    ws.onopen = () => {
+      if (authToken) ws.send(JSON.stringify({ type: 'AUTH_BROWSER', token: authToken }));
+      setStatus('Đã kết nối Bridge Server.');
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'STATUS') {
+        setStatus(data.msg);
+        // Tài khoản "free" đã dùng hết số phiên Live miễn phí -> server trả về
+        // locked:true kèm feature:'live_view'. Bật ngay khung "tạm khóa tính
+        // năng, vui lòng mua gói" thay vì chỉ hiện dòng chữ nhỏ ở status box,
+        // để người dùng không bỏ lỡ thông báo quan trọng này.
+        if (data.locked) {
+          showLockedModal(data.msg);
+          return;
+        }
+        // Đồng bộ "đang xem phiên Live nào" cho MỌI thiết bị, kể cả thiết bị chỉ
+        // mở trang lên mà chưa tự bấm "Kết Nối" (vd điện thoại mở sau khi laptop
+        // đã kết nối sẵn). Nhờ vậy bộ lọc chống lẫn comment phiên cũ vẫn hoạt
+        // động đúng, và điện thoại tự biết đang xem đúng phiên nào.
+        if (data.success && data.roomUsername) {
+          currentSessionUsername = data.roomUsername.toLowerCase();
+          if ($('#tiktokUsername') && !$('#tiktokUsername').value.trim()) {
+            $('#tiktokUsername').value = data.roomUsername;
+          }
+          updateLiveIdLabel(data.roomUsername);
+          adoptServerSessionId(data.sessionId, data.roomUsername, data.roomUsername);
+        } else if (data.stopped) {
+          // Server đã dừng hẳn phiên Live (do bấm nút "Dừng xem Live") —
+          // đồng bộ lại giao diện: bỏ ID đang xem, ẩn nút dừng, xoá feed.
+          currentSessionUsername = null;
+          currentSessionId = null;
+          updateLiveIdLabel(null);
+          const feed = $('#commentFeed');
+          if (feed) feed.innerHTML = '<div class="feed-placeholder" style="color:var(--muted); font-size:13px;">Đang chờ bình luận từ phiên Live...</div>';
+        }
+      } else if (data.type === 'COMMENT') {
+        adoptServerSessionId(data.sessionId, data.roomUsername, data.roomUsername);
+        addCommentToFeed(data.comment, data.roomUsername);
+      } else if (data.type === 'HISTORY') {
+        // Server gửi lại toàn bộ comment gần đây của phiên Live đang chạy —
+        // nhận được khi vừa mở trang hoặc vừa kết nối lại WebSocket, để feed
+        // không bao giờ hiện "0 comment" trong lúc phiên Live đã có sẵn dữ liệu.
+        adoptServerSessionId(data.sessionId, data.roomUsername, data.roomUsername);
+        (data.comments || []).forEach(c => addCommentToFeed(c, data.roomUsername));
+      } else if (data.type === 'SESSION_DELETED') {
+        // 1 thiết bị khác (hoặc chính máy này) vừa xóa 1 phiên lịch sử — xóa
+        // luôn khỏi bản dữ liệu đang giữ ở đây để giao diện đồng bộ ngay,
+        // không cần tải lại trang.
+        if (liveSessions[data.sessionId]) {
+          delete liveSessions[data.sessionId];
+          openSessionIds.delete(data.sessionId);
+          if (currentSessionId === data.sessionId) { currentSessionId = null; currentSessionUsername = null; }
+          renderSessionBadge();
+          if ($('#viewSessions').style.display !== 'none') renderSessionList();
+        }
+      } else if (data.type === 'CART_ITEM_DELETED') {
+        // Tương tự SESSION_DELETED nhưng cho 1 sản phẩm trong giỏ hàng.
+        const cust = customers[data.customerId];
+        if (cust) {
+          cust.items = (cust.items || []).filter(it => it.id !== data.itemId);
+          if (data.customerRemoved || cust.items.length === 0) delete customers[data.customerId];
+          renderCustomerBadge();
+          if ($('#viewCustomers').style.display !== 'none') renderCustomerList();
+          if ($('#viewReport').style.display !== 'none') renderReport($('#reportDate').value || dateKeyLocal());
+        }
+      }
+    };
+
+    ws.onclose = () => {
+      setStatus('Ngắt kết nối Bridge Server. Đang kết nối lại...');
+      scheduleWsReconnect();
+    };
+
+    ws.onerror = () => {
+      setStatus('Lỗi kết nối WebSocket tới Bridge Server.');
+    };
+  }
+
+  function scheduleWsReconnect() {
+    if (wsReconnectTimer) return; // đã có 1 lần hẹn giờ kết nối lại, khỏi tạo thêm
+    wsReconnectTimer = setTimeout(() => {
+      wsReconnectTimer = null;
+      initWS();
+    }, 3000);
+  }
+
+  // Kiểm tra socket còn sống hay không; nếu chết thì kết nối lại ngay
+  function ensureWsAlive() {
+    if (!currentUser) return; // chưa đăng nhập thì thôi
+    if (!ws || (ws.readyState !== WebSocket.OPEN && ws.readyState !== WebSocket.CONNECTING)) {
+      initWS();
+    }
+  }
+
+  // ===== TỰ KẾT NỐI LẠI KHI QUAY LẠI TAB / MỞ LẠI MÀN HÌNH / CÓ MẠNG LẠI =====
+  // Trên di động, khi thoát app/khóa màn hình, trình duyệt có thể "đóng băng"
+  // hoặc ngắt WebSocket ngầm mà không bắn ra sự kiện onclose, khiến vòng lặp
+  // tự kết nối lại phía trên không được kích hoạt. Các sự kiện dưới đây đảm
+  // bảo mỗi khi người dùng quay lại trang, ta chủ động kiểm tra và nối lại.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      ensureWsAlive();
+    } else {
+      // Trang bị ẩn đi (chuyển tab, khóa màn hình...) -> chưa chắc trang sẽ
+      // đóng hẳn, nhưng cứ lưu ngay cho chắc, tránh phụ thuộc vào timer 500ms
+      // còn đang chờ nếu người dùng thoát hẳn ngay sau đó.
+      flushSessionsNow();
+    }
+  });
+  window.addEventListener('focus', ensureWsAlive);
+  window.addEventListener('pageshow', ensureWsAlive);
+  window.addEventListener('online', ensureWsAlive);
+  // Trang thực sự bị đóng/điều hướng đi nơi khác -> lưu nốt lần cuối.
+  window.addEventListener('pagehide', flushSessionsNow);
+  // ===== HẾT PHẦN TỰ KẾT NỐI LẠI =====
+
+  function setStatus(msg) {
+    $('#statusBox').textContent = msg;
+  }
+
+  // Cập nhật chữ "@id_tiktok" hiện ngay cạnh tiêu đề "Bình Luận Trực Tiếp" và
+  // hiện/ẩn nút "Dừng xem Live" tương ứng — cho biết ngay đang xem phòng nào
+  // mà không cần nhìn xuống ô Trạng thái bên dưới.
+  function updateLiveIdLabel(username) {
+    const label = $('#liveIdLabel');
+    const btnStop = $('#btnStopTikTok');
+    if (username) {
+      if (label) label.textContent = ` — @${username}`;
+      if (btnStop) btnStop.style.display = '';
+    } else {
+      if (label) label.textContent = '';
+      if (btnStop) btnStop.style.display = 'none';
+    }
+  }
+
+  // Trích xuất username TikTok sạch từ link hoặc @tên (giống cách server xử lý),
+  // dùng để lưu vào danh sách ID đã dùng cho gọn, không lưu nguyên link dài.
+  function extractTiktokUsername(inputRaw) {
+    let username = (inputRaw || '').trim();
+    if (username.includes('tiktok.com/')) {
+      const match = username.match(/@([^/?#\s]+)/);
+      if (match) username = match[1];
+    } else {
+      username = username.replace('@', '').trim();
+    }
+    return username.replace(/\/+$/, '').trim();
+  }
+
+  $('#btnConnectTikTok').addEventListener('click', () => {
+    const username = $('#tiktokUsername').value.trim();
+    if (!username) { alert('Vui lòng nhập tên hoặc dán link TikTok Live'); return; }
+    if (!ws || ws.readyState !== WebSocket.OPEN) { alert('Chưa kết nối tới Bridge Server!'); return; }
+
+    if (!authToken) { alert('Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.'); return; }
+
+    setStatus(`Đang gửi yêu cầu kết nối TikTok...`);
+    ws.send(JSON.stringify({ type: 'START_TIKTOK', username, token: authToken }));
+
+    const cleanUsername = extractTiktokUsername(username);
+    if (cleanUsername) {
+      $('#tiktokUsername').value = cleanUsername;
+      rememberTiktokId(cleanUsername);
+      startNewSession(cleanUsername); // mở 1 phiên lưu lịch sử mới cho lần kết nối này
+    }
+  });
+
+  $('#btnStopTikTok').addEventListener('click', () => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) { alert('Chưa kết nối tới Bridge Server!'); return; }
+    if (!confirm('Dừng xem phiên Live hiện tại? Bình luận mới sẽ không được nhận nữa cho tới khi bấm "Kết Nối" lại.')) return;
+    setStatus('Đang gửi yêu cầu dừng xem Live...');
+    ws.send(JSON.stringify({ type: 'STOP_TIKTOK', token: authToken }));
+  });
+
+  function addCommentToFeed(cmt, roomUsername) {
+    // Lớp bảo vệ thứ 2 ở phía trình duyệt: nếu server có gửi kèm roomUsername
+    // (ID phòng Live mà comment này thuộc về) và nó KHÔNG khớp với phiên Live
+    // đang mở hiện tại, đây chắc chắn là dữ liệu trễ của phiên Live cũ (thư viện
+    // TikTok đôi khi bắn nốt vài sự kiện cuối trước khi ngắt hẳn) -> bỏ qua
+    // hoàn toàn, không hiện lên feed và không lưu nhầm vào phiên mới.
+    if (roomUsername && currentSessionUsername && roomUsername.toLowerCase() !== currentSessionUsername) {
+      console.warn(`Bỏ qua 1 comment trễ từ phòng live cũ @${roomUsername} (đang xem @${currentSessionUsername})`);
+      return;
+    }
+
+    if (!cmt.receivedAt) cmt.receivedAt = new Date().toISOString();
+    if (!cmt.id) cmt.id = 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+
+    const feed = $('#commentFeed');
+    const placeholder = feed.querySelector('.feed-placeholder');
+    if (placeholder) placeholder.remove();
+
+    const card = document.createElement('div');
+    card.className = 'comment-card';
+    card.innerHTML = `
+      <div class="comment-info">
+        <div class="top-row">
+          <div>
+            <span class="user-name">${escapeHtml(cmt.nickname)}</span>
+            <span class="user-id">@${escapeHtml(cmt.uniqueId)}</span>
+          </div>
+          <span class="comment-time">${formatGio(cmt.receivedAt)}</span>
+        </div>
+        <div class="comment-text">${escapeHtml(cmt.comment)}</div>
+      </div>
+      <button class="btn-print">🖨️ In phiếu</button>
+    `;
+
+    const printBtn = card.querySelector('.btn-print');
+    printBtn.textContent = '⚡ In & thêm đơn';
+    printBtn.addEventListener('click', () => quickPrintAndOrder(cmt, printBtn));
+
+    feed.prepend(card);
+
+    // Lưu lại toàn bộ comment vào phiên live hiện tại, kể cả khi chưa bấm "In phiếu",
+    // để có thể xem lại / in bù sau này trong tab "Lịch sử".
+    if (currentSessionId && liveSessions[currentSessionId]) {
+      const stored = Object.assign({}, cmt, { added: false });
+      liveSessions[currentSessionId].comments.push(stored);
+      renderSessionBadge();
+      if ($('#viewSessions').style.display !== 'none') {
+        // Ưu tiên chỉ chèn thêm 1 dòng vào đúng thẻ đang hiển thị (không rebuild
+        // toàn bộ danh sách) để không làm sập các thẻ đang mở hay nhảy vị trí
+        // cuộn — đây chính là nguyên nhân gây cảm giác "giật văng ra" trước đây.
+        const appended = appendCommentToSessionDOM(currentSessionId, stored);
+        if (!appended) renderSessionList();
+      }
+      scheduleSaveSessions();
+    }
+  }
+
+  // Đánh dấu 1 comment trong lịch sử là "đã in/đã thêm đơn" khi nó được in
+  // trực tiếp từ feed Live (để tab Lịch sử không hiện lại nút in trùng lặp).
+  function markSessionCommentAdded(commentId) {
+    if (!commentId || !currentSessionId || !liveSessions[currentSessionId]) return;
+    const found = liveSessions[currentSessionId].comments.find(c => c.id === commentId);
+    if (found) {
+      found.added = true;
+      scheduleSaveSessions();
+    }
+
+    // Nếu dòng tương ứng đang hiển thị sẵn trong tab Lịch sử, cập nhật ngay
+    // tại chỗ (không render lại toàn bộ) để tránh làm mất trạng thái đang mở/cuộn.
+    const row = document.querySelector(`.session-comment-item[data-comment-id="${commentId}"]`);
+    if (row) {
+      const btn = row.querySelector('.btn-print-history');
+      if (btn) btn.textContent = '🖨️ In thêm lần nữa';
+      const note = row.querySelector('.added-note');
+      if (note) note.style.display = '';
+    }
+  }
+
+  function escapeHtml(str) {
+    return String(str == null ? '' : str)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+  }
+
+  async function printComment(cmt) {
+    const bridgeUrl = $('#bridgeUrl').value.trim().replace(/\/$/, '');
+    if (!bridgeUrl) { alert('Vui lòng điền địa chỉ Bridge Server'); return false; }
+    if (printBusy) { setPrinterStatus('⏳ Đang xử lý lệnh in trước, vui lòng chờ.'); return false; }
+    printBusy = true;
+
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('vi-VN') + ' ' + now.toLocaleDateString('vi-VN');
+
+    const bytes = buildEscPosBitmap({
+      name: cmt.nickname,
+      id: '@' + cmt.uniqueId,
+      comment: cmt.comment,
+      time: timeStr
+    });
+
+    try {
+      setPrinterStatus(`Đang gửi lệnh in comment của @${cmt.uniqueId}...`);
+      // QUAN TRỌNG: /print yêu cầu xác thực (requireAuth ở server) để biết
+      // đúng tài khoản nào đang bấm in, từ đó kiểm tra gói/hạn dùng. Phải gửi
+      // kèm header Authorization, nếu không server luôn trả lỗi "thiếu token"
+      // dù tài khoản đã đăng nhập và đã được cấp gói.
+      if (!authToken) {
+        setPrinterStatus('❌ Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.');
+        return false;
+      }
+      const copies = Math.max(1, Math.min(5, parseInt(appSettings.copies, 10) || 1));
+      for (let copy = 1; copy <= copies; copy++) {
+        setPrinterStatus(`Đang in bản ${copy}/${copies} cho @${cmt.uniqueId}...`);
+        const res = await fetch(`${bridgeUrl}/print`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/octet-stream',
+            'Authorization': 'Bearer ' + authToken
+          },
+          body: bytes
+        });
+
+        const text = await res.text();
+        if (res.ok) continue;
+        if (res.status === 403 && text.startsWith('LOCKED:')) {
+        // Server chặn in vì tài khoản chưa có gói / gói đã hết hạn -> hiện
+        // ngay khung "tạm khóa tính năng, vui lòng mua gói" thay vì chỉ báo
+        // lỗi âm thầm trong status box, để không ai bỏ lỡ mà tưởng máy in lỗi.
+        const lockedMsg = text.slice('LOCKED:'.length).trim();
+        setPrinterStatus(`🔒 ${lockedMsg}`);
+        showLockedModal(lockedMsg);
+          return false;
+        }
+        setPrinterStatus(`❌ ${text}`);
+        return false;
+      }
+      setPrinterStatus(`✅ In thành công ${copies} bản cho @${cmt.uniqueId}`);
+      return true;
+    } catch (err) {
+      setPrinterStatus(`❌ Lỗi kết nối tới Bridge Server: ${err.message}`);
+      return false;
+    } finally {
+      printBusy = false;
+    }
+  }
+
+  function setPrinterStatus(msg) {
+    const box = $('#printerStatusBox');
+    if (box) box.textContent = msg;
+  }
+
+  function buildEscPosBitmap({ name, id, comment, time }) {
+    const widthDots = Number(appSettings.paperWidth) === 58 ? 384 : 576;
+    const canvas = document.createElement('canvas');
+    canvas.width = widthDots;
+
+    const ctx = canvas.getContext('2d');
+
+    ctx.font = '22px Arial';
+    const lines = wrapText(ctx, `Nội dung: ${comment}`, widthDots - 20);
+    const canvasHeight = 220 + (lines.length * 32);
+    canvas.height = canvasHeight;
+
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#000';
+    ctx.textBaseline = 'top';
+
+    ctx.font = 'bold 26px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(String(appSettings.shopName || 'SHOP LIVE').slice(0, 30), widthDots / 2, 15);
+
+    ctx.font = '20px Arial';
+    ctx.fillText('------------------------------------------------', widthDots / 2, 50);
+
+    ctx.textAlign = 'left';
+    ctx.font = 'bold 22px Arial';
+    ctx.fillText(`Tên: ${name}`, 10, 80);
+
+    ctx.font = '20px Arial';
+    ctx.fillText(`ID TikTok: ${id}`, 10, 115);
+
+    ctx.font = 'bold 22px Arial';
+    let currentY = 155;
+    lines.forEach(line => {
+      ctx.fillText(line, 10, currentY);
+      currentY += 32;
+    });
+
+    ctx.font = '18px Arial';
+    ctx.fillText(`Thời gian in: ${time}`, 10, currentY + 15);
+
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const raster = rasterizeData(imgData, canvas.width, canvas.height);
+
+    const chunks = [];
+    chunks.push(new Uint8Array([0x1B, 0x40]));
+    chunks.push(raster);
+    chunks.push(new Uint8Array([0x0A, 0x0A, 0x0A]));
+    chunks.push(new Uint8Array([0x1D, 0x56, 0x00]));
+
+    let total = 0;
+    chunks.forEach(c => total += c.length);
+    const out = new Uint8Array(total);
+    let offset = 0;
+    chunks.forEach(c => { out.set(c, offset); offset += c.length; });
+    return out;
+  }
+
+  function wrapText(ctx, text, maxWidth) {
+    const words = text.split(' ');
+    const lines = [];
+    let currentLine = words[0];
+
+    for (let i = 1; i < words.length; i++) {
+      const word = words[i];
+      const width = ctx.measureText(currentLine + " " + word).width;
+      if (width < maxWidth) {
+        currentLine += " " + word;
+      } else {
+        lines.push(currentLine);
+        currentLine = word;
+      }
+    }
+    lines.push(currentLine);
+    return lines;
+  }
+
+  function rasterizeData(imgData, width, height) {
+    const widthBytes = Math.ceil(width / 8);
+    const header = new Uint8Array([
+      0x1D, 0x76, 0x30, 0x00,
+      widthBytes & 0xFF, (widthBytes >> 8) & 0xFF,
+      height & 0xFF, (height >> 8) & 0xFF,
+    ]);
+    const data = new Uint8Array(widthBytes * height);
+    const px = imgData.data;
+
+    for (let y = 0; y < height; y++) {
+      for (let bx = 0; bx < widthBytes; bx++) {
+        let byte = 0;
+        for (let bit = 0; bit < 8; bit++) {
+          const xPos = bx * 8 + bit;
+          if (xPos >= width) continue;
+          const idx = (y * width + xPos) * 4;
+          const r = px[idx], g = px[idx + 1], b = px[idx + 2], a = px[idx + 3];
+          const luminance = (r * 0.299 + g * 0.587 + b * 0.114);
+          if (a > 0 && luminance < 170) byte |= (0x80 >> bit);
+        }
+        data[y * widthBytes + bx] = byte;
+      }
+    }
+    const out = new Uint8Array(header.length + data.length);
+    out.set(header, 0);
+    out.set(data, header.length);
+    return out;
+  }
+
+  tryAutoLogin();
+})();
+</script>
+</body>
+</html>
