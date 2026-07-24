@@ -331,6 +331,23 @@ app.post('/print', (req, res) => {
 });
 
 let tiktokConnection = null;
+// "Thế hệ" (generation) của kết nối TikTok hiện tại. Mỗi lần bắt đầu 1 phiên
+// Live mới (kể cả kết nối lại cùng 1 ID), số này tăng lên 1. Các listener
+// (chat, streamEnd, connect...) của phiên CŨ đều tự kiểm tra "mình có còn là
+// thế hệ mới nhất không" trước khi gửi dữ liệu về trình duyệt — nếu không,
+// coi như dữ liệu đó đã lỗi thời và bỏ qua. Đây là lớp bảo vệ chính chống
+// hiện tượng lẫn comment của phiên Live cũ vào phiên Live mới, vì thư viện
+// tiktok-live-connector có thể vẫn bắn nốt vài sự kiện "chat" của phòng cũ
+// trong khoảnh khắc ngắn trước khi disconnect() thật sự có hiệu lực.
+let tiktokConnectionGeneration = 0;
+
+// Gỡ toàn bộ listener + ngắt kết nối 1 connector cũ một cách an toàn.
+function shutdownTiktokConnection(conn) {
+  if (!conn) return;
+  try { conn.removeAllListeners('chat'); } catch (e) {}
+  try { conn.removeAllListeners('streamEnd'); } catch (e) {}
+  try { conn.disconnect(); } catch (e) {}
+}
 
 wss.on('connection', (ws) => {
   ws.on('close', () => {
@@ -342,9 +359,10 @@ wss.on('connection', (ws) => {
       return; // ESP32 ngắt kết nối thì không đụng gì tới phiên TikTok của trình duyệt
     }
     if (tiktokConnection) {
-      try { tiktokConnection.disconnect(); } catch (e) {}
+      shutdownTiktokConnection(tiktokConnection);
       tiktokConnection = null;
     }
+    tiktokConnectionGeneration++; // vô hiệu hóa mọi sự kiện cũ còn sót lại của trình duyệt này
   });
 
   ws.on('message', async (message) => {
@@ -398,8 +416,11 @@ wss.on('connection', (ws) => {
         console.log(`[TikTok] Đã trích xuất Username: @${username}`);
 
         if (tiktokConnection) {
-          try { tiktokConnection.disconnect(); } catch (e) {}
+          shutdownTiktokConnection(tiktokConnection);
+          tiktokConnection = null;
         }
+        tiktokConnectionGeneration++;
+        const myGeneration = tiktokConnectionGeneration; // "chứng minh thư" của phiên kết nối này
 
         try {
           if (typeof ConnectorClass === 'function') {
@@ -431,6 +452,7 @@ wss.on('connection', (ws) => {
         }
 
         tiktokConnection.connect().then(state => {
+          if (myGeneration !== tiktokConnectionGeneration) return; // đã có phiên mới hơn thay thế, bỏ qua kết quả trễ này
           console.log(`[TikTok Success] ✅ Kết nối thành công! Room ID: ${state.roomId}`);
           ws.send(JSON.stringify({ 
             type: 'STATUS', 
@@ -438,6 +460,7 @@ wss.on('connection', (ws) => {
             msg: `Đã kết nối thành công Live của: @${username}` 
           }));
         }).catch(err => {
+          if (myGeneration !== tiktokConnectionGeneration) return; // đã có phiên mới hơn thay thế, bỏ qua lỗi trễ này
           console.error(`[TikTok Error] ❌ Lỗi kết nối:`, err.message || err);
           let userMsg = `Lỗi kết nối TikTok: ${err.message || err}`;
           if (err.toString().includes('LIVE_NOT_FOUND') || err.toString().includes('offline')) {
@@ -452,6 +475,8 @@ wss.on('connection', (ws) => {
 
         let debugLogged = 0;
         tiktokConnection.on('chat', data => {
+          if (myGeneration !== tiktokConnectionGeneration) return; // comment trễ từ phiên Live cũ -> bỏ qua, không gửi về trình duyệt
+
           // DEBUG: in ra cấu trúc dữ liệu thật của 3 comment đầu để đối chiếu field.
           // Sau khi xác định đúng field, có thể xóa khối debug này.
           if (debugLogged < 3) {
@@ -487,6 +512,7 @@ wss.on('connection', (ws) => {
           console.log(`[Comment] @${uniqueId}: ${commentText}`);
           ws.send(JSON.stringify({
             type: 'COMMENT',
+            roomUsername: username, // ID phòng Live mà comment này thuộc về, để trình duyệt tự đối chiếu thêm 1 lớp nữa
             comment: {
               nickname,      // Tên hiển thị
               uniqueId,      // ID TikTok (@username)
@@ -497,6 +523,7 @@ wss.on('connection', (ws) => {
         });
 
         tiktokConnection.on('streamEnd', () => {
+          if (myGeneration !== tiktokConnectionGeneration) return; // sự kiện trễ từ phiên Live cũ -> bỏ qua
           console.log(`[TikTok] Phiên Live đã kết thúc.`);
           ws.send(JSON.stringify({ type: 'STATUS', success: false, msg: 'Phiên Live đã kết thúc.' }));
         });
