@@ -587,7 +587,7 @@
     <div class="cust-summary">
       <span><b id="summaryCustomerCount">0</b> khách hàng</span>
       <span><b id="summaryItemCount">0</b> sản phẩm</span>
-      <span>Tổng: <b id="summaryRevenue">0đ</b></span>
+      <span>Tạm tính: <b id="summaryRevenue">0đ</b></span>
     </div>
     <div class="field session-search-field">
       <input id="customerSearchInput" type="search" autocomplete="off" placeholder="Tìm theo tên TikTok hoặc @ID TikTok...">
@@ -641,7 +641,7 @@
       <div class="stat-card">
         <div class="stat-icon">💰</div>
         <div class="stat-info">
-          <span class="stat-label">Doanh thu</span>
+          <span class="stat-label">Doanh thu đã giao</span>
           <span class="stat-value" id="repRevenue">0đ</span>
         </div>
       </div>
@@ -655,7 +655,7 @@
       <div class="stat-card">
         <div class="stat-icon">🧾</div>
         <div class="stat-info">
-          <span class="stat-label">Số đơn (comment đã in)</span>
+          <span class="stat-label">Đơn giao thành công</span>
           <span class="stat-value" id="repOrders">0</span>
         </div>
       </div>
@@ -691,7 +691,8 @@
     </div>
     <div class="cust-summary">
       <span><b id="orderCountSummary">0</b> đơn</span>
-      <span>Doanh thu hợp lệ: <b id="orderRevenueSummary">0đ</b></span>
+      <span>Tạm tính: <b id="orderTemporarySummary">0đ</b></span>
+      <span>Doanh thu đã giao: <b id="orderRevenueSummary">0đ</b></span>
       <span>Chờ xử lý: <b id="orderPendingSummary">0</b></span>
     </div>
     <div class="toolbar">
@@ -953,7 +954,7 @@
       <div class="field"><label>Mã sản phẩm</label><input id="ordProductCode" list="productCodeOptions"></div>
       <div class="field"><label>Tên sản phẩm *</label><input id="ordProductName" required></div>
       <div class="field"><label>Số lượng</label><input id="ordQuantity" type="number" min="1" value="1"></div>
-      <div class="field"><label>Đơn giá</label><input id="ordUnitPrice" type="number" min="0" value="0"></div>
+      <div class="field"><label>Đơn giá (nhập tại đơn)</label><input id="ordUnitPrice" type="number" min="0" value="0"></div>
       <div class="field"><label>Phí vận chuyển</label><input id="ordShippingFee" type="number" min="0" value="0"></div>
       <div class="field"><label>Tổng dự kiến</label><input id="ordTotalPreview" readonly></div>
       <div class="field"><label>Số điện thoại</label><input id="ordPhone" inputmode="tel"></div>
@@ -1342,27 +1343,6 @@
     }
   }
 
-  // Đọc số tiền từ nội dung comment. Hỗ trợ các kiểu: "50k", "2tr", "150.000", "150000", "20 nghìn"...
-  function parseGiaTien(text) {
-    if (!text) return 0;
-    const t = text.toLowerCase();
-
-    let m = t.match(/(\d+(?:[.,]\d+)?)\s*(tr|triệu|trieu)/);
-    if (m) return Math.round(parseFloat(m[1].replace(',', '.')) * 1000000);
-
-    m = t.match(/(\d+(?:[.,]\d+)?)\s*(k|nghìn|nghin|ngàn|ngan)/);
-    if (m) return Math.round(parseFloat(m[1].replace(',', '.')) * 1000);
-
-    m = t.match(/(\d{1,3}(?:[.,]\d{3})+|\d+)\s*(đ|vnd|d)?/);
-    if (m) {
-      const numStr = m[1].replace(/[.,]/g, '');
-      const value = parseInt(numStr, 10);
-      return isNaN(value) ? 0 : value;
-    }
-
-    return 0;
-  }
-
   function formatTien(n) {
     return (n || 0).toLocaleString('vi-VN') + 'đ';
   }
@@ -1385,7 +1365,8 @@
 
   function addToCart(cmt) {
     const id = cmt.uniqueId || 'unknown';
-    const price = cmt.orderPrice != null ? Math.max(0, Number(cmt.orderPrice) || 0) : parseGiaTien(cmt.comment);
+    const hasOrderPrice = cmt.orderPrice != null;
+    const price = hasOrderPrice ? Math.max(0, Number(cmt.orderPrice) || 0) : 0;
 
     if (!customers[id]) {
       customers[id] = { nickname: cmt.nickname, uniqueId: id, avatar: cmt.avatar, items: [] };
@@ -1398,6 +1379,8 @@
       id: 'item_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
       comment: cmt.comment,
       price,
+      priceSource: hasOrderPrice ? 'order' : 'unset',
+      orderId: cmt.orderId || null,
       time: cmt.receivedAt || new Date().toISOString()
     });
 
@@ -1430,6 +1413,12 @@
     if (badge) badge.textContent = count;
   }
 
+  function cartItemAmount(item) {
+    const linkedOrder = item.orderId ? ordersV2.find(order => order.id === item.orderId) : null;
+    if (linkedOrder) return Math.max(0, Number(linkedOrder.total) || 0);
+    return item.priceSource === 'unset' ? 0 : Math.max(0, Number(item.price) || 0);
+  }
+
   function renderCustomerList() {
     const body = $('#customerListBody');
 
@@ -1455,14 +1444,17 @@
       })
       .filter(cust => cust.items.length > 0)
       .sort((a, b) => {
-        const totalA = a.items.reduce((s, it) => s + it.price, 0);
-        const totalB = b.items.reduce((s, it) => s + it.price, 0);
+        const totalA = a.items.reduce((s, it) => s + cartItemAmount(it), 0);
+        const totalB = b.items.reduce((s, it) => s + cartItemAmount(it), 0);
         return totalB - totalA;
       });
 
     let totalItems = 0;
     let totalRevenue = 0;
-    list.forEach(c => { totalItems += c.items.length; totalRevenue += c.items.reduce((s, it) => s + it.price, 0); });
+    list.forEach(c => {
+      totalItems += c.items.length;
+      totalRevenue += c.items.reduce((s, it) => s + cartItemAmount(it), 0);
+    });
 
     $('#summaryCustomerCount').textContent = list.length;
     $('#summaryItemCount').textContent = totalItems;
@@ -1479,7 +1471,7 @@
 
     body.innerHTML = '';
     list.forEach(cust => {
-      const total = cust.items.reduce((s, it) => s + it.price, 0);
+      const total = cust.items.reduce((s, it) => s + cartItemAmount(it), 0);
       const card = document.createElement('div');
       card.className = 'customer-card';
       card.innerHTML = `
@@ -1495,19 +1487,20 @@
 
       const itemsBox = card.querySelector('.customer-items');
       cust.items.forEach(it => {
+        const itemAmount = cartItemAmount(it);
         const row = document.createElement('div');
         row.className = 'cart-item';
         row.innerHTML = `
           <span class="item-text">${escapeHtml(it.comment)}</span>
           <span class="item-meta">
             <span class="item-time">${formatGio(it.time)}</span>
-            <span class="item-price">${formatTien(it.price)}</span>
+            <span class="item-price">${itemAmount ? formatTien(itemAmount) : 'Chưa nhập giá'}</span>
           </span>
           <button class="btn-del-item" title="Xóa sản phẩm này">✕</button>
         `;
         row.querySelector('.btn-del-item').addEventListener('click', (e) => {
           e.stopPropagation();
-          if (!confirm(`Xóa đơn "${it.comment}" (${formatTien(it.price)}) của @${cust.uniqueId}?`)) return;
+          if (!confirm(`Xóa đơn "${it.comment}" (${itemAmount ? formatTien(itemAmount) : 'chưa nhập giá'}) của @${cust.uniqueId}?`)) return;
           removeCartItem(cust.uniqueId, it.id);
         });
         itemsBox.appendChild(row);
@@ -1544,6 +1537,8 @@
       const data = await apiFetch('/api/orders');
       ordersV2 = data.orders || [];
       renderOrdersV2();
+      if ($('#viewCustomers').style.display !== 'none') renderCustomerList();
+      if ($('#viewReport').style.display !== 'none') renderReport($('#reportDate').value || dateKeyLocal());
     } catch (err) {
       console.error('Không tải được đơn hàng:', err);
     }
@@ -1631,7 +1626,7 @@
     $('#ordProductCode').value = order?.productCode || matched?.code || '';
     $('#ordProductName').value = order?.productName || matched?.name || cmt?.comment || '';
     $('#ordQuantity').value = order?.quantity || guessQuantity(cmt?.comment);
-    $('#ordUnitPrice').value = order?.unitPrice ?? matched?.price ?? parseGiaTien(cmt?.comment || '');
+    $('#ordUnitPrice').value = order?.unitPrice ?? matched?.price ?? 0;
     $('#ordShippingFee').value = order?.shippingFee || 0;
     $('#ordPhone').value = order?.phone || '';
     $('#ordAddress').value = order?.address || '';
@@ -1725,7 +1720,7 @@
     }
     const matched = findProductFromText(cmt.comment);
     const quantity = guessQuantity(cmt.comment);
-    const unitPrice = matched?.price ?? parseGiaTien(cmt.comment);
+    const unitPrice = matched?.price ?? 0;
     const payload = {
       sourceCommentId: cmt.id || null,
       sourceSessionId: currentSessionId,
@@ -1743,7 +1738,8 @@
         const printed = await printOrderV2(order);
         addToCart(Object.assign({}, cmt, {
           comment: `${payload.productCode ? payload.productCode + ' - ' : ''}${payload.productName} x${quantity}`,
-          orderPrice: order.total
+          orderPrice: order.total,
+          orderId: order.id
         }));
         if (cmt.id) markSessionCommentAdded(cmt.id);
         await loadOrdersV2();
@@ -1764,9 +1760,12 @@
       if (q && ![o.customerId,o.customerName,o.productCode,o.productName,o.phone].join(' ').toLowerCase().includes(q)) return false;
       return true;
     });
-    const valid = list.filter(o => !['cancelled','returned'].includes(o.status));
-    const revenue = valid.reduce((s,o) => s + o.total, 0);
+    const temporary = list.filter(o => o.shippingStatus !== 'delivered' &&
+      !['cancelled','returned'].includes(o.status) &&
+      !['cancelled','returned'].includes(o.shippingStatus)).reduce((sum,o) => sum + o.total, 0);
+    const revenue = list.filter(o => o.shippingStatus === 'delivered').reduce((sum,o) => sum + o.total, 0);
     $('#orderCountSummary').textContent = list.length;
+    $('#orderTemporarySummary').textContent = formatTien(temporary);
     $('#orderRevenueSummary').textContent = formatTien(revenue);
     $('#orderPendingSummary').textContent = list.filter(o => ['new','confirmed','packing'].includes(o.status)).length;
     $('#orderCountBadge').textContent = ordersV2.filter(o => o.status === 'new').length;
@@ -1780,7 +1779,7 @@
           <div><span class="order-main">@${escapeHtml(o.customerId)} · ${escapeHtml(o.productCode || '')} ${escapeHtml(o.productName)}</span>
           <div class="order-meta">${escapeHtml(o.customerName)} · SL ${o.quantity} · ${new Date(o.createdAt).toLocaleString('vi-VN')}<br>
           ${o.phone ? '☎ ' + escapeHtml(o.phone) + ' · ' : ''}${o.address ? escapeHtml(o.address) : ''}</div></div>
-          <div><div class="order-total">${formatTien(o.total)}</div><span class="status-pill status-${o.status}">${ORDER_STATUS_LABELS[o.status] || o.status}</span></div>
+          <div><div class="order-total">${formatTien(o.total)}<small>${o.shippingStatus === 'delivered' ? 'Doanh thu' : 'Tạm tính'}</small></div><span class="status-pill status-${o.status}">${ORDER_STATUS_LABELS[o.status] || o.status}</span></div>
         </div>
         <div class="order-actions">
           <select class="order-status-select">${Object.entries(ORDER_STATUS_LABELS).map(([k,v]) => `<option value="${k}"${o.status===k?' selected':''}>${v}</option>`).join('')}</select>
@@ -1816,8 +1815,12 @@
     try {
       const data = await apiFetch('/api/shipments');
       shipmentsV2 = data.shipments || [];
+      ordersV2 = shipmentsV2;
+      renderOrdersV2();
       renderShippingV2();
       renderReconcileV2();
+      if ($('#viewCustomers').style.display !== 'none') renderCustomerList();
+      if ($('#viewReport').style.display !== 'none') renderReport($('#reportDate').value || dateKeyLocal());
       if (trackingShipmentId && $('#spxTrackingModal').classList.contains('open')) {
         const trackedOrder = shipmentsV2.find(order => order.id === trackingShipmentId);
         if (trackedOrder) {
@@ -2755,17 +2758,23 @@
   // ===== HẾT PHẦN LỊCH SỬ PHIÊN LIVE =====
 
   // ===== BÁO CÁO =====
+  function deliveredOrdersV2() {
+    return ordersV2.filter(order => order.shippingStatus === 'delivered');
+  }
+
+  function revenueDateKey(order) {
+    return dateKeyLocal(order.deliveredAt || order.shippingUpdatedAt || order.updatedAt || order.createdAt);
+  }
+
   function getThongKeTheoNgay() {
     // { 'YYYY-MM-DD': { revenue, orders, customerSet:Set } }
     const map = {};
-    Object.values(customers).forEach(cust => {
-      cust.items.forEach(it => {
-        const key = dateKeyLocal(it.time);
-        if (!map[key]) map[key] = { revenue: 0, orders: 0, customerSet: new Set() };
-        map[key].revenue += it.price;
-        map[key].orders += 1;
-        map[key].customerSet.add(cust.uniqueId);
-      });
+    deliveredOrdersV2().forEach(order => {
+      const key = revenueDateKey(order);
+      if (!map[key]) map[key] = { revenue: 0, orders: 0, customerSet: new Set() };
+      map[key].revenue += order.total;
+      map[key].orders += 1;
+      map[key].customerSet.add(order.customerId);
     });
     return map;
   }
@@ -2774,14 +2783,12 @@
   function getThongKeTheoThang() {
     // { 'YYYY-MM': { revenue, orders, customerSet:Set } }
     const map = {};
-    Object.values(customers).forEach(cust => {
-      cust.items.forEach(it => {
-        const monthKey = dateKeyLocal(it.time).slice(0, 7);
-        if (!map[monthKey]) map[monthKey] = { revenue: 0, orders: 0, customerSet: new Set() };
-        map[monthKey].revenue += it.price;
-        map[monthKey].orders += 1;
-        map[monthKey].customerSet.add(cust.uniqueId);
-      });
+    deliveredOrdersV2().forEach(order => {
+      const monthKey = revenueDateKey(order).slice(0, 7);
+      if (!map[monthKey]) map[monthKey] = { revenue: 0, orders: 0, customerSet: new Set() };
+      map[monthKey].revenue += order.total;
+      map[monthKey].orders += 1;
+      map[monthKey].customerSet.add(order.customerId);
     });
     return map;
   }

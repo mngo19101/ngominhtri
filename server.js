@@ -241,6 +241,7 @@ ensureColumn('orders', 'last_label_at', 'INTEGER');
 ensureColumn('orders', 'delivery_attempts', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('orders', 'cod_reconciled_at', 'INTEGER');
 ensureColumn('orders', 'cod_paid_at', 'INTEGER');
+ensureColumn('orders', 'delivered_at', 'INTEGER');
 
 db.exec(`
   CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_shipping_code
@@ -1090,8 +1091,16 @@ function saveSpxTrackingSuccess(userId, orderId, tracking, now, auditAction = nu
       tracking.currentLocation || null, tracking.expectedDeliveryAt,
       tracking.expectedDeliveryText || null, null, now, now);
   if (syncedShippingStatus && syncedShippingStatus !== order.shipping_status) {
-    db.prepare(`UPDATE orders SET shipping_status = ?, shipping_updated_at = ?, updated_at = ?
-      WHERE id = ? AND user_id = ?`).run(syncedShippingStatus, now, now, orderId, userId);
+    const syncedOrderStatus = syncedShippingStatus === 'delivered' ? 'completed'
+      : ['returning','returned'].includes(syncedShippingStatus) ? 'returned'
+        : syncedShippingStatus === 'cancelled' ? 'cancelled'
+          : ['delivering','delivery_failed'].includes(syncedShippingStatus) ? 'shipped' : null;
+    db.prepare(`UPDATE orders SET shipping_status = ?, shipping_updated_at = ?,
+      delivered_at = CASE WHEN ? = 'delivered' THEN COALESCE(delivered_at, ?) ELSE delivered_at END,
+      status = COALESCE(?, status), updated_at = ?
+      WHERE id = ? AND user_id = ?`)
+      .run(syncedShippingStatus, now, syncedShippingStatus, now, syncedOrderStatus,
+        now, orderId, userId);
   }
   db.prepare(`DELETE FROM shipment_events
     WHERE user_id = ? AND order_id = ? AND event_type = 'spx_tracking'`).run(userId, orderId);
@@ -1204,6 +1213,7 @@ function publicOrder(row) {
     deliveryAttempts: row.delivery_attempts || 0,
     codReconciledAt: row.cod_reconciled_at,
     codPaidAt: row.cod_paid_at,
+    deliveredAt: row.delivered_at,
     carrier: row.carrier_name || row.carrier || '',
     externalTrackingCode: row.external_tracking_code || row.tracking_code || '',
     carrierStatus: row.carrier_status || row.current_status || '',
@@ -1448,9 +1458,12 @@ app.post('/api/shipments/:id/status', requireAuth, (req, res) => {
   const now = Date.now();
   const addAttempt = status === 'delivering' && old.shipping_status !== 'delivering' ? 1 : 0;
   db.prepare(`UPDATE orders SET shipping_status = ?, shipping_updated_at = ?,
-    delivery_attempts = delivery_attempts + ?, status = ?, updated_at = ?
+    delivery_attempts = delivery_attempts + ?,
+    delivered_at = CASE WHEN ? = 'delivered' THEN COALESCE(delivered_at, ?) ELSE delivered_at END,
+    status = ?, updated_at = ?
     WHERE id = ? AND user_id = ?`)
-    .run(status, now, addAttempt, orderStatusMap[status] || old.status, now, old.id, req.userId);
+    .run(status, now, addAttempt, status, now, orderStatusMap[status] || old.status,
+      now, old.id, req.userId);
   addShipmentEvent(req.userId, old.id, 'status_changed', status, note);
   addAudit(req.userId, 'shipment.status_changed', 'order', old.id, { status, note });
   res.json({ order: publicOrder(db.prepare('SELECT * FROM orders WHERE id = ?').get(old.id)) });
@@ -1672,8 +1685,8 @@ app.post('/api/backup/restore', requireAuth, (req, res) => {
        status,payment_status,print_status,print_attempts,last_print_error,
        shipping_code,shipping_status,package_weight,cod_amount,shipping_created_at,
        shipping_updated_at,label_count,last_label_at,delivery_attempts,cod_reconciled_at,cod_paid_at,
-       created_at,updated_at,deleted_at)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)`);
+       delivered_at,created_at,updated_at,deleted_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)`);
     for (const o of backup.orders) {
       const quantity = intValue(o.quantity, 1, 1, 9999);
       const unitPrice = intValue(o.unit_price ?? o.unitPrice, 0);
@@ -1704,6 +1717,7 @@ app.post('/api/backup/restore', requireAuth, (req, res) => {
         intValue(o.delivery_attempts ?? o.deliveryAttempts, 0, 0, 100000),
         o.cod_reconciled_at ?? o.codReconciledAt ?? null,
         o.cod_paid_at ?? o.codPaidAt ?? null,
+        o.delivered_at ?? o.deliveredAt ?? null,
         intValue(o.created_at ?? o.createdAt, now, 0, Number.MAX_SAFE_INTEGER),
         intValue(o.updated_at ?? o.updatedAt, now, 0, Number.MAX_SAFE_INTEGER));
     }
