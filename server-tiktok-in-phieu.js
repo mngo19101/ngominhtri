@@ -37,6 +37,7 @@ const connectorReady = new Promise((resolve) => { _resolveConnectorReady = resol
   _resolveConnectorReady();
 })();
 
+const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const Database = require('better-sqlite3');
@@ -48,7 +49,28 @@ const Database = require('better-sqlite3');
 // một Railway Volume (ổ đĩa lưu trữ lâu dài) rồi trỏ biến môi trường DATA_DIR
 // tới đường dẫn mount của Volume đó (ví dụ: DATA_DIR=/data).
 // Nếu chưa cấu hình DATA_DIR, sẽ dùng tạm ổ đĩa của container (mất dữ liệu khi deploy lại).
-const dataDir = process.env.DATA_DIR || __dirname;
+//
+// Railway TỰ ĐỘNG cấp biến RAILWAY_VOLUME_MOUNT_PATH khi bạn gắn Volume vào
+// service này, nên nếu bạn không tự đặt DATA_DIR, code sẽ tự dùng luôn biến
+// đó — bạn chỉ cần tạo Volume trên dashboard, không cần set tay DATA_DIR nữa.
+const dataDir = process.env.DATA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || __dirname;
+const usingPersistentVolume = !!(process.env.DATA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH);
+
+if (!usingPersistentVolume) {
+  console.warn('⚠️  CẢNH BÁO: chưa gắn Railway Volume (không có DATA_DIR / RAILWAY_VOLUME_MOUNT_PATH).');
+  console.warn('⚠️  Database đang lưu tạm trong container — TÀI KHOẢN SẼ MẤT khi deploy lại!');
+  console.warn('⚠️  Vào Railway → tạo Volume → gắn vào service này để dữ liệu không bị mất.');
+} else {
+  console.log(`✅ Đang lưu database tại thư mục lâu dài: ${dataDir}`);
+}
+
+// Tự tạo thư mục nếu chưa tồn tại (phòng trường hợp Volume vừa gắn lần đầu).
+try {
+  fs.mkdirSync(dataDir, { recursive: true });
+} catch (err) {
+  console.error(`❌ Không tạo được thư mục dữ liệu "${dataDir}":`, err.message);
+}
+
 const db = new Database(path.join(dataDir, 'data.db'));
 db.pragma('journal_mode = WAL');
 
