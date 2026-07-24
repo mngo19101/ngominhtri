@@ -42,9 +42,14 @@ const crypto = require('crypto');
 const Database = require('better-sqlite3');
 
 // ====== DATABASE (SQLite) ======
-// File database nằm cạnh server, tự tạo nếu chưa có. Lưu tài khoản + dữ liệu
-// khách hàng đã thêm, để dùng lại được ở bất kỳ máy nào, bất kỳ lúc nào (chỉ cần đăng nhập).
-const db = new Database(path.join(__dirname, 'data.db'));
+// QUAN TRỌNG: ổ đĩa mặc định của container trên Railway KHÔNG tồn tại lâu dài —
+// mỗi lần deploy lại, container cũ bị xóa và file database cũng mất theo.
+// Để dữ liệu (tài khoản, khách hàng...) sống sót qua mỗi lần deploy, cần gắn
+// một Railway Volume (ổ đĩa lưu trữ lâu dài) rồi trỏ biến môi trường DATA_DIR
+// tới đường dẫn mount của Volume đó (ví dụ: DATA_DIR=/data).
+// Nếu chưa cấu hình DATA_DIR, sẽ dùng tạm ổ đĩa của container (mất dữ liệu khi deploy lại).
+const dataDir = process.env.DATA_DIR || __dirname;
+const db = new Database(path.join(dataDir, 'data.db'));
 db.pragma('journal_mode = WAL');
 
 db.exec(`
