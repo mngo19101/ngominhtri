@@ -491,6 +491,34 @@
       </div>
     </div>
 
+    <h2 class="report-section-title" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+      <span>Doanh Thu Theo Tháng</span>
+      <input type="month" id="reportMonth" class="date-input">
+    </h2>
+    <div class="report-stats">
+      <div class="stat-card">
+        <div class="stat-icon">💰</div>
+        <div class="stat-info">
+          <span class="stat-label">Doanh thu</span>
+          <span class="stat-value" id="repRevenueMonth">0đ</span>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">👥</div>
+        <div class="stat-info">
+          <span class="stat-label">Khách hàng</span>
+          <span class="stat-value" id="repCustomersMonth">0</span>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">🧾</div>
+        <div class="stat-info">
+          <span class="stat-label">Số đơn (comment đã in)</span>
+          <span class="stat-value" id="repOrdersMonth">0</span>
+        </div>
+      </div>
+    </div>
+
     <h2 class="report-section-title">Doanh Thu Theo Ngày</h2>
     <div class="daily-chart" id="dailyChart">
       <div class="empty-note">Chưa có dữ liệu doanh thu.</div>
@@ -1376,6 +1404,31 @@
     return map;
   }
 
+  // Giống getThongKeTheoNgay() nhưng gộp theo tháng (key 'YYYY-MM') thay vì theo ngày.
+  function getThongKeTheoThang() {
+    // { 'YYYY-MM': { revenue, orders, customerSet:Set } }
+    const map = {};
+    Object.values(customers).forEach(cust => {
+      cust.items.forEach(it => {
+        const monthKey = dateKeyLocal(it.time).slice(0, 7);
+        if (!map[monthKey]) map[monthKey] = { revenue: 0, orders: 0, customerSet: new Set() };
+        map[monthKey].revenue += it.price;
+        map[monthKey].orders += 1;
+        map[monthKey].customerSet.add(cust.uniqueId);
+      });
+    });
+    return map;
+  }
+
+  function renderReportMonth(selectedMonth) {
+    const stats = getThongKeTheoThang();
+    const month = stats[selectedMonth] || { revenue: 0, orders: 0, customerSet: new Set() };
+
+    $('#repRevenueMonth').textContent = formatTien(month.revenue);
+    $('#repCustomersMonth').textContent = month.customerSet.size;
+    $('#repOrdersMonth').textContent = month.orders;
+  }
+
   function renderReport(selectedDate) {
     const stats = getThongKeTheoNgay();
     const day = stats[selectedDate] || { revenue: 0, orders: 0, customerSet: new Set() };
@@ -1383,6 +1436,10 @@
     $('#repRevenue').textContent = formatTien(day.revenue);
     $('#repCustomers').textContent = day.customerSet.size;
     $('#repOrders').textContent = day.orders;
+
+    // Cập nhật luôn phần thống kê theo tháng mỗi khi Báo Cáo được render lại,
+    // để 2 khối ngày/tháng luôn khớp dữ liệu mới nhất.
+    renderReportMonth($('#reportMonth').value || dateKeyLocal().slice(0, 7));
 
     const allDates = Object.keys(stats).sort();
     const chartBox = $('#dailyChart');
@@ -1418,6 +1475,11 @@
   $('#reportDate').value = dateKeyLocal();
   $('#reportDate').addEventListener('change', () => {
     renderReport($('#reportDate').value || dateKeyLocal());
+  });
+
+  $('#reportMonth').value = dateKeyLocal().slice(0, 7);
+  $('#reportMonth').addEventListener('change', () => {
+    renderReportMonth($('#reportMonth').value || dateKeyLocal().slice(0, 7));
   });
   // ===== HẾT PHẦN BÁO CÁO =====
 
