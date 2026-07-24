@@ -684,6 +684,19 @@ let currentLiveUsername = null;
 let commentHistory = [];
 const COMMENT_HISTORY_LIMIT = 200;
 
+// ID của phiên Live hiện tại — do CHÍNH SERVER sinh ra và phát cho MỌI thiết bị
+// (kèm trong STATUS/HISTORY/COMMENT). Trước đây mỗi trình duyệt tự sinh 1 ID
+// riêng (hàm startNewSession phía client) nên chỉ đúng-DUY-NHẤT trên chính
+// thiết bị vừa bấm "Kết Nối": mọi comment gõ được vào lúc đó mới lưu bền vào
+// DB (qua liveSessions/api/sessions). Thiết bị nào mở trang SAU (F5 lại, hoặc
+// điện thoại mở lên khi laptop đã kết nối sẵn) sẽ không có sessionId này ->
+// vẫn thấy comment chạy trong feed Live (do server broadcast) nhưng KHÔNG lưu
+// được vào lịch sử/DB, vì client coi đó chỉ là dữ liệu "tạm" trong bộ nhớ.
+// Nay server phát ra 1 sessionId DUY NHẤT dùng chung cho toàn bộ thiết bị của
+// tài khoản đó trong suốt phiên Live này, để thiết bị nào cũng lưu đúng vào
+// cùng 1 phiên trên DB, không bị rơi rớt dữ liệu.
+let currentSessionId = null;
+
 // Gửi 1 message tới TẤT CẢ trình duyệt đang mở trang (bỏ qua socket của ESP32),
 // để mọi thiết bị (laptop, điện thoại...) luôn thấy cùng 1 luồng dữ liệu.
 function broadcastToBrowsers(msgObj) {
@@ -724,12 +737,14 @@ wss.on('connection', (ws) => {
       type: 'STATUS',
       success: true,
       msg: `Đã kết nối thành công Live của: @${currentLiveUsername}`,
-      roomUsername: currentLiveUsername
+      roomUsername: currentLiveUsername,
+      sessionId: currentSessionId
     }));
     if (commentHistory.length) {
       ws.send(JSON.stringify({
         type: 'HISTORY',
         roomUsername: currentLiveUsername,
+        sessionId: currentSessionId,
         comments: commentHistory
       }));
     }
@@ -757,6 +772,7 @@ wss.on('connection', (ws) => {
       tiktokConnection = null;
       currentLiveUsername = null;
       commentHistory = [];
+      currentSessionId = null;
     }
     tiktokConnectionGeneration++; // vô hiệu hóa mọi sự kiện cũ còn sót lại của trình duyệt này
   });
@@ -857,6 +873,7 @@ wss.on('connection', (ws) => {
         }
         currentLiveUsername = null;
         commentHistory = [];
+        currentSessionId = null;
         tiktokConnectionGeneration++; // vô hiệu hóa mọi sự kiện trễ còn sót lại
 
         broadcastToBrowsers({
@@ -929,10 +946,11 @@ wss.on('connection', (ws) => {
             type: 'STATUS',
             success: true,
             msg: `Đã kết nối thành công Live của: @${username}`,
-            roomUsername: username
+            roomUsername: username,
+            sessionId: currentSessionId
           }));
           if (commentHistory.length) {
-            ws.send(JSON.stringify({ type: 'HISTORY', roomUsername: username, comments: commentHistory }));
+            ws.send(JSON.stringify({ type: 'HISTORY', roomUsername: username, sessionId: currentSessionId, comments: commentHistory }));
           }
           return;
         }
@@ -970,6 +988,10 @@ wss.on('connection', (ws) => {
         commentHistory = [];
         tiktokConnectionGeneration++;
         const myGeneration = tiktokConnectionGeneration; // "chứng minh thư" của phiên kết nối này
+        // Sinh 1 sessionId DUY NHẤT cho phiên Live này, dùng chung cho MỌI thiết
+        // bị (kể cả thiết bị mở trang sau, hoặc F5 lại giữa chừng) để toàn bộ
+        // comment về sau đều được lưu đúng vào 1 phiên duy nhất trên DB.
+        currentSessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
 
         try {
           if (typeof ConnectorClass === 'function') {
@@ -1008,7 +1030,8 @@ wss.on('connection', (ws) => {
             type: 'STATUS',
             success: true,
             msg: `Đã kết nối thành công Live của: @${username}`,
-            roomUsername: username
+            roomUsername: username,
+            sessionId: currentSessionId
           });
         }).catch(err => {
           if (myGeneration !== tiktokConnectionGeneration) return; // đã có phiên mới hơn thay thế, bỏ qua lỗi trễ này
@@ -1071,6 +1094,7 @@ wss.on('connection', (ws) => {
           broadcastToBrowsers({
             type: 'COMMENT',
             roomUsername: username, // ID phòng Live mà comment này thuộc về, để trình duyệt tự đối chiếu thêm 1 lớp nữa
+            sessionId: currentSessionId, // để trình duyệt lưu đúng vào phiên đang lưu bền trên DB, kể cả khi vừa F5 lại trang
             comment: commentObj
           });
         });
@@ -1080,6 +1104,7 @@ wss.on('connection', (ws) => {
           console.log(`[TikTok] Phiên Live đã kết thúc.`);
           currentLiveUsername = null;
           commentHistory = [];
+          currentSessionId = null;
           broadcastToBrowsers({ type: 'STATUS', success: false, msg: 'Phiên Live đã kết thúc.' });
         });
       }
