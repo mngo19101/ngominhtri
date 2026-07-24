@@ -1185,8 +1185,23 @@
       const data = JSON.parse(event.data);
       if (data.type === 'STATUS') {
         setStatus(data.msg);
+        // Đồng bộ "đang xem phiên Live nào" cho MỌI thiết bị, kể cả thiết bị chỉ
+        // mở trang lên mà chưa tự bấm "Kết Nối" (vd điện thoại mở sau khi laptop
+        // đã kết nối sẵn). Nhờ vậy bộ lọc chống lẫn comment phiên cũ vẫn hoạt
+        // động đúng, và điện thoại tự biết đang xem đúng phiên nào.
+        if (data.success && data.roomUsername) {
+          currentSessionUsername = data.roomUsername.toLowerCase();
+          if ($('#tiktokUsername') && !$('#tiktokUsername').value.trim()) {
+            $('#tiktokUsername').value = data.roomUsername;
+          }
+        }
       } else if (data.type === 'COMMENT') {
         addCommentToFeed(data.comment, data.roomUsername);
+      } else if (data.type === 'HISTORY') {
+        // Server gửi lại toàn bộ comment gần đây của phiên Live đang chạy —
+        // nhận được khi vừa mở trang hoặc vừa kết nối lại WebSocket, để feed
+        // không bao giờ hiện "0 comment" trong lúc phiên Live đã có sẵn dữ liệu.
+        (data.comments || []).forEach(c => addCommentToFeed(c, data.roomUsername));
       }
     };
 
