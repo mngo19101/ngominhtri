@@ -165,6 +165,12 @@
   .btn-mini.added{ background:#173832; color:var(--teal); border-color:var(--teal); cursor:default; }
   .btn-mini.added:hover{ background:#173832; color:var(--teal); }
   .session-search-field{ margin-top:12px; }
+  .session-date-jump-field{ margin-top:10px; }
+  #sessionDateJump{
+    background:#141310; border:1px solid var(--border); color:#fff;
+    padding:10px; border-radius:6px; font-family:'JetBrains Mono', monospace; font-size:13px;
+    width:100%;
+  }
 
   /* ===== NHÓM THEO NGÀY (Lịch Sử Phiên Live) ===== */
   .day-group{ display:flex; flex-direction:column; gap:10px; margin-bottom:22px; }
@@ -397,6 +403,12 @@
     </div>
     <div class="field session-search-field">
       <input id="sessionSearchInput" type="text" placeholder="Tìm theo tên, ID TikTok hoặc nội dung bình luận...">
+    </div>
+    <div class="field session-date-jump-field">
+      <label>Chuyển nhanh đến ngày</label>
+      <select id="sessionDateJump">
+        <option value="">— Tất cả các ngày —</option>
+      </select>
     </div>
     <div class="customer-list" id="sessionListBody">
       <div class="empty-note">Chưa có phiên live nào được lưu. Mỗi lần bấm "Kết Nối TikTok Live", toàn bộ bình luận nhận được sẽ tự động lưu lại ở đây để xem lại sau.</div>
@@ -1031,8 +1043,15 @@
     $('#summarySessionCount').textContent = entries.length;
     $('#summarySessionCommentCount').textContent = totalComments;
 
+    // Danh sách ngày cho dropdown "Chuyển nhanh đến ngày" luôn lấy TOÀN BỘ
+    // ngày đang có dữ liệu, không phụ thuộc vào từ khóa tìm kiếm hiện tại —
+    // để có thể nhảy sang ngày khác rồi mới tìm kiếm, thay vì bị giới hạn.
+    const fullDayKeysSorted = [...new Set(entries.map(([, s]) => dateKeyLocal(s.startedAt)))].sort((a, b) => b.localeCompare(a));
+    updateSessionDateJumpOptions(fullDayKeysSorted);
+
     if (entries.length === 0) {
       body.innerHTML = '<div class="empty-note">Chưa có phiên live nào được lưu. Mỗi lần bấm "Kết Nối TikTok Live", toàn bộ bình luận nhận được sẽ tự động lưu lại ở đây để xem lại sau.</div>';
+      updateSessionDateJumpOptions([]);
       return;
     }
 
@@ -1229,6 +1248,41 @@
 
     return true;
   }
+
+  // Đổ danh sách các ngày đang có dữ liệu vào dropdown "Chuyển nhanh đến ngày",
+  // vẫn giữ nguyên lựa chọn hiện tại của người dùng (nếu ngày đó còn tồn tại)
+  // để không bị nhảy về "Tất cả" mỗi lần có comment mới / render lại.
+  function updateSessionDateJumpOptions(dayKeysSorted) {
+    const select = $('#sessionDateJump');
+    if (!select) return;
+    const currentValue = select.value;
+    select.innerHTML = '<option value="">— Tất cả các ngày —</option>' +
+      dayKeysSorted.map(dk => `<option value="${dk}">${humanizeDateKey(dk)}</option>`).join('');
+    if (currentValue && dayKeysSorted.includes(currentValue)) select.value = currentValue;
+  }
+
+  // Bấm chọn 1 ngày trong dropdown -> cuộn thẳng tới khối ngày đó và tự mở
+  // sẵn toàn bộ các live trong ngày để xem ngay, khỏi phải cuộn tay tìm.
+  $('#sessionDateJump').addEventListener('change', () => {
+    const dateKey = $('#sessionDateJump').value;
+    if (!dateKey) return; // "Tất cả các ngày" -> không làm gì thêm
+    const dayEl = $('#sessionListBody').querySelector(`.day-group[data-day-key="${dateKey}"]`);
+    if (!dayEl) return;
+
+    // Mở sẵn toàn bộ khối live trong ngày được chọn để thấy nội dung ngay.
+    dayEl.querySelectorAll('.session-card').forEach(card => {
+      const box = card.querySelector('.session-comments');
+      if (box) {
+        box.classList.add('open');
+        if (card.dataset.groupKey) openSessionIds.add(card.dataset.groupKey);
+      }
+    });
+
+    dayEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    dayEl.style.outline = '2px solid var(--teal)';
+    dayEl.style.borderRadius = '10px';
+    setTimeout(() => { dayEl.style.outline = 'none'; }, 1500);
+  });
 
   $('#sessionSearchInput').addEventListener('input', () => renderSessionList());
   // ===== HẾT PHẦN LỊCH SỬ PHIÊN LIVE =====
