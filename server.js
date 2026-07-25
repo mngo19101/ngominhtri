@@ -1910,9 +1910,18 @@ app.get('/api/orders', requireAuth, (req, res) => {
     const like = `%${q}%`;
     args.push(like, like, like, like, like);
   }
-  const rows = db.prepare(`SELECT * FROM orders WHERE ${where.join(' AND ')}
-    ORDER BY created_at DESC LIMIT 5000`).all(...args);
-  res.json({ orders: rows.map(publicOrder) });
+  // limit/offset là THAM SỐ TUỲ CHỌN — không truyền thì hành vi giữ nguyên như
+  // trước (tối đa 5000 bản ghi mới nhất), để không phá vỡ giao diện hiện tại.
+  // Cho phép truyền để về sau có thể thêm phân trang thật trên giao diện mà
+  // không cần đổi API lần nữa. limit bị chặn tối đa 5000 để tránh 1 request
+  // đơn lẻ kéo quá nhiều dữ liệu cùng lúc.
+  const limit = Math.min(5000, Math.max(1, intValue(req.query.limit, 5000, 1, 5000)));
+  const offset = Math.max(0, intValue(req.query.offset, 0, 0, Number.MAX_SAFE_INTEGER));
+  const whereSql = where.join(' AND ');
+  const totalCount = db.prepare(`SELECT COUNT(*) AS c FROM orders WHERE ${whereSql}`).get(...args).c;
+  const rows = db.prepare(`SELECT * FROM orders WHERE ${whereSql}
+    ORDER BY created_at DESC LIMIT ? OFFSET ?`).all(...args, limit, offset);
+  res.json({ orders: rows.map(publicOrder), totalCount, limit, offset });
 });
 
 app.post('/api/orders', requireAuth, (req, res) => {
@@ -2015,6 +2024,12 @@ app.delete('/api/orders/:id', requireAuth, (req, res) => {
 // Danh sách vận chuyển dùng chung dữ liệu đơn hàng, nhưng chỉ trả về đơn thuộc
 // tài khoản đang đăng nhập. Đơn chưa đủ SĐT/địa chỉ vẫn xuất hiện ở "Cần xử lý".
 app.get('/api/shipments', requireAuth, (req, res) => {
+  // Cùng cách làm với /api/orders ở trên: limit/offset tuỳ chọn, mặc định giữ
+  // nguyên hành vi cũ (tối đa 5000 bản ghi) để không phá vỡ giao diện hiện tại.
+  const limit = Math.min(5000, Math.max(1, intValue(req.query.limit, 5000, 1, 5000)));
+  const offset = Math.max(0, intValue(req.query.offset, 0, 0, Number.MAX_SAFE_INTEGER));
+  const totalCount = db.prepare(`SELECT COUNT(*) AS c FROM orders WHERE user_id = ? AND deleted_at IS NULL`)
+    .get(req.userId).c;
   const rows = db.prepare(`SELECT o.*, t.carrier AS carrier_name,
       t.tracking_code AS external_tracking_code, t.current_status AS carrier_status,
       t.current_location AS carrier_location, t.expected_delivery_at,
@@ -2023,9 +2038,9 @@ app.get('/api/shipments', requireAuth, (req, res) => {
     FROM orders o
     LEFT JOIN shipment_tracking t ON t.order_id = o.id AND t.user_id = o.user_id
     WHERE o.user_id = ? AND o.deleted_at IS NULL
-    ORDER BY COALESCE(o.shipping_updated_at, o.updated_at) DESC LIMIT 5000`)
-    .all(req.userId);
-  res.json({ shipments: rows.map(publicOrder) });
+    ORDER BY COALESCE(o.shipping_updated_at, o.updated_at) DESC LIMIT ? OFFSET ?`)
+    .all(req.userId, limit, offset);
+  res.json({ shipments: rows.map(publicOrder), totalCount, limit, offset });
 });
 
 app.get('/api/shipments/:id/events', requireAuth, (req, res) => {
@@ -2193,7 +2208,11 @@ app.post('/api/shipments/:id/reconcile', requireAuth, (req, res) => {
 });
 
 app.get('/api/products', requireAuth, (req, res) => {
-  const rows = db.prepare('SELECT * FROM products WHERE user_id = ? ORDER BY active DESC, code ASC').all(req.userId);
+  // Không phân trang ở đây vì trang "Đơn hàng" cần tải đủ toàn bộ danh mục để
+  // đối chiếu alias với nội dung comment realtime. Chỉ thêm 1 giới hạn an toàn
+  // (rất cao, không ảnh hưởng shop thực tế) để phòng trường hợp dữ liệu lỗi
+  // sinh ra hàng trăm nghìn dòng làm 1 request nặng bất thường.
+  const rows = db.prepare('SELECT * FROM products WHERE user_id = ? ORDER BY active DESC, code ASC LIMIT 20000').all(req.userId);
   res.json({ products: rows.map(p => ({
     id: p.id, code: p.code, name: p.name, price: p.price, stock: p.stock,
     aliases: JSON.parse(p.aliases || '[]'), active: !!p.active,
