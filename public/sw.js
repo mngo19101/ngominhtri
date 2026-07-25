@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tiktok-live-clothes-v1';
+const CACHE_NAME = 'tiktok-live-v1';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',

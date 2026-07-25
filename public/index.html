@@ -125,19 +125,13 @@
     content-visibility: auto;
     contain-intrinsic-size: 80px;
   }
-  .btn, .btn-mini, .nav-item, .clothes-chip {
+  .btn, .btn-mini, .nav-item {
     touch-action: manipulation;
     user-select: none;
     -webkit-user-select: none;
   }
 
-  .clothes-quick-bar{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:8px 0 12px; padding:8px 12px; background:rgba(255,255,255,.65); border:1px solid var(--border); border-radius:10px; }
-  .clothes-bar-label{ font-size:11.5px; font-weight:700; color:var(--text); }
-  .clothes-chips{ display:flex; gap:4px; flex-wrap:wrap; }
-  .clothes-chip{ padding:3px 9px; font-size:11.5px; font-weight:700; border:1px solid var(--border); background:#fff; color:var(--text); border-radius:6px; cursor:pointer; transition:.15s; user-select:none; touch-action:manipulation; }
-  .clothes-chip:hover, .clothes-chip.active{ background:var(--teal); color:#fff; border-color:var(--teal); }
-
-  .feed-panel-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+  .feed-panel-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
   .feed-panel-header h2{ margin-bottom:0; }
 
   .badge-count{
@@ -748,30 +742,12 @@
         <h2>Bình Luận Trực Tiếp<span id="liveIdLabel" style="color:var(--muted); text-transform:none; letter-spacing:0; font-weight:600;"></span></h2>
         <button class="btn-print" id="btnStopTikTok" style="display:none; border-color:rgba(230,102,102,.5); color:#e6386a;">⏹ Dừng xem Live</button>
       </div>
-      <!-- THANH CHỌN NHANH SIZE & MÀU QUẦN ÁO BÁN LIVE -->
-      <div class="clothes-quick-bar">
-        <span class="clothes-bar-label">👕 Size:</span>
-        <div class="clothes-chips">
-          <button type="button" class="clothes-chip size-chip" data-val="S">S</button>
-          <button type="button" class="clothes-chip size-chip" data-val="M">M</button>
-          <button type="button" class="clothes-chip size-chip" data-val="L">L</button>
-          <button type="button" class="clothes-chip size-chip" data-val="XL">XL</button>
-          <button type="button" class="clothes-chip size-chip" data-val="2XL">2XL</button>
-          <button type="button" class="clothes-chip size-chip" data-val="FreeSize">F</button>
-        </div>
-        <span class="clothes-bar-label" style="margin-left:6px;">🎨 Màu:</span>
-        <div class="clothes-chips">
-          <button type="button" class="clothes-chip color-chip" data-val="Đen">Đen</button>
-          <button type="button" class="clothes-chip color-chip" data-val="Trắng">Trắng</button>
-          <button type="button" class="clothes-chip color-chip" data-val="Hồng">Hồng</button>
-          <button type="button" class="clothes-chip color-chip" data-val="Kem">Kem</button>
-          <button type="button" class="clothes-chip color-chip" data-val="Xanh">Xanh</button>
-          <button type="button" class="clothes-chip color-chip" data-val="Nâu">Nâu</button>
-          <button type="button" class="clothes-chip color-chip" data-val="Đỏ">Đỏ</button>
-        </div>
-      </div>
       <div class="feed-list" id="commentFeed">
         <div class="feed-placeholder" style="color:var(--muted); font-size:13px;">Đang chờ bình luận từ phiên Live...</div>
+      </div>
+      <div class="feed-footer-bar" style="margin-top:10px; display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+        <span style="font-size:11.5px; color:var(--muted);">⚡ Tối ưu hiển thị 300 bình luận mới nhất (RAM mượt)</span>
+        <button type="button" class="btn-mini" id="btnGoToHistoryFromFeed">📜 Xem đầy đủ bình luận đã lưu (<b id="liveFeedStoredTotalCount">0</b>)</button>
       </div>
     </div>
 
@@ -2847,6 +2823,13 @@ function cartItemAmount(item) {
   function renderSessionBadge() {
     const badge = $('#sessionCountBadge');
     if (badge) badge.textContent = Object.keys(liveSessions).length;
+    const feedCount = $('#liveFeedStoredTotalCount');
+    if (feedCount) {
+      const currentCount = (currentSessionId && liveSessions[currentSessionId])
+        ? (liveSessions[currentSessionId].comments || []).length
+        : 0;
+      feedCount.textContent = currentCount;
+    }
   }
 
   function deleteSession(sessionId) {
@@ -3337,6 +3320,7 @@ function cartItemAmount(item) {
   $('#navShipping').addEventListener('click', () => switchTab('shipping'));
   $('#navMenu').addEventListener('click', () => switchTab('menu'));
   $('#navAdmin').addEventListener('click', () => switchTab('admin'));
+  $('#btnGoToHistoryFromFeed')?.addEventListener('click', () => switchTab('sessions'));
   // ===== HẾT PHẦN KHÁCH HÀNG / GIỎ HÀNG =====
 
   // ===== TAB MENU: thông tin tài khoản + hạn dùng gói/key =====
@@ -4526,28 +4510,7 @@ function cartItemAmount(item) {
 
   tryAutoLogin();
 
-  // ====== CHUYỂN ĐỔI CHIP CHỌN QUICK SIZE & MÀU CHO SHOP QUẦN ÁO ======
-  document.querySelectorAll('.clothes-chip').forEach(chip => {
-    chip.addEventListener('click', () => {
-      chip.classList.toggle('active');
-      const val = chip.dataset.val;
-      const modalOpen = $('#orderModal') && $('#orderModal').style.display !== 'none';
-      if (modalOpen) {
-        const input = $('#ordProductName');
-        if (input) {
-          const current = input.value.trim();
-          input.value = current ? `${current} - ${val}` : val;
-          input.focus();
-        }
-      } else {
-        const searchInput = $('#orderSearch') || $('#sessionSearchInput');
-        if (searchInput) {
-          searchInput.value = val;
-          searchInput.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-      }
-    });
-  });
+
 
   // ====== BÀN PHÍM TẮT DÀNH CHO SHOP BÁN LIVE ======
   window.addEventListener('keydown', (e) => {
