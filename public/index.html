@@ -3488,7 +3488,10 @@ function cartItemAmount(item) {
       const presenceLabel = u.isOnline ? 'Đang online' : 'Offline';
       const ipLabel = u.ipAddress || 'Chưa ghi nhận IP';
       const lastLoginStr = formatAdminDateTime(u.lastLoginAt);
-      const locationLabel = u.ipCity || u.ipRegion || u.ipCountry || (u.ipAddress ? 'Đang xác định...' : 'Chưa xác định');
+      const locationFromRequestedSource = u.ipGeoSource === 'whatismyipaddress-only-v3' || u.ipGeoSource === 'local';
+      const locationLabel = locationFromRequestedSource
+        ? (u.ipCity || u.ipRegion || u.ipCountry || 'Chưa xác định')
+        : (u.ipAddress ? 'Bấm IP để kiểm tra vị trí' : 'Chưa xác định');
       const ipHtml = u.ipAddress
         ? `<a class="presence-ip-link" href="https://whatismyipaddress.com/ip/${encodeURIComponent(u.ipAddress)}" target="_blank" rel="noopener" title="Mở trên WhatIsMyIPAddress">🌐 ${escapeHtml(ipLabel)}</a>`
         : `🌐 ${escapeHtml(ipLabel)}`;

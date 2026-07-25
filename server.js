@@ -841,7 +841,12 @@ async function refreshIpLocation(ip) {
   if (!ip || !net.isIP(ip)) return null;
   if (ipGeoPending.has(ip)) return ipGeoPending.get(ip);
   const task = (async () => {
-    let location = { city: null, region: null, country: null, source: null };
+    let location = {
+      city: null,
+      region: null,
+      country: null,
+      source: 'whatismyipaddress-unavailable-v3'
+    };
     try {
       if (isPrivateIp(ip)) {
         location = { city: 'Mạng nội bộ', region: null, country: null, source: 'local' };
@@ -870,27 +875,14 @@ async function refreshIpLocation(ip) {
             const match = text.match(new RegExp(`(?:^|\\n)${label}:?\\s*(?:\\n)?([^\\n]+)`, 'i'));
             return cleanText(match?.[1], 100) || null;
           };
-          location = {
+          const whatIsMyIpLocation = {
             city: readField('City'),
             region: readField('State/Region'),
             country: readField('Country'),
-            source: 'whatismyipaddress'
+            source: 'whatismyipaddress-only-v3'
           };
-        }
-        // Dự phòng khi trang HTML thay đổi hoặc chặn yêu cầu từ máy chủ.
-        if (!location.city && !location.region && !location.country) {
-          const fallbackResponse = await fetch(
-            `https://ipwho.is/${encodeURIComponent(ip)}?fields=success,city,region,country`,
-            { signal: AbortSignal.timeout(4500) }
-          );
-          const data = await fallbackResponse.json();
-          if (fallbackResponse.ok && data?.success !== false) {
-            location = {
-              city: cleanText(data.city, 100) || null,
-              region: cleanText(data.region, 100) || null,
-              country: cleanText(data.country, 100) || null,
-              source: 'ipwhois-fallback'
-            };
+          if (whatIsMyIpLocation.city || whatIsMyIpLocation.region || whatIsMyIpLocation.country) {
+            location = whatIsMyIpLocation;
           }
         }
       }
@@ -1174,12 +1166,18 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
   const onlineWindowMs = 6 * 60 * 1000;
   const geoRefreshMs = 30 * 24 * 60 * 60 * 1000;
   const ipsToLookup = [...new Set(rows
-    .filter(user => user.last_login_ip && (
-      user.last_login_geo_ip !== user.last_login_ip ||
-      !user.last_login_geo_at ||
-      !user.last_login_geo_source ||
-      now - user.last_login_geo_at > geoRefreshMs
-    ))
+    .filter(user => {
+      if (!user.last_login_ip) return false;
+      const geoAge = now - (Number(user.last_login_geo_at) || 0);
+      const knownSource = ['whatismyipaddress-only-v3', 'whatismyipaddress-unavailable-v3', 'local']
+        .includes(user.last_login_geo_source);
+      return user.last_login_geo_ip !== user.last_login_ip ||
+        !user.last_login_geo_at ||
+        !knownSource ||
+        geoAge > geoRefreshMs ||
+        (user.last_login_geo_source === 'whatismyipaddress-unavailable-v3' &&
+          geoAge > 60 * 60 * 1000);
+    })
     .map(user => user.last_login_ip))];
   if (ipsToLookup.length) {
     try {

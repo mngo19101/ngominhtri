@@ -1,4 +1,4 @@
-# TikTok Live Print & Order Manager v2.20.0
+# TikTok Live Print & Order Manager v2.22.0
 
 Bộ mã này chạy trực tiếp trên Railway và phục vụ giao diện tại:
 
@@ -45,7 +45,7 @@ Sau khi upload, chọn **Redeploy**. Server tự tạo/migrate bảng SQLite, kh
 Bridge Server đang chạy tại cổng ...
 ```
 
-## Tính năng v2.20.0
+## Tính năng v2.22.0
 
 - Tab **Vận chuyển** riêng, dùng chung đơn đã chốt.
 - Chỉ nhập mã vận đơn SPX: hệ thống tự tra cứu trạng thái, vị trí hiện tại, hành trình và ngày giao dự kiến, rồi lưu vào đúng đơn.
@@ -86,9 +86,12 @@ Bridge Server đang chạy tại cổng ...
 - Thẻ tài khoản Admin được rút gọn, bỏ các dòng tạo lúc, dung lượng ước tính và hoạt động gần nhất khỏi màn quản lý gói.
 - Mỗi thẻ chỉ giữ trạng thái, IP, thành phố gần đúng và thời điểm đăng nhập gần nhất theo dạng `giờ:phút:giây ngày/tháng/năm`.
 - Thành phố được tự tra theo IP khi IP thay đổi và lưu lại để không gọi dịch vụ liên tục; IP nội bộ được ghi là **Mạng nội bộ**.
-- Vị trí IP dùng WhatIsMyIPAddress làm nguồn chính; nếu trang không phản hồi thì dùng IPWhois làm dự phòng.
+- Vị trí IP chỉ dùng WhatIsMyIPAddress, không lấy kết quả từ bất kỳ nguồn tra cứu dự phòng nào.
 - Có thể bấm trực tiếp vào địa chỉ IP trong thẻ tài khoản để mở trang chi tiết tương ứng trên WhatIsMyIPAddress.
 - Đã bỏ nút **Đóng** khỏi toàn bộ màn chi tiết Quản trị; chỉ giữ nút quay lại danh sách lựa chọn.
+- Chỉ hiển thị tên thành phố khi lấy được từ WhatIsMyIPAddress; không còn hiển thị thành phố khác lấy từ nguồn dự phòng.
+- Nếu WhatIsMyIPAddress chặn máy chủ, vị trí hiện **Bấm IP để kiểm tra vị trí** và địa chỉ IP vẫn mở đúng trang tra cứu.
+- Bản nâng cấp tự bỏ qua vị trí đã lưu từ nguồn cũ và tra lại bằng WhatIsMyIPAddress; nếu trang tạm chặn máy chủ, hệ thống thử lại sau 1 giờ.
 - Đơn chưa giao chỉ cộng vào **Tạm tính**. Chỉ khi vận chuyển chuyển sang **Đã giao** mới ghi nhận **Doanh thu**, theo đúng ngày giao thành công.
 - Đã bỏ tab **Sản phẩm** khỏi thanh điều hướng; dữ liệu sản phẩm cũ vẫn được giữ an toàn trong database.
 - Đã bỏ nút **Hành trình** cũ trong Vận chuyển; chỉ giữ **Xem hành trình SPX**.
