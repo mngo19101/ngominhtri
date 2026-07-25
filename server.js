@@ -913,13 +913,6 @@ function formatSmtpError(err) {
   const raw = String(err?.message || err || 'Lỗi SMTP không xác định');
   const lower = raw.toLowerCase();
   const hints = [];
-  const extra = [];
-
-  if (err?.code) extra.push(`Mã lỗi: ${err.code}`);
-  if (err?.responseCode) extra.push(`SMTP response code: ${err.responseCode}`);
-  if (err?.command) extra.push(`Lệnh lỗi: ${err.command}`);
-  if (err?.response) extra.push(`Phản hồi SMTP: ${String(err.response).trim()}`);
-  if (err?.cause?.message) extra.push(`Nguyên nhân: ${String(err.cause.message).trim()}`);
 
   if (lower.includes('535')) {
     hints.push('Gmail thường trả mã 535 khi sai mật khẩu ứng dụng, chưa bật 2-Step Verification, hoặc app password đã bị thu hồi.');
@@ -937,7 +930,51 @@ function formatSmtpError(err) {
     hints.push('Kiểm tra SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS và xem log Railway để biết mã lỗi thật.');
   }
 
-  return [raw, ...extra, hints.join(' ')].filter(Boolean).join('\n');
+  return `${raw}
+${hints.join(' ')}`;
+}
+
+function maskEmailForLog(email) {
+  const value = String(email || '').trim();
+  if (!value) return '(missing)';
+  const at = value.indexOf('@');
+  if (at <= 1) return '***' + value.slice(at >= 0 ? at : 0);
+  return `${value.slice(0, 2)}***${value.slice(at)}`;
+}
+
+function logSmtpEnvironmentDiagnostics() {
+  const host = String(process.env.SMTP_HOST || '').trim();
+  const portRaw = String(process.env.SMTP_PORT || '').trim();
+  const secureEnv = String(process.env.SMTP_SECURE || '').trim().toLowerCase();
+  const secure = secureEnv === '1' || secureEnv === 'true' || portRaw === '465';
+  const username = String(process.env.SMTP_USER || '').trim();
+  const fromEnv = String(process.env.SMTP_FROM || '').trim();
+  const from = fromEnv || username;
+  const password = String(process.env.SMTP_PASS || '');
+
+  console.log('[SMTP] Cấu hình khởi động:');
+  console.log(`[SMTP] host=${host || '(missing)'} port=${portRaw || '(default 587)'} secure=${secure ? 'true' : 'false'}`);
+  console.log(`[SMTP] user=${maskEmailForLog(username)} from=${maskEmailForLog(from)}${fromEnv ? '' : ' (fallback từ SMTP_USER)'}`);
+  console.log(`[SMTP] pass=${password ? 'đã có' : '(missing)'}`);
+
+  const missing = [];
+  if (!host) missing.push('SMTP_HOST');
+  if (!username) missing.push('SMTP_USER');
+  if (!password) missing.push('SMTP_PASS');
+  if (missing.length) {
+    console.warn(`[SMTP] Thiếu biến môi trường: ${missing.join(', ')}`);
+  }
+  if (!from) {
+    console.warn('[SMTP] Không có SMTP_FROM và cũng chưa có SMTP_USER để làm địa chỉ gửi.');
+  } else if (!isValidEmail(from)) {
+    console.warn('[SMTP] SMTP_FROM không phải email hợp lệ.');
+  }
+  if (portRaw && portRaw === '465' && !secure) {
+    console.warn('[SMTP] Cảnh báo: port 465 nên đi với SMTP_SECURE=true.');
+  }
+  if (portRaw && portRaw === '587' && secureEnv === 'true') {
+    console.warn('[SMTP] Cảnh báo: port 587 thường dùng SMTP_SECURE=false.');
+  }
 }
 
 async function sendMailViaSmtp({ to, subject, text }) {
@@ -947,26 +984,9 @@ async function sendMailViaSmtp({ to, subject, text }) {
   const secure = secureEnv === '1' || secureEnv === 'true' || port === 465;
   const username = String(process.env.SMTP_USER || '').trim();
   const password = String(process.env.SMTP_PASS || '');
-  const fromEnv = String(process.env.SMTP_FROM || '').trim();
-  const from = fromEnv || username;
-
-  if (!host) {
-    throw new Error('Chưa cấu hình SMTP_HOST để gửi email.');
-  }
-  if (!username) {
-    throw new Error('Chưa cấu hình SMTP_USER để đăng nhập SMTP.');
-  }
-  if (!password) {
-    throw new Error('Chưa cấu hình SMTP_PASS (mật khẩu ứng dụng).');
-  }
-  if (!from) {
-    throw new Error('Chưa có SMTP_FROM hoặc SMTP_USER để làm địa chỉ gửi.');
-  }
-  if (!isValidEmail(username)) {
-    throw new Error('SMTP_USER phải là địa chỉ Gmail hợp lệ.');
-  }
-  if (fromEnv && !isValidEmail(fromEnv)) {
-    throw new Error('SMTP_FROM phải là địa chỉ Gmail hợp lệ.');
+  const from = String(process.env.SMTP_FROM || username).trim();
+  if (!host || !from) {
+    throw new Error('Chưa cấu hình SMTP_HOST / SMTP_FROM để gửi email.');
   }
 
   const netModule = secure ? require('tls') : require('net');
@@ -3620,6 +3640,7 @@ const PORT = process.env.PORT || 8181;
 
 server.listen(PORT, () => {
   console.log(`Bridge Server đang chạy tại cổng ${PORT}`);
+  logSmtpEnvironmentDiagnostics();
   console.log('✅ Sẵn sàng nhận lệnh kết nối TikTok Live!');
   // Dọn ngay khi khởi động, sau đó kiểm tra lại mỗi 6 giờ.
   cleanupExpiredComments(new Date());
