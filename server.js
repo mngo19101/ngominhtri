@@ -816,14 +816,13 @@ function createSupportSession(adminUserId, targetUserId, req) {
   db.prepare(`INSERT INTO sessions
     (token, user_id, created_at, expires_at, device_name, user_agent, last_seen_at, ip_address,
      is_support, support_admin_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`)
-    .run(token, targetUserId, now, now + SUPPORT_SESSION_TTL_MS, deviceName, userAgent, now, ipAddress, adminUserId);
+    VALUES (?, ?, ?, NULL, ?, ?, ?, ?, 1, ?)`)
+    .run(token, targetUserId, now, deviceName, userAgent, now, ipAddress, adminUserId);
   addAudit(adminUserId, 'admin.support.start', 'user', String(targetUserId), {
     targetUserId,
-    expiresAt: now + SUPPORT_SESSION_TTL_MS,
     ipAddress
   });
-  return { token, expiresAt: now + SUPPORT_SESSION_TTL_MS };
+  return { token, expiresAt: null };
 }
 
 
@@ -1622,32 +1621,8 @@ app.get('/api/admin/support/code', requireAuth, requireAdmin, (req, res) => {
 
 app.post('/api/admin/support/start', requireAuth, requireAdmin, (req, res) => {
   const username = String(req.body?.username || '').trim().replace(/^@/, '');
-  const code = String(req.body?.code || '').trim();
-  if (!username || !/^\d{8}$/.test(code)) {
-    return res.status(400).json({ error: 'Vui lòng nhập username khách và mã hỗ trợ 8 số.' });
-  }
-
-  const now = Date.now();
-  const security = getSupportSecurity(req.userId);
-  const lockedUntil = Number(security?.locked_until || 0);
-  if (lockedUntil > now) {
-    return res.status(429).json({
-      error: `Mã hỗ trợ đang bị khóa thử trong ${Math.ceil((lockedUntil - now) / 1000)} giây.`,
-      lockedUntil
-    });
-  }
-
-  const expectedCode = getAdminSupportCode(req.userId, now);
-  if (!crypto.timingSafeEqual(Buffer.from(code), Buffer.from(expectedCode))) {
-    const result = recordSupportCodeFailure(req.userId, now);
-    const attemptsLeft = Math.max(0, SUPPORT_CODE_MAX_ATTEMPTS - result.failedAttempts);
-    return res.status(401).json({
-      error: attemptsLeft
-        ? `Mã hỗ trợ không đúng. Còn ${attemptsLeft} lần thử trước khi khóa 15 phút.`
-        : 'Mã hỗ trợ sai quá 5 lần. Đã khóa thử mã trong 15 phút.',
-      attemptsLeft,
-      lockedUntil: result.lockedUntil || null
-    });
+  if (!username) {
+    return res.status(400).json({ error: 'Vui lòng nhập ID/username tài khoản khách.' });
   }
 
   const target = db.prepare('SELECT id, username, is_admin, is_banned FROM users WHERE username = ?').get(username);
@@ -1655,12 +1630,11 @@ app.post('/api/admin/support/start', requireAuth, requireAdmin, (req, res) => {
   if (target.is_admin) return res.status(400).json({ error: 'Không thể mở phiên hỗ trợ vào tài khoản Admin khác.' });
   if (target.is_banned) return res.status(403).json({ error: 'Tài khoản khách hàng đang bị khóa.' });
 
-  resetSupportCodeFailures(req.userId, now);
   const support = createSupportSession(req.userId, target.id, req);
   res.json({
     ok: true,
     token: support.token,
-    expiresAt: support.expiresAt,
+    expiresAt: null,
     username: target.username,
     supportAdminId: req.userId
   });

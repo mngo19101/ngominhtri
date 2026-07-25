@@ -28,18 +28,7 @@
     --glass:rgba(255,255,255,.68);
     --glass-strong:rgba(255,250,253,.90);
   }
-  :root[data-theme="dark"]{
-    --bg:#0f111a;
-    --card:rgba(22, 26, 42, 0.88);
-    --border:rgba(245, 118, 169, 0.35);
-    --teal:#ff5b99;
-    --text:#e2e8f0;
-    --muted:#94a3b8;
-    --accent2:#c084fc;
-    --accent3:#fbbf24;
-    --glass:rgba(26, 31, 52, 0.85);
-    --glass-strong:rgba(18, 22, 38, 0.95);
-  }
+
   *{box-sizing:border-box;}
   html{ min-height:100%; }
   body{
@@ -134,10 +123,7 @@
     box-shadow: 0 0 14px rgba(245, 158, 11, 0.35);
     background: linear-gradient(135deg, rgba(254, 243, 199, 0.75), rgba(255, 255, 255, 0.88));
   }
-  :root[data-theme="dark"] .comment-card.closing-match {
-    background: linear-gradient(135deg, rgba(120, 53, 15, 0.5), rgba(30, 41, 59, 0.9));
-    border-color: #fbbf24;
-  }
+
   .closing-tag {
     display: inline-flex; align-items: center; gap: 3px;
     background: #f59e0b; color: #fff; font-size: 10px; font-weight: 800;
@@ -818,7 +804,6 @@
       <button class="btn-mini" id="btnExitSupportMode">Thoát hỗ trợ</button>
     </div>
     <div style="display:flex; align-items:center;">
-      <button class="btn-mini" id="btnToggleTheme" style="margin-right:8px; font-weight:700;">🌙 Đêm</button>
       <button class="btn-mini" id="btnInstallPwa" style="display:none; background:var(--teal); color:#fff; border:none; margin-right:8px; font-weight:700;">📲 Cài App</button>
       <button class="btn-logout" id="btnLogout">Đăng xuất</button>
     </div>
@@ -1112,7 +1097,7 @@
           <button class="admin-choice-card" data-admin-screen="support">
             <span class="admin-choice-icon">🛠️</span>
             <b>Hỗ trợ tài khoản khách</b>
-            <small>Dùng mã hỗ trợ 8 số để vào tạm thời tài khoản khách trong 15 phút mà không cần biết mật khẩu.</small>
+            <small>Đăng nhập trực tiếp vào tài khoản khách hàng để hỗ trợ mà không cần mật khẩu.</small>
           </button>
         </div>
       </div>
@@ -1135,31 +1120,18 @@
 
       <div class="admin-screen" id="adminScreenSupport">
         <div class="admin-section-title">
-          <div><h2>Hỗ trợ tài khoản khách</h2><p>Mã riêng của Admin đổi mỗi 10 phút. Phiên hỗ trợ tự hết hạn sau 15 phút và mọi lần bắt đầu/kết thúc đều được ghi nhật ký.</p></div>
-        </div>
-        <div class="menu-card" style="margin-bottom:14px;">
-          <div class="shipping-stats">
-            <div class="shipping-stat"><small>Mã hỗ trợ hiện tại</small><b id="adminSupportCode" style="letter-spacing:4px;font-size:24px;">--------</b></div>
-            <div class="shipping-stat"><small>Mã hết hạn lúc</small><b id="adminSupportCodeExpiry">Đang tải...</b></div>
-            <div class="shipping-stat"><small>Trạng thái thử mã</small><b id="adminSupportCodeLock">Sẵn sàng</b></div>
-          </div>
-          <div class="menu-hint" id="adminSupportCodeHint">Mã này chỉ dùng để mở phiên hỗ trợ ngắn hạn, không phải mật khẩu chung.</div>
+          <div><h2>Hỗ trợ tài khoản khách</h2><p>Nhập ID/username tài khoản khách để truy cập trực tiếp hỗ trợ mà không cần mật khẩu.</p></div>
         </div>
         <div class="menu-card">
           <h3 style="margin-top:0;">Mở phiên hỗ trợ</h3>
           <div class="field">
-            <label>Tài khoản khách hàng</label>
+            <label>Tài khoản khách hàng (ID / Username)</label>
             <input id="adminSupportUsername" type="text" autocomplete="off" placeholder="@username khách cần hỗ trợ">
-          </div>
-          <div class="field">
-            <label>Nhập mã 8 số</label>
-            <input id="adminSupportCodeInput" type="text" inputmode="numeric" maxlength="8" autocomplete="one-time-code" placeholder="12345678">
           </div>
           <div class="toolbar">
             <button class="btn" id="btnStartAdminSupport">🛠️ Bắt đầu hỗ trợ</button>
-            <button class="btn-mini" id="btnRefreshAdminSupportCode">🔄 Lấy mã mới</button>
           </div>
-          <div class="status" id="adminSupportStatus">Bạn sẽ được chuyển vào dữ liệu của tài khoản khách trong tối đa 15 phút.</div>
+          <div class="status" id="adminSupportStatus">Nhập ID/username của khách hàng để vào phiên hỗ trợ.</div>
         </div>
         <div class="menu-hint" style="margin-top:12px;">
           Lưu ý: phiên hỗ trợ có quyền thao tác như chính tài khoản khách. Không hiển thị hoặc cho phép thay đổi quyền Admin.
@@ -2422,7 +2394,7 @@ function cartItemAmount(item) {
           <span>Phí giao<b>${formatTien(o.shippingFee || 0)}</b></span>
         </div>
         <div class="shipping-actions">
-          <button class="btn-mini track-spx">${o.externalTrackingCode ? 'Xem hành trình SPX' : 'Nhập mã SPX'}</button>
+          <button class="btn-mini track-spx">${o.externalTrackingCode ? 'Xem hành trình SPX' : 'Nhập mã vận đơn'}</button>
           <button class="btn-mini edit-shipment">${o.shippingCode ? 'Sửa thông tin' : 'Bổ sung & tạo phiếu'}</button>
           ${o.shippingCode ? `<button class="btn-mini export-label">In đơn (xuất ảnh)</button>
           <select class="shipment-status-select">${SHIPPING_STATUS_CHOICES.map(k=>`<option value="${k}"${status===k?' selected':''}>${SHIPPING_STATUS_LABELS[k]}</option>`).join('')}</select>` : ''}
@@ -2562,7 +2534,7 @@ function cartItemAmount(item) {
     renderSpxSummary(order);
     $('#spxTrackingModal').classList.add('open');
     if (order.externalTrackingCode) loadSpxJourney(order.id);
-    else $('#spxJourney').innerHTML = '<div class="empty-note">Chỉ cần nhập mã vận đơn SPX.</div>';
+    else $('#spxJourney').innerHTML = '<div class="empty-note">Chỉ cần nhập mã vận đơn.</div>';
     setTimeout(() => $('#spxTrackingCode').focus(), 0);
   }
 
@@ -2575,7 +2547,7 @@ function cartItemAmount(item) {
     if (!trackingShipmentId) return;
     const trackingCode = $('#spxTrackingCode').value.trim().toUpperCase().replace(/\s+/g, '');
     if (!trackingCode) {
-      $('#spxTrackingError').textContent = 'Vui lòng nhập mã vận đơn SPX.';
+      $('#spxTrackingError').textContent = 'Vui lòng nhập mã vận đơn.';
       return;
     }
     $('#spxTrackingCode').value = trackingCode;
@@ -3628,8 +3600,6 @@ function cartItemAmount(item) {
       loadAdminStorage();
     } else if (name === 'logs') {
       loadLicenseLogs();
-    } else if (name === 'support') {
-      loadAdminSupportCode();
     }
   }
 
@@ -3688,56 +3658,23 @@ function cartItemAmount(item) {
     return `${minutes}:${String(seconds).padStart(2, '0')}`;
   }
 
-  function renderSupportMode(expiresAt) {
+  function renderSupportMode(active) {
     const badge = $('#supportModeBadge');
     if (!badge) return;
-    if (!expiresAt) {
+    if (!active) {
       badge.style.display = 'none';
       if (supportCountdownTimer) clearInterval(supportCountdownTimer);
       supportCountdownTimer = null;
       return;
     }
     badge.style.display = 'flex';
-    const tick = () => {
-      const remaining = Math.max(0, Number(expiresAt) - Date.now());
-      $('#supportModeCountdown').textContent = `Còn ${formatSupportCountdown(remaining)}`;
-      if (remaining <= 0) {
-        clearInterval(supportCountdownTimer);
-        supportCountdownTimer = null;
-        alert('Phiên hỗ trợ đã hết hạn. Bạn sẽ được đưa về tài khoản Admin.');
-        restoreAdminSession();
-      }
-    };
-    tick();
-    if (supportCountdownTimer) clearInterval(supportCountdownTimer);
-    supportCountdownTimer = setInterval(tick, 1000);
-  }
-
-  async function loadAdminSupportCode() {
-    try {
-      const data = await apiFetch('/api/admin/support/code');
-      $('#adminSupportCode').textContent = data.code;
-      $('#adminSupportCodeExpiry').textContent = formatAdminDateTime(data.expiresAt);
-      if (data.lockedUntil && data.lockedUntil > Date.now()) {
-        $('#adminSupportCodeLock').textContent = `Đang khóa đến ${formatAdminDateTime(data.lockedUntil)}`;
-      } else {
-        $('#adminSupportCodeLock').textContent = data.failedAttempts
-          ? `Đã sai ${data.failedAttempts}/5 lần`
-          : 'Sẵn sàng';
-      }
-      $('#adminSupportCodeHint').textContent =
-        `Mã tự đổi sau ${formatSupportCountdown(data.remainingMs)}. Không dùng mã này làm mật khẩu đăng nhập.`;
-    } catch (err) {
-      $('#adminSupportStatus').textContent = err.message;
-    }
+    if ($('#supportModeCountdown')) $('#supportModeCountdown').textContent = '';
   }
 
   async function startAdminSupport() {
     const username = $('#adminSupportUsername').value.trim().replace(/^@/, '');
-    const code = $('#adminSupportCodeInput').value.trim();
     const status = $('#adminSupportStatus');
-    if (!username) { status.textContent = 'Vui lòng nhập username khách hàng.'; return; }
-    if (!/^\d{8}$/.test(code)) { status.textContent = 'Mã hỗ trợ phải gồm đúng 8 chữ số.'; return; }
+    if (!username) { status.textContent = 'Vui lòng nhập ID/username khách hàng.'; return; }
     if (!adminReturnToken) {
       adminReturnToken = authToken;
       adminReturnUser = currentUser;
@@ -3747,7 +3684,7 @@ function cartItemAmount(item) {
     try {
       const data = await apiFetch('/api/admin/support/start', {
         method: 'POST',
-        body: JSON.stringify({ username, code })
+        body: JSON.stringify({ username })
       });
       authToken = data.token;
       currentUser = data.username;
@@ -3762,12 +3699,11 @@ function cartItemAmount(item) {
       renderSessionBadge();
       await Promise.all([loadOrdersV2(), loadProductsV2(), loadSettingsV2(), loadShippingV2()]);
       await refreshAdminFlag();
-      renderSupportMode(data.expiresAt);
+      renderSupportMode(true);
       status.textContent = `Đã mở phiên hỗ trợ @${data.username}.`;
       initWS();
     } catch (err) {
       status.textContent = err.message;
-      await loadAdminSupportCode();
     }
   }
 
@@ -3806,13 +3742,9 @@ function cartItemAmount(item) {
     }
   }
 
-  $('#btnStartAdminSupport').addEventListener('click', startAdminSupport);
-  $('#btnRefreshAdminSupportCode').addEventListener('click', loadAdminSupportCode);
-  $('#btnExitSupportMode').addEventListener('click', () => {
+  $('#btnStartAdminSupport')?.addEventListener('click', startAdminSupport);
+  $('#btnExitSupportMode')?.addEventListener('click', () => {
     if (confirm('Kết thúc phiên hỗ trợ và quay lại tài khoản Admin?')) restoreAdminSession();
-  });
-  $('#adminSupportCodeInput').addEventListener('input', e => {
-    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 8);
   });
 
   async function loadAdminUsers() {
@@ -4670,22 +4602,8 @@ function cartItemAmount(item) {
 
   tryAutoLogin();
 
-  // ====== BẬT/TẮT CHẾ ĐỘ TỐI (DARK MODE) ======
-  let isDarkMode = localStorage.getItem('app_theme') === 'dark';
-  function applyTheme(dark) {
-    isDarkMode = dark;
-    if (dark) {
-      document.documentElement.setAttribute('data-theme', 'dark');
-      if ($('#btnToggleTheme')) $('#btnToggleTheme').textContent = '☀️ Sáng';
-      localStorage.setItem('app_theme', 'dark');
-    } else {
-      document.documentElement.removeAttribute('data-theme');
-      if ($('#btnToggleTheme')) $('#btnToggleTheme').textContent = '🌙 Đêm';
-      localStorage.setItem('app_theme', 'light');
-    }
-  }
-  applyTheme(isDarkMode);
-  $('#btnToggleTheme')?.addEventListener('click', () => applyTheme(!isDarkMode));
+  document.documentElement.removeAttribute('data-theme');
+  localStorage.removeItem('app_theme');
 
   // ====== BẬT/TẮT LỌC BÌNH LUẬN CHỐT ĐƠN ======
   $('#btnToggleFilterClosing')?.addEventListener('click', () => {
