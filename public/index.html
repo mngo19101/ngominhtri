@@ -27,6 +27,18 @@
     --glass:rgba(255,255,255,.68);
     --glass-strong:rgba(255,250,253,.90);
   }
+  :root[data-theme="dark"]{
+    --bg:#0f111a;
+    --card:rgba(22, 26, 42, 0.88);
+    --border:rgba(245, 118, 169, 0.35);
+    --teal:#ff5b99;
+    --text:#e2e8f0;
+    --muted:#94a3b8;
+    --accent2:#c084fc;
+    --accent3:#fbbf24;
+    --glass:rgba(26, 31, 52, 0.85);
+    --glass-strong:rgba(18, 22, 38, 0.95);
+  }
   *{box-sizing:border-box;}
   html{ min-height:100%; }
   body{
@@ -113,12 +125,44 @@
   .user-id{ font-size:11px; color:var(--teal); font-family:'JetBrains Mono', monospace; }
   .comment-time{ font-size:11px; color:var(--muted); font-family:'JetBrains Mono', monospace; white-space:nowrap; }
   .comment-text{ font-size:13.5px; color:var(--text); margin-top:4px; line-height:1.4; opacity:.85; }
-  .btn-print{
-    background:rgba(255,255,255,.6); color:var(--text); border:1px solid var(--border);
-    padding:8px 12px; border-radius:8px; font-weight:600; cursor:pointer;
-    white-space:nowrap; transition:.15s; font-size:12px; backdrop-filter:blur(6px);
-  }
   .btn-print:hover{ background:var(--teal); color:#fff; border-color:var(--teal); }
+
+  /* ===== TÔ SÁNG & ĐÁNH DẤU CHỐT ĐƠN / KHÁCH VIP / ĐA HÃNG ===== */
+  .comment-card.closing-match {
+    border-color: #f59e0b;
+    box-shadow: 0 0 14px rgba(245, 158, 11, 0.35);
+    background: linear-gradient(135deg, rgba(254, 243, 199, 0.75), rgba(255, 255, 255, 0.88));
+  }
+  :root[data-theme="dark"] .comment-card.closing-match {
+    background: linear-gradient(135deg, rgba(120, 53, 15, 0.5), rgba(30, 41, 59, 0.9));
+    border-color: #fbbf24;
+  }
+  .closing-tag {
+    display: inline-flex; align-items: center; gap: 3px;
+    background: #f59e0b; color: #fff; font-size: 10px; font-weight: 800;
+    padding: 2px 6px; border-radius: 4px; text-transform: uppercase; margin-left: 6px;
+  }
+  .badge-vip {
+    display: inline-flex; align-items: center; gap: 3px;
+    background: linear-gradient(135deg, #f59e0b, #ef4444); color: #fff;
+    font-size: 10.5px; font-weight: 800; padding: 2px 7px; border-radius: 12px;
+    box-shadow: 0 2px 6px rgba(245, 158, 11, 0.35); margin-left: 4px;
+  }
+  .badge-regular {
+    display: inline-flex; align-items: center; gap: 3px;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: #fff;
+    font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 12px;
+    margin-left: 4px;
+  }
+  .carrier-badge {
+    display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 4px;
+    font-size: 10.5px; font-weight: 800; color: #fff; letter-spacing: 0.3px; margin-left: 4px;
+  }
+  .carrier-spx { background: #ee4d2d; }
+  .carrier-ghn { background: #1565c0; }
+  .carrier-ghtk { background: #006838; }
+  .carrier-jt { background: #d32f2f; }
+  .carrier-viettel { background: #c62828; }
 
   .comment-card, .cust-card, .order-card, .session-card {
     contain: content;
@@ -700,6 +744,7 @@
       <button class="btn-mini" id="btnExitSupportMode">Thoát hỗ trợ</button>
     </div>
     <div style="display:flex; align-items:center;">
+      <button class="btn-mini" id="btnToggleTheme" style="margin-right:8px; font-weight:700;">🌙 Đêm</button>
       <button class="btn-mini" id="btnInstallPwa" style="display:none; background:var(--teal); color:#fff; border:none; margin-right:8px; font-weight:700;">📲 Cài App</button>
       <button class="btn-logout" id="btnLogout">Đăng xuất</button>
     </div>
@@ -740,7 +785,10 @@
     <div class="feed-panel">
       <div class="feed-panel-header">
         <h2>Bình Luận Trực Tiếp<span id="liveIdLabel" style="color:var(--muted); text-transform:none; letter-spacing:0; font-weight:600;"></span></h2>
-        <button class="btn-print" id="btnStopTikTok" style="display:none; border-color:rgba(230,102,102,.5); color:#e6386a;">⏹ Dừng xem Live</button>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button type="button" class="btn-mini" id="btnToggleFilterClosing" style="font-weight:700; border-color:var(--border);">⚡ Lọc chốt đơn (TẮT)</button>
+          <button class="btn-print" id="btnStopTikTok" style="display:none; border-color:rgba(230,102,102,.5); color:#e6386a;">⏹ Dừng xem Live</button>
+        </div>
       </div>
       <div class="feed-list" id="commentFeed">
         <div class="feed-placeholder" style="color:var(--muted); font-size:13px;">Đang chờ bình luận từ phiên Live...</div>
@@ -1278,15 +1326,23 @@
   </div>
 </div>
 
-<!-- VẬN CHUYỂN: TRA CỨU SPX TỰ ĐỘNG -->
+<!-- VẬN CHUYỂN: TRA CỨU ĐA HÃNG TỰ ĐỘNG -->
 <div class="app-modal" id="spxTrackingModal">
   <div class="app-modal-card">
-    <div class="modal-head"><h3 id="spxTrackingTitle">Theo dõi SPX</h3><button class="btn-mini" id="spxTrackingClose">✕</button></div>
-    <div class="toolbar">
-      <input id="spxTrackingCode" autocomplete="off" placeholder="Nhập mã vận đơn SPX">
+    <div class="modal-head"><h3 id="spxTrackingTitle">Tra cứu & Theo dõi đơn vận chuyển</h3><button class="btn-mini" id="spxTrackingClose">✕</button></div>
+    <div class="toolbar" style="flex-wrap:wrap;">
+      <select id="trackingCarrierSelect" style="width:150px; font-weight:700;">
+        <option value="auto">⚡ Đa Hãng (Tự chọn)</option>
+        <option value="spx">SPX Express</option>
+        <option value="ghn">GHN (Giao Hàng Nhanh)</option>
+        <option value="ghtk">GHTK (Tiết Kiệm)</option>
+        <option value="jt">J&T Express</option>
+        <option value="viettel">Viettel Post</option>
+      </select>
+      <input id="spxTrackingCode" autocomplete="off" placeholder="Mã vận đơn (SPX, GHN, GHTK, J&T, Viettel Post...)">
       <button class="btn" id="btnLookupSpx" style="width:auto;">Tra cứu & lưu</button>
     </div>
-    <div class="order-meta" style="margin:-4px 0 10px;">Tự kiểm tra SPX mỗi 5 phút khi đơn chưa giao xong hoặc chưa hoàn xong.</div>
+    <div class="order-meta" style="margin:-4px 0 10px;">Hỗ trợ tự nhận diện và tra cứu trực tiếp từ SPX, GHN, GHTK, J&T, Viettel Post.</div>
     <div class="auth-error" id="spxTrackingError"></div>
     <div class="spx-summary" id="spxTrackingSummary" style="display:none;">
       <b id="spxCurrentStatus">-</b>
@@ -1299,6 +1355,7 @@
     <div class="toolbar" id="spxTrackingLinks" style="display:none;">
       <button class="btn-mini" id="btnRefreshSpx">↻ Cập nhật lại</button>
       <a class="btn-mini" id="btnOpenSpx" target="_blank" rel="noopener">Mở trên SPX</a>
+      <a class="btn-mini" id="btnOpenCarrierWeb" target="_blank" rel="noopener" style="display:none; background:var(--teal); color:#fff;">🌐 Mở tra cứu web hãng</a>
     </div>
     <h3>Hành trình</h3>
     <div class="tracking-timeline" id="spxJourney"><div class="empty-note">Nhập mã để tra cứu.</div></div>
@@ -4247,6 +4304,14 @@ function cartItemAmount(item) {
     ws.send(JSON.stringify({ type: 'STOP_TIKTOK', token: authToken }));
   });
 
+  function checkIsClosingMatch(commentText) {
+    if (!commentText) return false;
+    const keywordsStr = $('#settingKeywords')?.value || 'chốt, lấy, mua, nhận, giật, dồn, s, m, l, xl, 2xl, bộ, áo, quần, váy, đầm, chot, lay, mua, nhan';
+    const keywordList = keywordsStr.split(/[,;\n]/).map(k => k.trim().toLowerCase()).filter(Boolean);
+    const commentLower = String(commentText).toLowerCase();
+    return keywordList.some(kw => commentLower.includes(kw));
+  }
+
   function addCommentToFeed(cmt, roomUsername) {
     // Lớp bảo vệ thứ 2 ở phía trình duyệt: nếu server có gửi kèm roomUsername
     // (ID phòng Live mà comment này thuộc về) và nó KHÔNG khớp với phiên Live
@@ -4258,6 +4323,12 @@ function cartItemAmount(item) {
       return;
     }
 
+    const isClosingMatch = checkIsClosingMatch(cmt.comment);
+    if (filterOnlyClosing && !isClosingMatch) {
+      // Đang bật lọc chỉ hiện comment chốt đơn -> bỏ qua comment này không vẽ lên feed
+      return;
+    }
+
     if (!cmt.receivedAt) cmt.receivedAt = new Date().toISOString();
     if (!cmt.id) cmt.id = 'c_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
 
@@ -4265,14 +4336,29 @@ function cartItemAmount(item) {
     const placeholder = feed.querySelector('.feed-placeholder');
     if (placeholder) placeholder.remove();
 
+    // Dò hồ sơ khách hàng xuyên suốt nhiều phiên để hiện Huy hiệu Khách VIP / Khách quen
+    const lowerId = (cmt.uniqueId || '').toLowerCase();
+    const cust = customers[lowerId] || Object.values(customers).find(c => (c.uniqueId || '').toLowerCase() === lowerId);
+    const itemCount = cust?.items?.length || 0;
+    const isVip = cust?.isVip || itemCount >= 3;
+
+    let customerBadgeHtml = '';
+    if (isVip) {
+      customerBadgeHtml = `<span class="badge-vip">👑 KHÁCH VIP${itemCount > 0 ? ' (' + itemCount + ' đơn)' : ''}</span>`;
+    } else if (itemCount > 0) {
+      customerBadgeHtml = `<span class="badge-regular">⭐ Khách quen (${itemCount} đơn)</span>`;
+    }
+
     const card = document.createElement('div');
-    card.className = 'comment-card';
+    card.className = 'comment-card' + (isClosingMatch ? ' closing-match' : '');
     card.innerHTML = `
       <div class="comment-info">
         <div class="top-row">
           <div>
             <span class="user-name">${escapeHtml(cmt.nickname)}</span>
             <span class="user-id">@${escapeHtml(cmt.uniqueId)}</span>
+            ${customerBadgeHtml}
+            ${isClosingMatch ? '<span class="closing-tag">⚡ CHỐT ĐƠN</span>' : ''}
           </div>
           <span class="comment-time">${formatGio(cmt.receivedAt)}</span>
         </div>
@@ -4509,6 +4595,84 @@ function cartItemAmount(item) {
   }
 
   tryAutoLogin();
+
+  // ====== BẬT/TẮT CHẾ ĐỘ TỐI (DARK MODE) ======
+  let isDarkMode = localStorage.getItem('app_theme') === 'dark';
+  function applyTheme(dark) {
+    isDarkMode = dark;
+    if (dark) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      if ($('#btnToggleTheme')) $('#btnToggleTheme').textContent = '☀️ Sáng';
+      localStorage.setItem('app_theme', 'dark');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+      if ($('#btnToggleTheme')) $('#btnToggleTheme').textContent = '🌙 Đêm';
+      localStorage.setItem('app_theme', 'light');
+    }
+  }
+  applyTheme(isDarkMode);
+  $('#btnToggleTheme')?.addEventListener('click', () => applyTheme(!isDarkMode));
+
+  // ====== BẬT/TẮT LỌC BÌNH LUẬN CHỐT ĐƠN ======
+  $('#btnToggleFilterClosing')?.addEventListener('click', () => {
+    filterOnlyClosing = !filterOnlyClosing;
+    const btn = $('#btnToggleFilterClosing');
+    if (btn) {
+      btn.textContent = filterOnlyClosing ? '⚡ Chỉ chốt đơn (BẬT)' : '⚡ Lọc chốt đơn (TẮT)';
+      btn.style.background = filterOnlyClosing ? 'var(--teal)' : '';
+      btn.style.color = filterOnlyClosing ? '#fff' : '';
+    }
+  });
+
+  // ====== BẢO TRỢ TRA CỨU ĐA HÃNG (SPX, GHN, GHTK, J&T, VIETTEL POST) ======
+  function detectCarrier(code) {
+    const c = String(code || '').trim().toUpperCase();
+    if (c.startsWith('SPX') || c.startsWith('SPXVN')) return 'spx';
+    if (c.startsWith('GHTK') || /^12[0-9]{8,12}$/.test(c)) return 'ghtk';
+    if (c.startsWith('GHN') || c.startsWith('N') || c.startsWith('R')) return 'ghn';
+    if (c.startsWith('88') || c.startsWith('80') || c.startsWith('J')) return 'jt';
+    if (c.startsWith('VT') || /^10[0-9]{8,12}$/.test(c)) return 'viettel';
+    return 'spx';
+  }
+
+  function getCarrierTrackingUrl(carrier, code) {
+    const c = encodeURIComponent(String(code || '').trim());
+    switch (carrier) {
+      case 'ghn': return `https://donhang.ghn.vn/?order_code=${c}`;
+      case 'ghtk': return `https://giaohangtietkiem.vn/?tracking_id=${c}`;
+      case 'jt': return `https://jtexpress.vn/vi/tracking?html=1&billcode=${c}`;
+      case 'viettel': return `https://viettelpost.com.vn/tra-cuu-hanh-trinh-don-hang/?code=${c}`;
+      case 'spx':
+      default:
+        return `https://spx.vn/track?${c}`;
+    }
+  }
+
+  $('#spxTrackingCode')?.addEventListener('input', (e) => {
+    const code = e.target.value.trim();
+    if (!code) return;
+    const carrier = detectCarrier(code);
+    const select = $('#trackingCarrierSelect');
+    if (select && select.value === 'auto') {
+      select.value = carrier;
+    }
+    const btnCarrierWeb = $('#btnOpenCarrierWeb');
+    if (btnCarrierWeb) {
+      btnCarrierWeb.href = getCarrierTrackingUrl(select?.value || carrier, code);
+      btnCarrierWeb.style.display = 'inline-flex';
+    }
+  });
+
+  $('#trackingCarrierSelect')?.addEventListener('change', (e) => {
+    const code = $('#spxTrackingCode')?.value.trim() || '';
+    if (!code) return;
+    const carrier = e.target.value === 'auto' ? detectCarrier(code) : e.target.value;
+    const btnCarrierWeb = $('#btnOpenCarrierWeb');
+    if (btnCarrierWeb) {
+      btnCarrierWeb.href = getCarrierTrackingUrl(carrier, code);
+      btnCarrierWeb.style.display = 'inline-flex';
+    }
+  });
 
 
 
