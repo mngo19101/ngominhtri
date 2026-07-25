@@ -913,6 +913,13 @@ function formatSmtpError(err) {
   const raw = String(err?.message || err || 'Lỗi SMTP không xác định');
   const lower = raw.toLowerCase();
   const hints = [];
+  const extra = [];
+
+  if (err?.code) extra.push(`Mã lỗi: ${err.code}`);
+  if (err?.responseCode) extra.push(`SMTP response code: ${err.responseCode}`);
+  if (err?.command) extra.push(`Lệnh lỗi: ${err.command}`);
+  if (err?.response) extra.push(`Phản hồi SMTP: ${String(err.response).trim()}`);
+  if (err?.cause?.message) extra.push(`Nguyên nhân: ${String(err.cause.message).trim()}`);
 
   if (lower.includes('535')) {
     hints.push('Gmail thường trả mã 535 khi sai mật khẩu ứng dụng, chưa bật 2-Step Verification, hoặc app password đã bị thu hồi.');
@@ -930,8 +937,7 @@ function formatSmtpError(err) {
     hints.push('Kiểm tra SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS và xem log Railway để biết mã lỗi thật.');
   }
 
-  return `${raw}
-${hints.join(' ')}`;
+  return [raw, ...extra, hints.join(' ')].filter(Boolean).join('\n');
 }
 
 async function sendMailViaSmtp({ to, subject, text }) {
@@ -941,9 +947,26 @@ async function sendMailViaSmtp({ to, subject, text }) {
   const secure = secureEnv === '1' || secureEnv === 'true' || port === 465;
   const username = String(process.env.SMTP_USER || '').trim();
   const password = String(process.env.SMTP_PASS || '');
-  const from = String(process.env.SMTP_FROM || username).trim();
-  if (!host || !from) {
-    throw new Error('Chưa cấu hình SMTP_HOST / SMTP_FROM để gửi email.');
+  const fromEnv = String(process.env.SMTP_FROM || '').trim();
+  const from = fromEnv || username;
+
+  if (!host) {
+    throw new Error('Chưa cấu hình SMTP_HOST để gửi email.');
+  }
+  if (!username) {
+    throw new Error('Chưa cấu hình SMTP_USER để đăng nhập SMTP.');
+  }
+  if (!password) {
+    throw new Error('Chưa cấu hình SMTP_PASS (mật khẩu ứng dụng).');
+  }
+  if (!from) {
+    throw new Error('Chưa có SMTP_FROM hoặc SMTP_USER để làm địa chỉ gửi.');
+  }
+  if (!isValidEmail(username)) {
+    throw new Error('SMTP_USER phải là địa chỉ Gmail hợp lệ.');
+  }
+  if (fromEnv && !isValidEmail(fromEnv)) {
+    throw new Error('SMTP_FROM phải là địa chỉ Gmail hợp lệ.');
   }
 
   const netModule = secure ? require('tls') : require('net');
