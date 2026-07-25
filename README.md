@@ -1,4 +1,4 @@
-# TikTok Live Print & Order Manager v2.22.0
+# TikTok Live Print & Order Manager v2.23.0
 
 Bộ mã này chạy trực tiếp trên Railway và phục vụ giao diện tại:
 
@@ -45,7 +45,13 @@ Sau khi upload, chọn **Redeploy**. Server tự tạo/migrate bảng SQLite, kh
 Bridge Server đang chạy tại cổng ...
 ```
 
-## Tính năng v2.22.0
+## Tính năng v2.23.0
+
+- Làm mới toàn bộ giao diện theo phong cách ứng dụng hiện đại: nền dịu, ít hoạ tiết, chữ dễ đọc và khoảng cách thống nhất.
+- Thẻ đơn, khách, vận chuyển, báo cáo, form nhập và cửa sổ bật lên dùng cùng một hệ màu/nút/viền, nên thao tác nhanh và không rối mắt.
+- Thanh tài khoản trở thành thanh nổi gọn ở đầu trang; điều hướng là dock nổi ở dưới trên laptop, tablet và điện thoại.
+- Trên điện thoại, thanh tab tự vuốt ngang thay vì ép toàn bộ chữ vào một hàng; không mất bất kỳ tab hay chức năng nào.
+- Tối ưu lại màn đăng nhập, Live, Khách hàng, Đơn hàng, Vận chuyển, Báo cáo, Menu và Quản trị cho màn hình nhỏ/lớn.
 
 - Tab **Vận chuyển** riêng, dùng chung đơn đã chốt.
 - Chỉ nhập mã vận đơn SPX: hệ thống tự tra cứu trạng thái, vị trí hiện tại, hành trình và ngày giao dự kiến, rồi lưu vào đúng đơn.

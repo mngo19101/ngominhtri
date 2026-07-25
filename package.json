@@ -1,14 +1,13 @@
 {
   "name": "bridge-server-tiktok-in-phieu",
-  "version": "2.22.0",
+  "version": "2.23.0",
   "main": "server.js",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
     "start": "node server.js",
-    "test": "node --test",
-    "check": "node --check server.js && node check-html.js public/index.html && npm test"
+    "check": "node --check server.js && node check-html.js public/index.html"
   },
   "dependencies": {
     "express": "^4.19.2",

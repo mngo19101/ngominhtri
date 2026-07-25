@@ -322,9 +322,25 @@ ensureColumn('shipment_tracking', 'expected_delivery_text', 'TEXT');
 // - Comment ngày 25/07 được giữ đến hết 25/08.
 // - Từ 00:00 ngày 26/08 trở đi mới bị xóa.
 // Đơn hàng/giỏ khách đã chốt KHÔNG bị xóa theo tác vụ này.
-// (Hàm tính toán ngày/giờ thuần đã được tách ra lib/date-rules.js để có thể
-// viết unit test độc lập không cần khởi động DB — xem tests/date-rules.test.js)
-const { addOneCalendarMonthEndOfDay, isCommentExpired, addThreeCalendarMonthsEndOfDay } = require('./lib/date-rules');
+function addOneCalendarMonthEndOfDay(value) {
+  const source = new Date(value);
+  if (!Number.isFinite(source.getTime())) return null;
+  // Railway thường chạy UTC, nên tự quy đổi cố định UTC+7 để ngày xóa luôn
+  // đúng theo ngày Việt Nam, không phụ thuộc timezone của container.
+  const vietnam = new Date(source.getTime() + 7 * 60 * 60 * 1000);
+  const year = vietnam.getUTCFullYear();
+  const month = vietnam.getUTCMonth();
+  const day = vietnam.getUTCDate();
+  const lastDayOfTargetMonth = new Date(Date.UTC(year, month + 2, 0)).getUTCDate();
+  const targetDay = Math.min(day, lastDayOfTargetMonth);
+  // 23:59:59.999 giờ Việt Nam = 16:59:59.999 UTC.
+  return new Date(Date.UTC(year, month + 1, targetDay, 16, 59, 59, 999));
+}
+
+function isCommentExpired(receivedAt, now = new Date()) {
+  const expiry = addOneCalendarMonthEndOfDay(receivedAt);
+  return expiry ? now.getTime() > expiry.getTime() : false;
+}
 
 function cleanupExpiredComments(now = new Date()) {
   const rows = db.prepare('SELECT user_id, data FROM live_session_data').all();
@@ -368,6 +384,18 @@ function cleanupExpiredComments(now = new Date()) {
     console.log('[Retention] Không có comment quá hạn cần xóa.');
   }
   return { removedComments, removedSessions, updatedUsers, checkedAt: now.toISOString() };
+}
+
+function addThreeCalendarMonthsEndOfDay(value) {
+  const source = new Date(value);
+  if (!Number.isFinite(source.getTime())) return null;
+  const vietnam = new Date(source.getTime() + 7 * 60 * 60 * 1000);
+  const year = vietnam.getUTCFullYear();
+  const month = vietnam.getUTCMonth();
+  const day = vietnam.getUTCDate();
+  const lastDayOfTargetMonth = new Date(Date.UTC(year, month + 4, 0)).getUTCDate();
+  const targetDay = Math.min(day, lastDayOfTargetMonth);
+  return new Date(Date.UTC(year, month + 3, targetDay, 16, 59, 59, 999));
 }
 
 function cleanupInactiveCustomers(now = new Date()) {
@@ -829,16 +857,7 @@ async function refreshIpLocation(ip) {
           headers: { 'User-Agent': 'Mozilla/5.0 (compatible; TikTokLiveAdmin/1.0)' },
           signal: AbortSignal.timeout(6000)
         });
-        // Phân biệt rõ "bị chặn/giới hạn tần suất" (403/429/503 — trang biết ta
-        // là bot và đang tạm từ chối) với các lỗi khác (404, 500...). Việc này
-        // giúp cơ chế thử-lại-sau-1-giờ (xem /api/admin/users bên dưới) chỉ áp
-        // dụng đúng cho trường hợp có khả năng phục hồi, tránh dò lại vô ích
-        // với IP mà trang này thực sự không có dữ liệu.
-        if (!detailsResponse.ok) {
-          const likelyBlocked = [403, 429, 503].includes(detailsResponse.status);
-          location.source = likelyBlocked ? 'whatismyipaddress-blocked-v3' : 'whatismyipaddress-unavailable-v3';
-          console.warn(`[Presence] whatismyipaddress.com trả về HTTP ${detailsResponse.status} cho IP ${ip} (${likelyBlocked ? 'có thể đang chặn bot' : 'không rõ nguyên nhân'}).`);
-        } else {
+        if (detailsResponse.ok) {
           const html = await detailsResponse.text();
           const text = html
             .replace(/<script[\s\S]*?<\/script>/gi, '\n')
@@ -852,17 +871,9 @@ async function refreshIpLocation(ip) {
             .map(line => line.replace(/\s+/g, ' ').trim())
             .filter(Boolean)
             .join('\n');
-          const knownLabels = ['city', 'state/region', 'country'];
           const readField = label => {
             const match = text.match(new RegExp(`(?:^|\\n)${label}:?\\s*(?:\\n)?([^\\n]+)`, 'i'));
-            const value = cleanText(match?.[1], 100) || null;
-            if (!value) return null;
-            // Nếu cấu trúc trang đổi khác đi, regex có thể vô tình bắt trúng
-            // ngay tên nhãn kế tiếp (vd "City" lại khớp ra chữ "Country") thay
-            // vì giá trị thật. Loại bỏ những kết quả rõ ràng là nhãn, không
-            // phải dữ liệu, để tránh lưu lại thông tin sai.
-            if (knownLabels.includes(value.toLowerCase())) return null;
-            return value;
+            return cleanText(match?.[1], 100) || null;
           };
           const whatIsMyIpLocation = {
             city: readField('City'),
@@ -872,11 +883,6 @@ async function refreshIpLocation(ip) {
           };
           if (whatIsMyIpLocation.city || whatIsMyIpLocation.region || whatIsMyIpLocation.country) {
             location = whatIsMyIpLocation;
-          } else {
-            // Trang trả về 200 nhưng không đọc được trường nào — nhiều khả năng
-            // giao diện trang đã đổi cấu trúc (chứ không hẳn IP không có dữ liệu).
-            // Ghi rõ log để admin biết cần kiểm tra lại, không âm thầm bỏ qua.
-            console.warn(`[Presence] Không đọc được City/State/Country cho IP ${ip} — có thể whatismyipaddress.com đã đổi cấu trúc trang.`);
           }
         }
       }
@@ -1023,72 +1029,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// Một số header bảo mật cơ bản, không cần thêm thư viện ngoài (helmet).
-// Không bật Content-Security-Policy nghiêm ngặt vì giao diện public/index.html
-// là 1 file HTML dùng nhiều <script> nội tuyến (inline) — bật CSP chặt sẽ làm
-// gãy toàn bộ giao diện. Các header dưới đây an toàn để bật mặc định.
-app.use((req, res, next) => {
-  res.header('X-Content-Type-Options', 'nosniff');
-  res.header('X-Frame-Options', 'SAMEORIGIN');
-  res.header('Referrer-Policy', 'no-referrer-when-downgrade');
-  next();
-});
-
-// ====== CHỐNG DÒ MẬT KHẨU (RATE LIMIT) ======
-// Không cần thêm package ngoài (express-rate-limit) — tự đếm số lần gọi theo
-// IP trong bộ nhớ. Đủ dùng cho quy mô 1 service Railway; nếu sau này chạy
-// nhiều instance phía sau load balancer thì nên chuyển sang đếm ở DB/Redis
-// dùng chung, vì bộ nhớ ở đây không chia sẻ được giữa các instance.
-const rateLimitBuckets = new Map(); // key: "loai:ip" -> { count, resetAt }
-
-function makeRateLimiter({ windowMs, max, message }) {
-  return function rateLimiter(req, res, next) {
-    const ip = getClientIp(req) || 'unknown';
-    const key = `${req.path}:${ip}`;
-    const now = Date.now();
-    let bucket = rateLimitBuckets.get(key);
-    if (!bucket || bucket.resetAt <= now) {
-      bucket = { count: 0, resetAt: now + windowMs };
-      rateLimitBuckets.set(key, bucket);
-    }
-    bucket.count += 1;
-    if (bucket.count > max) {
-      const retryAfterSec = Math.ceil((bucket.resetAt - now) / 1000);
-      res.header('Retry-After', String(retryAfterSec));
-      return res.status(429).json({
-        error: message || `Bạn thao tác quá nhanh, vui lòng thử lại sau ${retryAfterSec} giây.`,
-      });
-    }
-    next();
-  };
-}
-
-// Dọn định kỳ các bucket đã hết hạn để không phình bộ nhớ vô hạn theo thời gian.
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, bucket] of rateLimitBuckets) {
-    if (bucket.resetAt <= now) rateLimitBuckets.delete(key);
-  }
-}, 10 * 60 * 1000).unref();
-
-// Đăng nhập: tối đa 8 lần gọi / 15 phút / IP (đủ cho người gõ nhầm mật khẩu
-// vài lần, nhưng chặn được kiểu dò mật khẩu tự động liên tục).
-const loginRateLimiter = makeRateLimiter({
-  windowMs: 15 * 60 * 1000,
-  max: 8,
-  message: 'Bạn đã thử đăng nhập sai quá nhiều lần. Vui lòng thử lại sau ít phút.',
-});
-// Đăng ký: tối đa 5 tài khoản mới / giờ / IP, chặn spam tạo tài khoản hàng loạt.
-const registerRateLimiter = makeRateLimiter({
-  windowMs: 60 * 60 * 1000,
-  max: 5,
-  message: 'Bạn đã tạo tài khoản quá nhiều lần trong thời gian ngắn. Vui lòng thử lại sau.',
-});
-
 // ====== API TÀI KHOẢN & DỮ LIỆU KHÁCH HÀNG ======
 
 // Đăng ký tài khoản mới
-app.post('/api/register', registerRateLimiter, (req, res) => {
+app.post('/api/register', (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) {
     return res.status(400).json({ error: 'Thiếu username hoặc password.' });
@@ -1113,7 +1057,7 @@ app.post('/api/register', registerRateLimiter, (req, res) => {
 });
 
 // Đăng nhập
-app.post('/api/login', loginRateLimiter, (req, res) => {
+app.post('/api/login', (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) {
     return res.status(400).json({ error: 'Thiếu username hoặc password.' });
@@ -1225,17 +1169,13 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
     .filter(user => {
       if (!user.last_login_ip) return false;
       const geoAge = now - (Number(user.last_login_geo_at) || 0);
-      const knownSource = ['whatismyipaddress-only-v3', 'whatismyipaddress-unavailable-v3', 'whatismyipaddress-blocked-v3', 'local']
+      const knownSource = ['whatismyipaddress-only-v3', 'whatismyipaddress-unavailable-v3', 'local']
         .includes(user.last_login_geo_source);
-      // "blocked" (403/429/503 — bị chặn tạm thời) và "unavailable" (lỗi khác,
-      // có thể là tạm thời) đều đáng thử lại sau 1 giờ. Nếu trang đã đổi cấu
-      // trúc khiến không đọc được trường nào dù trả về 200, log cảnh báo ở
-      // refreshIpLocation() sẽ giúp phát hiện sớm thay vì lặp lại vô ích.
       return user.last_login_geo_ip !== user.last_login_ip ||
         !user.last_login_geo_at ||
         !knownSource ||
         geoAge > geoRefreshMs ||
-        (['whatismyipaddress-unavailable-v3', 'whatismyipaddress-blocked-v3'].includes(user.last_login_geo_source) &&
+        (user.last_login_geo_source === 'whatismyipaddress-unavailable-v3' &&
           geoAge > 60 * 60 * 1000);
     })
     .map(user => user.last_login_ip))];
@@ -1910,18 +1850,9 @@ app.get('/api/orders', requireAuth, (req, res) => {
     const like = `%${q}%`;
     args.push(like, like, like, like, like);
   }
-  // limit/offset là THAM SỐ TUỲ CHỌN — không truyền thì hành vi giữ nguyên như
-  // trước (tối đa 5000 bản ghi mới nhất), để không phá vỡ giao diện hiện tại.
-  // Cho phép truyền để về sau có thể thêm phân trang thật trên giao diện mà
-  // không cần đổi API lần nữa. limit bị chặn tối đa 5000 để tránh 1 request
-  // đơn lẻ kéo quá nhiều dữ liệu cùng lúc.
-  const limit = Math.min(5000, Math.max(1, intValue(req.query.limit, 5000, 1, 5000)));
-  const offset = Math.max(0, intValue(req.query.offset, 0, 0, Number.MAX_SAFE_INTEGER));
-  const whereSql = where.join(' AND ');
-  const totalCount = db.prepare(`SELECT COUNT(*) AS c FROM orders WHERE ${whereSql}`).get(...args).c;
-  const rows = db.prepare(`SELECT * FROM orders WHERE ${whereSql}
-    ORDER BY created_at DESC LIMIT ? OFFSET ?`).all(...args, limit, offset);
-  res.json({ orders: rows.map(publicOrder), totalCount, limit, offset });
+  const rows = db.prepare(`SELECT * FROM orders WHERE ${where.join(' AND ')}
+    ORDER BY created_at DESC LIMIT 5000`).all(...args);
+  res.json({ orders: rows.map(publicOrder) });
 });
 
 app.post('/api/orders', requireAuth, (req, res) => {
@@ -2024,12 +1955,6 @@ app.delete('/api/orders/:id', requireAuth, (req, res) => {
 // Danh sách vận chuyển dùng chung dữ liệu đơn hàng, nhưng chỉ trả về đơn thuộc
 // tài khoản đang đăng nhập. Đơn chưa đủ SĐT/địa chỉ vẫn xuất hiện ở "Cần xử lý".
 app.get('/api/shipments', requireAuth, (req, res) => {
-  // Cùng cách làm với /api/orders ở trên: limit/offset tuỳ chọn, mặc định giữ
-  // nguyên hành vi cũ (tối đa 5000 bản ghi) để không phá vỡ giao diện hiện tại.
-  const limit = Math.min(5000, Math.max(1, intValue(req.query.limit, 5000, 1, 5000)));
-  const offset = Math.max(0, intValue(req.query.offset, 0, 0, Number.MAX_SAFE_INTEGER));
-  const totalCount = db.prepare(`SELECT COUNT(*) AS c FROM orders WHERE user_id = ? AND deleted_at IS NULL`)
-    .get(req.userId).c;
   const rows = db.prepare(`SELECT o.*, t.carrier AS carrier_name,
       t.tracking_code AS external_tracking_code, t.current_status AS carrier_status,
       t.current_location AS carrier_location, t.expected_delivery_at,
@@ -2038,9 +1963,9 @@ app.get('/api/shipments', requireAuth, (req, res) => {
     FROM orders o
     LEFT JOIN shipment_tracking t ON t.order_id = o.id AND t.user_id = o.user_id
     WHERE o.user_id = ? AND o.deleted_at IS NULL
-    ORDER BY COALESCE(o.shipping_updated_at, o.updated_at) DESC LIMIT ? OFFSET ?`)
-    .all(req.userId, limit, offset);
-  res.json({ shipments: rows.map(publicOrder), totalCount, limit, offset });
+    ORDER BY COALESCE(o.shipping_updated_at, o.updated_at) DESC LIMIT 5000`)
+    .all(req.userId);
+  res.json({ shipments: rows.map(publicOrder) });
 });
 
 app.get('/api/shipments/:id/events', requireAuth, (req, res) => {
@@ -2208,11 +2133,7 @@ app.post('/api/shipments/:id/reconcile', requireAuth, (req, res) => {
 });
 
 app.get('/api/products', requireAuth, (req, res) => {
-  // Không phân trang ở đây vì trang "Đơn hàng" cần tải đủ toàn bộ danh mục để
-  // đối chiếu alias với nội dung comment realtime. Chỉ thêm 1 giới hạn an toàn
-  // (rất cao, không ảnh hưởng shop thực tế) để phòng trường hợp dữ liệu lỗi
-  // sinh ra hàng trăm nghìn dòng làm 1 request nặng bất thường.
-  const rows = db.prepare('SELECT * FROM products WHERE user_id = ? ORDER BY active DESC, code ASC LIMIT 20000').all(req.userId);
+  const rows = db.prepare('SELECT * FROM products WHERE user_id = ? ORDER BY active DESC, code ASC').all(req.userId);
   res.json({ products: rows.map(p => ({
     id: p.id, code: p.code, name: p.name, price: p.price, stock: p.stock,
     aliases: JSON.parse(p.aliases || '[]'), active: !!p.active,

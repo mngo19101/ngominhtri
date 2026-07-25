@@ -619,6 +619,407 @@
     .nav-label{font-size:8.5px}
     .nav-label-row{gap:2px}
   }
+
+  /* ================================================================
+     GIAO DIỆN 2026 — lớp tinh gọn áp dụng cho toàn bộ ứng dụng.
+     Giữ nguyên id/class và luồng xử lý cũ để không ảnh hưởng tính năng.
+     ================================================================ */
+  :root{
+    --bg:#fff8fb;
+    --surface:#ffffff;
+    --surface-soft:#fff3f8;
+    --surface-tint:#fff9fc;
+    --card:#ffffff;
+    --glass:#ffffff;
+    --glass-strong:#ffffff;
+    --border:#f1d8e4;
+    --border-strong:#eeb7cb;
+    --teal:#ee4f88;
+    --teal-dark:#cf356d;
+    --text:#352431;
+    --muted:#887080;
+    --accent2:#8b7cf6;
+    --accent3:#f5ae42;
+    --shadow:0 12px 32px rgba(96,40,70,.08);
+    --shadow-float:0 18px 45px rgba(96,40,70,.13);
+  }
+  html{background:var(--bg);}
+  body{
+    padding:24px 24px 112px;
+    background:
+      radial-gradient(circle at 4% -4%,rgba(255,188,214,.46),transparent 30rem),
+      radial-gradient(circle at 100% 6%,rgba(221,207,255,.42),transparent 28rem),
+      linear-gradient(180deg,#fffafd 0%,#fff7fb 54%,#fffafe 100%);
+    background-attachment:fixed;
+    letter-spacing:.005em;
+  }
+  *{scrollbar-color:#e9b7cb transparent;scrollbar-width:thin;}
+  ::selection{background:#ffd3e3;color:var(--text);}
+  button,input,select,textarea{font:inherit;}
+  input,select,textarea,.toolbar input,.toolbar select,.form-grid input,.form-grid select,.form-grid textarea,.date-input{
+    min-height:44px;
+    padding:10px 12px;
+    color:var(--text);
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:11px;
+    box-shadow:0 1px 1px rgba(61,27,45,.02);
+    transition:border-color .16s ease,box-shadow .16s ease,background .16s ease;
+  }
+  input::placeholder,textarea::placeholder{color:#b5a0ad;opacity:1;}
+  input:focus,select:focus,textarea:focus{
+    outline:none;
+    background:#fff;
+    border-color:var(--teal);
+    box-shadow:0 0 0 3px rgba(238,79,136,.13);
+  }
+  h2{
+    margin:0;
+    color:var(--text);
+    font-size:19px;
+    line-height:1.3;
+    text-transform:none;
+    letter-spacing:-.02em;
+  }
+  h2::first-letter{color:inherit;}
+  label{font-size:12px;font-weight:700;color:#755b6b;}
+  .field{gap:7px;margin-bottom:14px;}
+  hr{border-color:var(--border)!important;margin:18px 0!important;}
+  .btn,.btn-mini,.btn-print,.btn-admin-action,.admin-head-button,.auth-tab-btn,.btn-logout{
+    min-height:42px;
+    border-radius:11px;
+    font-weight:750;
+    letter-spacing:.005em;
+    transition:transform .15s ease,box-shadow .15s ease,background .15s ease,border-color .15s ease,color .15s ease;
+  }
+  .btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:7px;
+    background:linear-gradient(135deg,#f45791,#e9417d);
+    box-shadow:0 8px 18px rgba(223,53,112,.22);
+    padding:11px 16px;
+  }
+  .btn:hover{filter:none;transform:translateY(-1px);box-shadow:0 11px 22px rgba(223,53,112,.27);}
+  .btn:active,.btn-mini:active,.btn-print:active,.nav-item:active{transform:translateY(0) scale(.98);}
+  .btn-mini,.btn-print,.btn-admin-action,.admin-head-button{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:auto;
+    padding:8px 12px;
+    background:var(--surface);
+    border:1px solid var(--border);
+    color:var(--text);
+    box-shadow:0 2px 6px rgba(96,40,70,.035);
+  }
+  .btn-mini:hover,.btn-print:hover,.btn-admin-action:hover,.admin-head-button:hover{
+    background:var(--surface-soft);
+    border-color:var(--border-strong);
+    color:var(--teal-dark);
+    transform:translateY(-1px);
+  }
+  .status{
+    display:flex;
+    align-items:center;
+    min-height:42px;
+    padding:10px 12px;
+    border-radius:11px;
+    border:1px solid #eadfe5;
+    background:#fcfafb;
+    color:var(--muted);
+    font-family:'IBM Plex Sans',sans-serif;
+    line-height:1.45;
+  }
+  .panel,.feed-panel,.menu-card,.customer-card,.order-card,.shipping-card,.reconcile-row,.stat-card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    box-shadow:var(--shadow);
+    backdrop-filter:none;
+    -webkit-backdrop-filter:none;
+  }
+  .panel,.feed-panel{border-radius:18px;padding:20px;}
+  .panel h2,.feed-panel h2{margin-bottom:16px;}
+  .panel h2::after,.feed-panel h2::after,.customers-page>h2::after,.report-header h2::after,.management-page .feed-panel-header h2::after{
+    content:'';
+    display:block;
+    width:28px;
+    height:3px;
+    margin-top:7px;
+    border-radius:99px;
+    background:linear-gradient(90deg,var(--teal),#ff9bc0);
+  }
+
+  /* Khung ứng dụng và thanh tài khoản */
+  #appRoot{max-width:1240px;margin:0 auto;}
+  #accountBar{
+    position:sticky;
+    top:14px;
+    z-index:35;
+    max-width:none;
+    min-height:64px;
+    margin:0 0 22px;
+    padding:10px 12px 10px 14px;
+    border:1px solid rgba(241,216,228,.9);
+    border-radius:16px;
+    background:rgba(255,255,255,.9);
+    box-shadow:0 8px 24px rgba(96,40,70,.08);
+    backdrop-filter:blur(16px) saturate(145%);
+    -webkit-backdrop-filter:blur(16px) saturate(145%);
+  }
+  #accountBar::before{
+    content:'LP';
+    display:grid;
+    place-items:center;
+    width:38px;
+    height:38px;
+    margin-right:10px;
+    flex:0 0 38px;
+    border-radius:12px;
+    color:#fff;
+    background:linear-gradient(135deg,#ff7aaa,#e9427e);
+    box-shadow:0 7px 14px rgba(223,53,112,.2);
+    font:800 12px/1 'JetBrains Mono',monospace;
+  }
+  .account-info{flex:1;min-width:0;font-size:13px;color:var(--muted);}
+  .account-info b{color:var(--text);font-size:14px;overflow-wrap:anywhere;}
+  .btn-logout{min-height:38px;padding:7px 12px;border-color:#f3cbd9;color:var(--teal-dark);background:#fff7fa;}
+  .btn-logout:hover{background:#fff0f5;border-color:#efadc4;color:var(--teal-dark);}
+
+  /* Màn hình đăng nhập */
+  #authScreen{min-height:100dvh;padding:24px;}
+  .auth-box{
+    position:relative;
+    max-width:420px;
+    padding:30px;
+    border-radius:24px;
+    background:rgba(255,255,255,.92);
+    border:1px solid rgba(241,216,228,.95);
+    box-shadow:var(--shadow-float);
+    backdrop-filter:blur(18px);
+  }
+  .auth-box::before{
+    content:'✦';
+    display:grid;
+    place-items:center;
+    width:50px;
+    height:50px;
+    margin:0 auto 15px;
+    border-radius:17px;
+    color:#fff;
+    background:linear-gradient(135deg,#ff7ead,#e9407c);
+    box-shadow:0 11px 22px rgba(223,53,112,.24);
+    font-size:24px;
+  }
+  .auth-title{font-size:22px;letter-spacing:-.03em;margin-bottom:6px;}
+  .auth-sub{font-size:13px;line-height:1.55;margin-bottom:22px;}
+  .auth-tabs{padding:4px;border:none;border-radius:12px;background:#fff2f7;margin-bottom:20px;}
+  .auth-tab-btn{min-height:38px;padding:8px;border-radius:9px;color:var(--muted);}
+  .auth-tab-btn.active{background:#fff;color:var(--teal-dark);box-shadow:0 3px 10px rgba(117,50,80,.1);}
+  .auth-form .btn{margin-top:4px;}
+  .auth-hint{margin-top:16px;line-height:1.5;}
+
+  /* Các màn nội dung */
+  .container{max-width:1240px;grid-template-columns:minmax(290px,340px) minmax(0,1fr);gap:18px;}
+  .container>.panel{align-self:start;position:sticky;top:100px;}
+  .feed-panel{min-height:calc(100dvh - 190px);}
+  .feed-panel-header{margin-bottom:14px;}
+  .feed-panel-header h2{margin-bottom:0;}
+  .feed-list{max-height:calc(100dvh - 250px);padding:2px 4px 2px 1px;gap:10px;}
+  .comment-card{
+    padding:14px;
+    border-radius:14px;
+    border:1px solid var(--border);
+    background:#fff;
+    box-shadow:0 4px 13px rgba(96,40,70,.045);
+  }
+  .comment-card:hover{border-color:var(--border-strong);}
+  .comment-info .top-row{align-items:flex-start;}
+  .user-name{font-size:14px;}
+  .user-id{display:block;margin-top:2px;color:var(--teal-dark);}
+  .comment-text{margin-top:7px;line-height:1.55;color:#5e4453;}
+  .comment-time{padding:3px 6px;border-radius:7px;background:#fff4f8;font-size:10px;}
+  .comment-card .btn-print{align-self:center;white-space:nowrap;}
+  .saved-id-list{gap:7px;margin:0 0 14px;}
+  .saved-id-chip{padding:6px 7px 6px 10px;border-color:var(--border);background:#fff8fb;}
+  .saved-id-chip.active{border-color:#f4a8c3;background:#fff0f5;color:var(--teal-dark);}
+
+  .customers-page,.report-page,.menu-page{max-width:920px;}
+  .management-page,.shipping-page{max-width:1120px;}
+  .customers-page>h2,.report-header h2,.management-page .feed-panel-header h2{margin-bottom:18px;}
+  .cust-summary{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(145px,1fr));
+    padding:7px;
+    gap:7px;
+    border-radius:16px;
+    border:1px solid var(--border);
+    background:#fff6fa;
+    box-shadow:none;
+  }
+  .cust-summary>span{
+    min-width:0;
+    padding:10px 12px;
+    border-radius:11px;
+    background:#fff;
+    color:var(--muted);
+    font-size:12px;
+  }
+  .cust-summary b{color:var(--text);font-size:15px;}
+  .customer-list,.order-table{gap:10px;}
+  .customer-card{border-radius:15px;padding:15px;}
+  .customer-head .cust-total{color:var(--teal-dark);}
+  .cart-item{border-radius:11px;background:#fff9fc;border-color:#f4e2e9;}
+  .session-search-field{margin-top:16px;}
+  .session-search-field input{width:100%;}
+  .session-date-jump-field{margin-bottom:0;}
+  .empty-note{padding:30px 16px;color:var(--muted);}
+  .empty-note::before{content:'✦';display:block;margin-bottom:7px;font-size:19px;color:#eaa1bc;}
+
+  /* Đơn hàng, báo cáo, vận chuyển */
+  .toolbar{gap:8px;margin:14px 0;}
+  .toolbar input{min-width:220px;}
+  .toolbar .btn,.toolbar .btn-mini{width:auto;min-height:42px;}
+  .order-card{border-radius:16px;padding:15px;}
+  .order-card:hover{border-color:var(--border-strong);box-shadow:0 8px 20px rgba(96,40,70,.075);}
+  .order-main{font-size:16px;letter-spacing:-.01em;}
+  .order-customer-id{color:var(--teal-dark);}
+  .order-financial{padding-left:10px;border-left:1px solid #f5e2ea;}
+  .order-total{color:var(--teal-dark);font-size:15px;}
+  .order-actions{gap:7px;margin-top:12px;padding-top:11px;border-top:1px solid #f5e4eb;}
+  .status-pill{padding:4px 9px;}
+  .report-header{align-items:flex-end;margin-bottom:18px;}
+  .report-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+  .stat-card{min-height:94px;border-radius:16px;padding:15px;gap:12px;}
+  .stat-icon{display:grid;place-items:center;width:38px;height:38px;border-radius:12px;background:#fff0f5;font-size:19px;}
+  .stat-value{font-size:20px;letter-spacing:-.04em;}
+  .daily-chart{border-radius:16px;background:#fff;box-shadow:var(--shadow);}
+  .chart-bar{background:#ffd0e0;border-radius:6px 6px 2px 2px;}
+  .chart-bar.active,.chart-bar-wrap:hover .chart-bar.active{background:linear-gradient(180deg,#ff78aa,var(--teal));}
+  .shipping-hero{padding:20px;border-radius:20px;background:linear-gradient(135deg,#fff 0%,#fff2f7 100%);border-color:#f0d5e1;box-shadow:var(--shadow);}
+  .shipping-hero h2{font-size:22px;color:var(--text);}
+  .shipping-stats{gap:9px;margin-top:17px;}
+  .shipping-stat{padding:13px;border-radius:13px;background:rgba(255,255,255,.82);border-color:#f1dce5;}
+  .shipping-stat b{font-size:18px;letter-spacing:-.03em;}
+  .shipping-inner-tabs{gap:7px;margin:18px 0 11px;padding-bottom:2px;}
+  .shipping-inner-tab{padding:9px 13px;border-radius:10px;background:#fff;color:var(--muted);}
+  .shipping-inner-tab.active{background:#fff0f5;border-color:#f5b4ca;color:var(--teal-dark);}
+  .shipping-filter-tabs{padding-bottom:2px;}
+  .shipping-filter{padding:8px 11px;border:1px solid transparent;background:#fff7fa;}
+  .shipping-filter.active{background:#fff0f5;color:var(--teal-dark);box-shadow:inset 0 0 0 1px #f5bbcf;}
+  .shipping-card{border-radius:17px;padding:16px;margin:10px 0;}
+  .shipping-card:hover{border-color:var(--border-strong);box-shadow:0 10px 24px rgba(96,40,70,.075);}
+  .shipping-code,.shipping-tiktok-id{color:var(--teal-dark);}
+  .shipping-recipient{font-size:17px;letter-spacing:-.015em;}
+  .shipping-card-meta{border-color:#f3e1e8;}
+  .shipping-warning{border-radius:12px;line-height:1.5;}
+  .spx-summary{border-radius:15px;}
+
+  /* Tài khoản, quản trị và cửa sổ nhập */
+  .menu-card{border-radius:17px;padding:18px;margin-bottom:12px;}
+  .menu-row{padding:12px 0;border-color:#f2e2e8;}
+  .menu-row .v{color:var(--text);}
+  .admin-choice-card{border-color:var(--border);border-radius:18px;background:#fff;box-shadow:var(--shadow);}
+  .admin-choice-card:hover{border-color:var(--border-strong);box-shadow:var(--shadow-float);}
+  .admin-overlay.detail-open{background:linear-gradient(150deg,#fff7fb,#fcf8ff);}
+  .admin-shell-head{border-color:var(--border);background:rgba(255,255,255,.88);}
+  .admin-user-card{border-radius:15px;background:#fff;}
+  .app-modal{padding:20px;background:rgba(49,28,40,.44);backdrop-filter:blur(7px);}
+  .app-modal-card{border-radius:20px;padding:22px;background:#fff;box-shadow:var(--shadow-float);}
+  .modal-head h3{font-size:19px;color:var(--text);}
+  .modal-actions{padding-top:4px;}
+
+  /* Điều hướng: dạng dock gọn gàng, vẫn giữ nguyên mọi tab */
+  .bottom-nav{
+    left:50%;right:auto;bottom:16px;
+    width:min(920px,calc(100vw - 48px));
+    height:68px;
+    margin:0;
+    padding:6px;
+    transform:translateX(-50%);
+    border:1px solid rgba(241,216,228,.92);
+    border-radius:19px;
+    background:rgba(255,255,255,.9);
+    box-shadow:0 14px 34px rgba(96,40,70,.16);
+    backdrop-filter:blur(18px) saturate(150%);
+    -webkit-backdrop-filter:blur(18px) saturate(150%);
+    overflow:hidden;
+  }
+  .bottom-nav .nav-item{min-width:0;border-radius:13px;gap:3px;color:#987a8b;}
+  .bottom-nav .nav-item:hover{background:#fff2f7;color:var(--teal-dark);}
+  .bottom-nav .nav-item.active{background:#fff0f5;color:var(--teal-dark);}
+  .nav-icon{font-size:18px;filter:saturate(.88);}
+  .nav-label{font-size:10.5px;font-weight:750;white-space:nowrap;}
+  .badge-count{background:var(--teal);box-shadow:0 2px 6px rgba(223,53,112,.25);}
+
+  @media(max-width:900px){
+    body{padding:16px 16px 105px;}
+    #accountBar{top:8px;margin-bottom:16px;}
+    .container{grid-template-columns:1fr;gap:14px;}
+    .container>.panel{position:static;}
+    .feed-panel{min-height:0;}
+    .feed-list{max-height:none;min-height:280px;}
+    .bottom-nav{width:calc(100vw - 28px);bottom:12px;}
+  }
+  @media(max-width:620px){
+    body{padding:10px 10px 98px;}
+    #accountBar{min-height:56px;top:6px;margin-bottom:13px;padding:8px 9px;}
+    #accountBar::before{width:34px;height:34px;flex-basis:34px;margin-right:7px;border-radius:10px;font-size:11px;}
+    .account-info{font-size:11px;line-height:1.35;}
+    .account-info b{font-size:12px;}
+    .btn-logout{min-height:34px;padding:5px 9px;font-size:11px;}
+    .panel,.feed-panel{border-radius:15px;padding:15px;}
+    h2{font-size:17px;}
+    .customers-page>h2,.report-header h2,.management-page .feed-panel-header h2{margin-bottom:14px;}
+    .cust-summary{grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;padding:5px;}
+    .cust-summary>span{padding:8px 9px;font-size:11px;}
+    .cust-summary b{font-size:13px;}
+    .comment-card{padding:12px;}
+    .comment-card .btn-print{width:100%;}
+    .toolbar{display:grid;grid-template-columns:1fr 1fr;}
+    .toolbar input,.toolbar select{grid-column:1/-1;min-width:0;width:100%;}
+    .toolbar .btn,.toolbar .btn-mini{width:100%;}
+    .order-head{grid-template-columns:minmax(0,1fr) 96px;}
+    .order-card{padding:13px;}
+    .order-financial{padding-left:7px;}
+    .report-stats{grid-template-columns:1fr 1fr;gap:8px;}
+    .stat-card{min-height:82px;padding:11px;gap:8px;border-radius:14px;}
+    .stat-icon{width:32px;height:32px;border-radius:10px;font-size:16px;}
+    .stat-label{font-size:10.5px;line-height:1.25;}
+    .stat-value{font-size:15px;}
+    .shipping-hero{padding:16px;border-radius:16px;}
+    .shipping-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;}
+    .shipping-stat{padding:10px;}
+    .shipping-stat b{font-size:15px;}
+    .shipping-card{padding:13px;border-radius:15px;}
+    .app-modal{padding:10px;align-items:flex-end;}
+    .app-modal-card{max-height:90dvh;border-radius:20px 20px 14px 14px;padding:17px;}
+    .bottom-nav{
+      height:66px;
+      bottom:8px;
+      width:calc(100vw - 16px);
+      padding:4px;
+      border-radius:16px;
+      justify-content:flex-start;
+      overflow-x:auto;
+      overflow-y:hidden;
+      scroll-snap-type:x proximity;
+      scrollbar-width:none;
+    }
+    .bottom-nav::-webkit-scrollbar{display:none;}
+    .bottom-nav .nav-item{flex:0 0 68px;gap:2px;border-radius:11px;scroll-snap-align:start;}
+    .nav-icon{font-size:16px;}
+    .nav-label{font-size:8.5px;letter-spacing:-.03em;}
+    .nav-label-row{gap:1px;}
+    .badge-count{font-size:8px;min-width:14px;padding:0 4px;}
+  }
+  @media(max-width:380px){
+    .nav-label{font-size:7.6px;}
+    .nav-icon{font-size:15px;}
+    .bottom-nav{height:63px;}
+    .bottom-nav .nav-item{flex-basis:62px;}
+  }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -1296,7 +1697,14 @@
   const TOKEN_KEY = 'tiktok_auth_token';
 
   function apiBase() {
-    return $('#bridgeUrl').value.trim().replace(/\/+$/, '');
+    const configuredUrl = $('#bridgeUrl').value.trim().replace(/\/+$/, '');
+    // Khi mở bộ mã ở localhost để kiểm tra giao diện, tự dùng chính server cục bộ.
+    // Bản Railway vẫn dùng đúng URL đã cấu hình trong ô Bridge Server.
+    if ((location.hostname === '127.0.0.1' || location.hostname === 'localhost') &&
+        configuredUrl.includes('ngominhtri-production.up.railway.app')) {
+      return location.origin;
+    }
+    return configuredUrl;
   }
 
   async function apiFetch(path, options = {}) {
