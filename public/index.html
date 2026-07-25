@@ -618,13 +618,54 @@
   .tab-view,.panel,.feed-panel,.management-page,.shipping-page,.customers-page,.report-page{min-width:0;width:100%}
   input,select,textarea,button{max-width:100%}
   canvas,img{max-width:100%;height:auto}
+  /* ===== TỐI ƯU ĐA THIẾT BỊ: ĐIỆN THOẠI, IPAD & LAPTOP ===== */
+  body {
+    padding-bottom: calc(88px + env(safe-area-inset-bottom));
+  }
+  .bottom-nav {
+    padding-bottom: env(safe-area-inset-bottom);
+    height: calc(72px + env(safe-area-inset-bottom));
+  }
+
+  @media (min-width: 1101px) {
+    .container, #accountBar, .management-page, .shipping-page, .customers-page, .report-page {
+      max-width: 1240px;
+    }
+    .container {
+      grid-template-columns: 340px 1fr;
+      gap: 24px;
+    }
+    .bottom-nav {
+      max-width: 780px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-radius: 18px 18px 0 0;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.18);
+    }
+  }
+
+  @media (min-width: 769px) and (max-width: 1100px) {
+    .container {
+      grid-template-columns: 290px 1fr;
+      gap: 16px;
+    }
+    .bottom-nav {
+      max-width: 96%;
+      left: 2%;
+      border-radius: 18px 18px 0 0;
+    }
+  }
+
   @media(max-width:1024px){
-    body{padding:16px;padding-bottom:86px}
+    body{padding:16px;padding-bottom:calc(86px + env(safe-area-inset-bottom))}
     .panel,.feed-panel{padding:16px}
     .management-page,.shipping-page{max-width:100%}
   }
   @media(max-width:768px){
-    body{padding:12px;padding-bottom:82px}
+    body{padding:12px;padding-bottom:calc(82px + env(safe-area-inset-bottom))}
+    input, select, textarea {
+      font-size: 16px !important; /* Ngăn iOS Safari tự zoom màn hình khi bấm vào ô nhập */
+    }
     #accountBar{gap:10px;flex-wrap:wrap}
     .account-info{min-width:0;flex:1 1 220px}
     .account-info b{overflow-wrap:anywhere}
@@ -637,8 +678,7 @@
     .shipping-card-head{display:grid;grid-template-columns:minmax(0,1fr) auto}
     .reconcile-row{grid-template-columns:1fr}
     .app-modal{padding:10px}
-    .app-modal-card{padding:16px}
-    .bottom-nav{height:72px;overflow:hidden}
+    .app-modal-card{padding:16px; border-radius:18px;}
     .bottom-nav .nav-item{min-width:0;padding:4px 2px}
     .nav-label{font-size:10px;line-height:1.1;text-align:center}
     .nav-icon{font-size:17px}
