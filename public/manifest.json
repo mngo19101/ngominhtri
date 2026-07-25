@@ -1,0 +1,24 @@
+{
+  "name": "TikTok Live Clothes Sales - In Comment Chốt Đơn",
+  "short_name": "App TikTok Live",
+  "description": "Ứng dụng chốt đơn comment TikTok Live chuyên nghiệp cho shop bán quần áo thời trang",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fff5fa",
+  "theme_color": "#f54f91",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "https://i.pinimg.com/vwebp/1200x/07/e9/79/07e979928cae556d87c2e6e7d94b100c.webp",
+      "sizes": "192x192",
+      "type": "image/webp",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://i.pinimg.com/vwebp/1200x/07/e9/79/07e979928cae556d87c2e6e7d94b100c.webp",
+      "sizes": "512x512",
+      "type": "image/webp",
+      "purpose": "any maskable"
+    }
+  ]
+}

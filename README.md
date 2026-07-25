@@ -42,8 +42,6 @@ SMTP_PASS=app_password_or_smtp_password
 SMTP_FROM=your_email@gmail.com
 ```
 
-Chức năng quên mật khẩu chỉ tự động gửi mã khi tài khoản đã có email khôi phục. Người dùng có thể nhập email này lúc đăng ký hoặc cập nhật trong phần Bảo mật & dữ liệu sau khi đăng nhập.
-
 Không đổi `PORT`; Railway tự cấp biến này.
 
 Sau khi upload, chọn **Redeploy**. Server tự tạo/migrate bảng SQLite, không xóa dữ liệu cũ. Hãy xác nhận log có dòng:

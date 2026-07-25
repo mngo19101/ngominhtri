@@ -2,9 +2,14 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>In Comment TikTok Live - Xprinter LAN</title>
-<!-- Avatar nhỏ hiển thị trên tab trình duyệt (favicon). Thay link bên dưới bằng link ảnh TRỰC TIẾP (vd: https://i.pinimg.com/....jpg) lấy từ Pinterest -->
+<meta name="theme-color" content="#f54f91">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="App TikTok Live">
+<link rel="manifest" href="/manifest.json">
+<title>In Comment TikTok Live - App Bán Quần Áo</title>
+<!-- Avatar nhỏ hiển thị trên tab trình duyệt (favicon) -->
 <link rel="icon" type="image/webp" href="https://i.pinimg.com/vwebp/1200x/07/e9/79/07e979928cae556d87c2e6e7d94b100c.webp">
 <link rel="apple-touch-icon" href="https://i.pinimg.com/vwebp/1200x/07/e9/79/07e979928cae556d87c2e6e7d94b100c.webp">
 <style>
@@ -115,7 +120,24 @@
   }
   .btn-print:hover{ background:var(--teal); color:#fff; border-color:var(--teal); }
 
-  .feed-panel-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .comment-card, .cust-card, .order-card, .session-card {
+    contain: content;
+    content-visibility: auto;
+    contain-intrinsic-size: 80px;
+  }
+  .btn, .btn-mini, .nav-item, .clothes-chip {
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .clothes-quick-bar{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:8px 0 12px; padding:8px 12px; background:rgba(255,255,255,.65); border:1px solid var(--border); border-radius:10px; }
+  .clothes-bar-label{ font-size:11.5px; font-weight:700; color:var(--text); }
+  .clothes-chips{ display:flex; gap:4px; flex-wrap:wrap; }
+  .clothes-chip{ padding:3px 9px; font-size:11.5px; font-weight:700; border:1px solid var(--border); background:#fff; color:var(--text); border-radius:6px; cursor:pointer; transition:.15s; user-select:none; touch-action:manipulation; }
+  .clothes-chip:hover, .clothes-chip.active{ background:var(--teal); color:#fff; border-color:var(--teal); }
+
+  .feed-panel-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
   .feed-panel-header h2{ margin-bottom:0; }
 
   .badge-count{
@@ -462,16 +484,6 @@
     white-space:pre-wrap; line-height:1.4;
   }
   .auth-hint{ font-size:11.5px; color:var(--muted); text-align:center; margin-top:6px; }
-  .auth-link{
-    background:none; border:none; color:var(--teal); font-size:12px; font-weight:700;
-    padding:8px 0 0; cursor:pointer; text-decoration:underline; text-align:center;
-  }
-  .auth-link:hover{ filter:brightness(.95); }
-  .auth-reset{ display:none; margin-top:14px; padding-top:14px; border-top:1px dashed var(--border); }
-  .auth-reset.open{ display:block; }
-  .auth-reset-title{ font-size:13px; font-weight:800; color:var(--text); text-align:center; margin-bottom:10px; }
-  .auth-reset-actions{ display:flex; gap:8px; flex-wrap:wrap; }
-  .auth-reset-actions .btn-mini{ flex:1 1 0; }
   .auth-note{ font-size:11.5px; color:var(--muted); line-height:1.5; margin-top:8px; }
 
   /* ===== THANH TÀI KHOẢN ===== */
@@ -675,46 +687,9 @@
         <label>Nhập lại mật khẩu</label>
         <input id="registerPassword2" type="password" autocomplete="new-password" placeholder="••••••">
       </div>
-      <div class="field">
-        <label>Email khôi phục</label>
-        <input id="registerRecoveryEmail" type="email" autocomplete="email" placeholder="vd: tenban@gmail.com">
-      </div>
       <div class="auth-error" id="registerError"></div>
       <button type="submit" class="btn">Tạo Tài Khoản</button>
     </form>
-
-    <button type="button" class="auth-link" id="btnOpenReset">Quên mật khẩu?</button>
-
-    <div class="auth-reset" id="resetPasswordPanel">
-      <div class="auth-reset-title">Lấy lại mật khẩu</div>
-      <div class="field">
-        <label>Tên đăng nhập</label>
-        <input id="resetUsername" type="text" autocomplete="username" placeholder="vd: shopcuaban">
-      </div>
-      <div class="field">
-        <label>Email khôi phục</label>
-        <input id="resetEmail" type="email" autocomplete="email" placeholder="vd: tenban@gmail.com">
-      </div>
-      <div class="field">
-        <label>Mã xác nhận</label>
-        <input id="resetCode" type="text" inputmode="numeric" maxlength="6" placeholder="6 số">
-      </div>
-      <div class="field">
-        <label>Mật khẩu mới</label>
-        <input id="resetNewPassword" type="password" autocomplete="new-password" placeholder="Tối thiểu 8 ký tự">
-      </div>
-      <div class="field">
-        <label>Nhập lại mật khẩu mới</label>
-        <input id="resetNewPassword2" type="password" autocomplete="new-password" placeholder="••••••">
-      </div>
-      <div class="auth-error" id="resetError"></div>
-      <div class="auth-reset-actions">
-        <button type="button" class="btn-mini" id="btnSendResetCode">Gửi mã</button>
-        <button type="button" class="btn-mini" id="btnConfirmResetPassword">Đổi mật khẩu</button>
-        <button type="button" class="btn-mini" id="btnCloseReset">Đóng</button>
-      </div>
-      <div class="auth-note">Mã được gửi tự động qua email, hiệu lực 10 phút và chỉ dùng một lần.</div>
-    </div>
 
     <div class="auth-hint">Dữ liệu theo tài khoản, dùng được trên mọi thiết bị.</div>
   </div>
@@ -730,7 +705,10 @@
       <span id="supportModeCountdown" style="font-size:12px;"></span>
       <button class="btn-mini" id="btnExitSupportMode">Thoát hỗ trợ</button>
     </div>
-    <button class="btn-logout" id="btnLogout">Đăng xuất</button>
+    <div style="display:flex; align-items:center;">
+      <button class="btn-mini" id="btnInstallPwa" style="display:none; background:var(--teal); color:#fff; border:none; margin-right:8px; font-weight:700;">📲 Cài App</button>
+      <button class="btn-logout" id="btnLogout">Đăng xuất</button>
+    </div>
   </div>
 
 <!-- TAB: PHIÊN LIVE -->
@@ -769,6 +747,28 @@
       <div class="feed-panel-header">
         <h2>Bình Luận Trực Tiếp<span id="liveIdLabel" style="color:var(--muted); text-transform:none; letter-spacing:0; font-weight:600;"></span></h2>
         <button class="btn-print" id="btnStopTikTok" style="display:none; border-color:rgba(230,102,102,.5); color:#e6386a;">⏹ Dừng xem Live</button>
+      </div>
+      <!-- THANH CHỌN NHANH SIZE & MÀU QUẦN ÁO BÁN LIVE -->
+      <div class="clothes-quick-bar">
+        <span class="clothes-bar-label">👕 Size:</span>
+        <div class="clothes-chips">
+          <button type="button" class="clothes-chip size-chip" data-val="S">S</button>
+          <button type="button" class="clothes-chip size-chip" data-val="M">M</button>
+          <button type="button" class="clothes-chip size-chip" data-val="L">L</button>
+          <button type="button" class="clothes-chip size-chip" data-val="XL">XL</button>
+          <button type="button" class="clothes-chip size-chip" data-val="2XL">2XL</button>
+          <button type="button" class="clothes-chip size-chip" data-val="FreeSize">F</button>
+        </div>
+        <span class="clothes-bar-label" style="margin-left:6px;">🎨 Màu:</span>
+        <div class="clothes-chips">
+          <button type="button" class="clothes-chip color-chip" data-val="Đen">Đen</button>
+          <button type="button" class="clothes-chip color-chip" data-val="Trắng">Trắng</button>
+          <button type="button" class="clothes-chip color-chip" data-val="Hồng">Hồng</button>
+          <button type="button" class="clothes-chip color-chip" data-val="Kem">Kem</button>
+          <button type="button" class="clothes-chip color-chip" data-val="Xanh">Xanh</button>
+          <button type="button" class="clothes-chip color-chip" data-val="Nâu">Nâu</button>
+          <button type="button" class="clothes-chip color-chip" data-val="Đỏ">Đỏ</button>
+        </div>
       </div>
       <div class="feed-list" id="commentFeed">
         <div class="feed-placeholder" style="color:var(--muted); font-size:13px;">Đang chờ bình luận từ phiên Live...</div>
@@ -1176,19 +1176,14 @@
 
     <div class="menu-card">
       <h2>Bảo mật & dữ liệu</h2>
-      <div class="menu-row">
-        <span class="k">Email khôi phục</span>
-        <span class="v mono" id="menuRecoveryEmail">-</span>
-      </div>
       <div class="toolbar">
-        <button class="btn-mini" id="btnUpdateRecoveryEmail">📧 Cập nhật email khôi phục</button>
         <button class="btn-mini" id="btnChangePassword">🔑 Đổi mật khẩu</button>
         <button class="btn-mini" id="btnManageSessions">📱 Thiết bị đăng nhập</button>
         <button class="btn-mini" id="btnDownloadBackup">💾 Tải bản sao lưu</button>
         <button class="btn-mini danger-text" id="btnRestoreBackup">↥ Khôi phục sao lưu</button>
         <input type="file" id="backupFileInput" accept="application/json,.json" style="display:none;">
       </div>
-      <div class="menu-hint">Email khôi phục được dùng để tự gửi mã đặt lại mật khẩu. Sao lưu gồm đơn, sản phẩm, khách và lịch sử Live.</div>
+      <div class="menu-hint">Sao lưu gồm đơn, sản phẩm, khách và lịch sử Live.</div>
     </div>
 
     <div class="menu-card">
@@ -1463,14 +1458,8 @@ ${data.details}` : '';
     $('#appRoot').style.display = 'none';
     $('#authScreen').style.display = 'flex';
     $('#bridgeUrl').readOnly = false;
-    hideResetPanel();
     setAuthTab('login');
     $('#loginError').textContent = message || 'Tài khoản đã bị khóa.';
-  }
-
-  function hideResetPanel() {
-    $('#resetPasswordPanel').classList.remove('open');
-    $('#resetError').textContent = '';
   }
 
   function setAuthTab(which) {
@@ -1481,71 +1470,10 @@ ${data.details}` : '';
     $('#registerForm').classList.toggle('active', !isLogin);
     $('#loginError').textContent = '';
     $('#registerError').textContent = '';
-    if (!isLogin) hideResetPanel();
   }
 
   $('#authTabLoginBtn').addEventListener('click', () => setAuthTab('login'));
   $('#authTabRegisterBtn').addEventListener('click', () => setAuthTab('register'));
-  $('#btnOpenReset').addEventListener('click', () => {
-    setAuthTab('login');
-    $('#resetPasswordPanel').classList.add('open');
-    $('#resetError').textContent = '';
-    $('#resetUsername').focus();
-  });
-  $('#btnCloseReset').addEventListener('click', hideResetPanel);
-
-  $('#btnSendResetCode').addEventListener('click', async () => {
-    const username = $('#resetUsername').value.trim();
-    const email = $('#resetEmail').value.trim();
-    $('#resetError').textContent = '';
-    if (!username || !email) {
-      $('#resetError').textContent = 'Vui lòng nhập tên đăng nhập và email khôi phục.';
-      return;
-    }
-    try {
-      const data = await apiFetch('/api/password-reset/request', {
-        method: 'POST',
-        body: JSON.stringify({ username, email })
-      });
-      $('#resetError').textContent = data.message || 'Nếu thông tin khớp, mã xác nhận đã được gửi.';
-    } catch (err) {
-      $('#resetError').textContent = err.message;
-    }
-  });
-
-  $('#btnConfirmResetPassword').addEventListener('click', async () => {
-    const username = $('#resetUsername').value.trim();
-    const email = $('#resetEmail').value.trim();
-    const code = $('#resetCode').value.trim();
-    const newPassword = $('#resetNewPassword').value;
-    const newPassword2 = $('#resetNewPassword2').value;
-    $('#resetError').textContent = '';
-    if (!username || !email || !code || !newPassword) {
-      $('#resetError').textContent = 'Vui lòng nhập đủ thông tin để đặt lại mật khẩu.';
-      return;
-    }
-    if (newPassword.length < 8) {
-      $('#resetError').textContent = 'Mật khẩu mới phải có ít nhất 8 ký tự.';
-      return;
-    }
-    if (newPassword !== newPassword2) {
-      $('#resetError').textContent = 'Mật khẩu nhập lại không khớp.';
-      return;
-    }
-    try {
-      const data = await apiFetch('/api/password-reset/confirm', {
-        method: 'POST',
-        body: JSON.stringify({ username, email, code, newPassword })
-      });
-      $('#resetError').textContent = data.message || 'Đã đặt lại mật khẩu thành công.';
-      setTimeout(() => {
-        hideResetPanel();
-        setAuthTab('login');
-      }, 700);
-    } catch (err) {
-      $('#resetError').textContent = err.message;
-    }
-  });
 
   $('#loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -1570,21 +1498,16 @@ ${data.details}` : '';
     const username = $('#registerUsername').value.trim();
     const password = $('#registerPassword').value;
     const password2 = $('#registerPassword2').value;
-    const recoveryEmail = $('#registerRecoveryEmail').value.trim();
     $('#registerError').textContent = '';
 
     if (!username || !password) { $('#registerError').textContent = 'Vui lòng nhập đủ tên đăng nhập và mật khẩu.'; return; }
     if (password.length < 8) { $('#registerError').textContent = 'Mật khẩu cần tối thiểu 8 ký tự.'; return; }
     if (password !== password2) { $('#registerError').textContent = 'Mật khẩu nhập lại không khớp.'; return; }
-    if (recoveryEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recoveryEmail)) {
-      $('#registerError').textContent = 'Email khôi phục không hợp lệ.';
-      return;
-    }
 
     try {
       const data = await apiFetch('/api/register', {
         method: 'POST',
-        body: JSON.stringify({ username, password, recoveryEmail })
+        body: JSON.stringify({ username, password })
       });
       await loginAs(data.username, data.token);
     } catch (err) {
@@ -1626,8 +1549,6 @@ ${data.details}` : '';
     $('#bridgeUrl').readOnly = false;
     $('#loginUsername').value = '';
     $('#loginPassword').value = '';
-    $('#registerRecoveryEmail').value = '';
-    hideResetPanel();
     setAuthTab('login');
   });
 
@@ -3450,7 +3371,6 @@ function cartItemAmount(item) {
     $('#menuAdminFlag').textContent = data.isAdmin ? 'Quản trị viên' : 'Người dùng';
     $('#menuPrinterToken').textContent = data.printerToken || '-';
     $('#menuPrinterConnected').textContent = data.printerConnected ? '✅ Đã kết nối' : '⚠️ Chưa có ESP32 nào kết nối bằng mã này';
-    $('#menuRecoveryEmail').textContent = data.recoveryEmail || 'Chưa cài đặt';
 
     const lic = data.license || { type: 'free', label: 'Miễn phí', canPrint: false, isExpired: false, daysLeft: null };
     const pill = $('#menuLicensePill');
@@ -3508,27 +3428,6 @@ function cartItemAmount(item) {
   $('#lockedModalGoMenu').addEventListener('click', () => {
     hideLockedModal();
     switchTab('menu');
-  });
-
-  $('#btnUpdateRecoveryEmail').addEventListener('click', async () => {
-    const nextEmail = prompt('Nhập email khôi phục mới (để trống nếu muốn xoá):', currentRecoveryEmail || '');
-    if (nextEmail === null) return;
-    const recoveryEmail = nextEmail.trim();
-    if (recoveryEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recoveryEmail)) {
-      alert('Email khôi phục không hợp lệ.');
-      return;
-    }
-    try {
-      const data = await apiFetch('/api/account/recovery-email', {
-        method: 'PUT',
-        body: JSON.stringify({ recoveryEmail })
-      });
-      currentRecoveryEmail = data.recoveryEmail || '';
-      alert(currentRecoveryEmail ? 'Đã lưu email khôi phục.' : 'Đã xoá email khôi phục.');
-      await loadMenuInfo();
-    } catch (err) {
-      alert(err.message);
-    }
   });
 
   $('#btnChangePassword').addEventListener('click', async () => {
@@ -4403,6 +4302,9 @@ function cartItemAmount(item) {
     printBtn.addEventListener('click', () => quickPrintAndOrder(cmt, printBtn));
 
     feed.prepend(card);
+    while (feed.children.length > 300) {
+      feed.removeChild(feed.lastChild);
+    }
 
     // Lưu lại toàn bộ comment vào phiên live hiện tại, kể cả khi chưa bấm "In phiếu",
     // để có thể xem lại / in bù sau này trong tab "Lịch sử".
@@ -4623,6 +4525,81 @@ function cartItemAmount(item) {
   }
 
   tryAutoLogin();
+
+  // ====== CHUYỂN ĐỔI CHIP CHỌN QUICK SIZE & MÀU CHO SHOP QUẦN ÁO ======
+  document.querySelectorAll('.clothes-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      chip.classList.toggle('active');
+      const val = chip.dataset.val;
+      const modalOpen = $('#orderModal') && $('#orderModal').style.display !== 'none';
+      if (modalOpen) {
+        const input = $('#ordProductName');
+        if (input) {
+          const current = input.value.trim();
+          input.value = current ? `${current} - ${val}` : val;
+          input.focus();
+        }
+      } else {
+        const searchInput = $('#orderSearch') || $('#sessionSearchInput');
+        if (searchInput) {
+          searchInput.value = val;
+          searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      }
+    });
+  });
+
+  // ====== BÀN PHÍM TẮT DÀNH CHO SHOP BÁN LIVE ======
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'F2' || (e.ctrlKey && e.key.toLowerCase() === 'k')) {
+      e.preventDefault();
+      const activeTab = document.querySelector('.nav-item.active')?.dataset?.tab;
+      if (activeTab === 'live') {
+        $('#tiktokUsername')?.focus();
+      } else if (activeTab === 'orders') {
+        $('#orderSearch')?.focus();
+      } else if (activeTab === 'customers') {
+        $('#customerSearchInput')?.focus();
+      }
+    }
+    if (e.key === 'Escape') {
+      const orderModal = $('#orderModal');
+      if (orderModal && orderModal.style.display !== 'none') {
+        orderModal.style.display = 'none';
+      }
+    }
+  });
+
+  // ====== LẮNG NGHE & CÀI ĐẶT PWA APP ======
+  let deferredPwaPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPwaPrompt = e;
+    const btn = $('#btnInstallPwa');
+    if (btn) btn.style.display = 'inline-flex';
+  });
+
+  const btnPwa = $('#btnInstallPwa');
+  if (btnPwa) {
+    btnPwa.addEventListener('click', async () => {
+      if (!deferredPwaPrompt) return;
+      deferredPwaPrompt.prompt();
+      const { outcome } = await deferredPwaPrompt.userChoice;
+      if (outcome === 'accepted') {
+        btnPwa.style.display = 'none';
+      }
+      deferredPwaPrompt = null;
+    });
+  }
+
+  // Đăng ký Service Worker hỗ trợ caching & load ứng dụng siêu tốc
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').then(reg => {
+        console.log('[PWA] ServiceWorker registered:', reg.scope);
+      }).catch(() => {});
+    });
+  }
 })();
 </script>
 </body>
