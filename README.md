@@ -1,4 +1,4 @@
-# TikTok Live Print & Order Manager v2.10.0
+# TikTok Live Print & Order Manager v2.12.0
 
 Bộ mã này chạy trực tiếp trên Railway và phục vụ giao diện tại:
 
@@ -32,6 +32,7 @@ ADMIN_PASSWORD=mat_khau_admin_manh
 Tùy chọn:
 
 ```text
+DATABASE_CAPACITY_MB=500
 TIKTOK_SIGN_API_KEY=api_key_cua_eulerstream
 ```
 
@@ -44,7 +45,7 @@ Sau khi upload, chọn **Redeploy**. Server tự tạo/migrate bảng SQLite, kh
 Bridge Server đang chạy tại cổng ...
 ```
 
-## Tính năng v2.10.0
+## Tính năng v2.12.0
 
 - Tab **Vận chuyển** riêng, dùng chung đơn đã chốt.
 - Chỉ nhập mã vận đơn SPX: hệ thống tự tra cứu trạng thái, vị trí hiện tại, hành trình và ngày giao dự kiến, rồi lưu vào đúng đơn.
@@ -61,6 +62,13 @@ Bridge Server đang chạy tại cổng ...
 - Phần **Đơn hàng** đã bỏ ô và chữ **Mã sản phẩm** khỏi màn hình thêm/sửa, danh sách và file Excel để thao tác gọn hơn.
 - Trong **Đơn hàng** và **Vận chuyển**, tên người mua hiển thị to, đậm ở trên; ID TikTok nhỏ hơn nằm ngay bên dưới.
 - Tối ưu responsive cho laptop, iPad và điện thoại: thanh tab luôn đủ mục, bộ lọc tự xuống dòng, thẻ đơn/vận chuyển không chồng chữ, cửa sổ nhập và nút bấm không tràn màn hình.
+- Giữ nguyên đơn đang hoạt động, số tiền và dữ liệu cần thiết cho báo cáo doanh thu.
+- Tự dọn chi tiết hành trình/dữ liệu thô SPX của đơn đã giao, đã hoàn hoặc đã hủy quá 30 ngày.
+- Tự xóa vĩnh viễn đơn đã bấm xóa quá 7 ngày cùng dữ liệu vận chuyển và mục giỏ liên quan.
+- Admin có nút **Dọn & tối ưu database** để chạy dọn ngay, checkpoint WAL và thu hồi vùng trống SQLite; khách có thể phải chờ vài giây nhưng không bị đăng xuất hay mất đơn đang hoạt động.
+- Admin thấy trực tiếp giới hạn database, dung lượng đã dùng thực tế, phần còn trống, phần có thể thu hồi và tỷ lệ đã dùng. Mặc định là 500 MB, có thể đổi bằng `DATABASE_CAPACITY_MB`.
+- Sau khi dọn, hệ thống báo kích thước trước/sau và chính xác số byte đã giải phóng.
+- Mỗi tài khoản hiển thị dung lượng dữ liệu đã lưu (ước tính) trong danh sách quản trị và bảng xếp theo dung lượng.
 - Đơn chưa giao chỉ cộng vào **Tạm tính**. Chỉ khi vận chuyển chuyển sang **Đã giao** mới ghi nhận **Doanh thu**, theo đúng ngày giao thành công.
 - Đã bỏ tab **Sản phẩm** khỏi thanh điều hướng; dữ liệu sản phẩm cũ vẫn được giữ an toàn trong database.
 - Đã bỏ nút **Hành trình** cũ trong Vận chuyển; chỉ giữ **Xem hành trình SPX**.

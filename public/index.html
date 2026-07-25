@@ -861,6 +861,38 @@
     <div class="auth-error" id="adminError" style="margin-top:10px;"></div>
     <div class="customer-list" id="adminUserList"></div>
 
+    <h2 style="margin-top:22px;">Dung Lượng Database</h2>
+    <div class="menu-card">
+      <div class="shipping-stats">
+        <div class="shipping-stat"><small>Giới hạn</small><b id="dbCapacity">500 MB</b></div>
+        <div class="shipping-stat"><small>Đã dùng thực tế</small><b id="dbUsed">Đang tải...</b></div>
+        <div class="shipping-stat"><small>Còn trống</small><b id="dbRemaining">Đang tải...</b></div>
+        <div class="shipping-stat"><small>Có thể thu hồi</small><b id="dbReclaimable">Đang tải...</b></div>
+      </div>
+      <div class="menu-progress-wrap">
+        <div class="menu-progress-bar"><div class="menu-progress-fill" id="dbUsageFill" style="width:0%;"></div></div>
+        <div class="menu-hint" id="dbUsagePercent" style="margin-top:6px;">Đang đọc dung lượng từ database...</div>
+      </div>
+      <div class="menu-hint" style="margin-bottom:10px;">
+        Tự động: xóa chi tiết hành trình SPX của đơn hoàn tất quá 30 ngày và xóa vĩnh viễn đơn đã bấm xóa quá 7 ngày.
+        Đơn đang dùng, số tiền và báo cáo doanh thu không bị xóa.
+      </div>
+      <div class="shipping-warning">
+        Nút tối ưu sẽ thu hồi vùng trống trong SQLite. Trong lúc chạy, khách đang dùng web có thể phải chờ vài giây,
+        nhưng không bị đăng xuất và không mất đơn đang hoạt động.
+      </div>
+      <div class="toolbar">
+        <button class="btn-mini" id="btnRefreshDatabaseStorage">🔄 Xem dung lượng mới</button>
+        <button class="btn" id="btnDatabaseMaintenance">🧹 Dọn & tối ưu database</button>
+      </div>
+      <div class="status" id="databaseMaintenanceStatus">Chỉ Admin có quyền chạy thao tác này.</div>
+      <h3 style="margin:18px 0 4px;">Dung lượng từng tài khoản</h3>
+      <div class="menu-hint">Số liệu ước tính theo nội dung khách đã lưu; không tính phần index và cấu trúc chung của SQLite.</div>
+      <div class="customer-list" id="adminStorageUserList" style="margin-top:10px;">
+        <div class="empty-note">Đang tải dung lượng tài khoản...</div>
+      </div>
+    </div>
+
     <h2 style="margin-top:22px;">Nhật Ký Chặn Tính Năng</h2>
     <div class="cust-summary">
       <span>Các lần tài khoản bị chặn xem Live / in phiếu vì chưa có gói hoặc gói đã hết hạn</span>
@@ -3023,7 +3055,7 @@ function cartItemAmount(item) {
     if (tab === 'orders') loadOrdersV2();
     if (tab === 'shipping') loadShippingV2();
     if (tab === 'menu') loadMenuInfo();
-    if (tab === 'admin') { loadAdminUsers(); loadLicenseLogs(); }
+    if (tab === 'admin') { loadAdminStorage(); loadAdminUsers(); loadLicenseLogs(); }
   }
 
   $('#navLive').addEventListener('click', () => switchTab('live'));
@@ -3176,6 +3208,7 @@ function cartItemAmount(item) {
   // ===== PHẦN QUẢN TRỊ (chỉ tài khoản admin) =====
   let isCurrentUserAdmin = false;
   let adminUsersCache = [];
+  let adminUserStorageMap = new Map();
 
   // Gọi sau khi đăng nhập/tự đăng nhập thành công để biết tài khoản hiện tại
   // có phải admin không, từ đó hiện/ẩn tab "Quản trị" trên thanh điều hướng.
@@ -3249,7 +3282,7 @@ function cartItemAmount(item) {
             ${u.isBanned ? '<span class="admin-badge badge-banned">ĐÃ KHÓA</span>' : ''}
             <span class="admin-badge ${licBadgeClass}">${escapeHtml(licBadgeText)}</span>
           </div>
-          <div class="admin-user-meta">Tạo lúc: ${createdStr}${liveQuotaStr}${u.isBanned && u.bannedReason ? ' • Lý do: ' + escapeHtml(u.bannedReason) : ''}</div>
+          <div class="admin-user-meta">Tạo lúc: ${createdStr}${liveQuotaStr} • Dữ liệu: ${formatStorageSize(adminUserStorageMap.get(Number(u.id)) || 0)} (ước tính)${u.isBanned && u.bannedReason ? ' • Lý do: ' + escapeHtml(u.bannedReason) : ''}</div>
           <div class="license-select-row">
             <select class="license-select">
               <option value="free"${lic.type === 'free' ? ' selected' : ''}>Miễn phí (thu hồi gói)</option>
@@ -3422,8 +3455,85 @@ function cartItemAmount(item) {
     }
   }
 
-  $('#btnRefreshAdmin').addEventListener('click', loadAdminUsers);
+  $('#btnRefreshAdmin').addEventListener('click', () => {
+    loadAdminStorage();
+    loadAdminUsers();
+  });
   $('#adminUserSearchInput').addEventListener('input', () => renderAdminUsers(adminUsersCache));
+
+  function formatStorageSize(bytes) {
+    const value = Math.max(0, Number(bytes) || 0);
+    if (value >= 1024 * 1024 * 1024) return `${(value / 1024 / 1024 / 1024).toFixed(2)} GB`;
+    if (value >= 1024 * 1024) return `${(value / 1024 / 1024).toFixed(2)} MB`;
+    if (value >= 1024) return `${(value / 1024).toFixed(1)} KB`;
+    return `${Math.round(value)} B`;
+  }
+
+  async function loadAdminStorage() {
+    const list = $('#adminStorageUserList');
+    const usageText = $('#dbUsagePercent');
+    try {
+      const data = await apiFetch('/api/admin/storage');
+      $('#dbCapacity').textContent = formatStorageSize(data.capacityBytes);
+      $('#dbUsed').textContent = formatStorageSize(data.usedBytes);
+      $('#dbRemaining').textContent = formatStorageSize(data.remainingBytes);
+      $('#dbReclaimable').textContent = formatStorageSize(data.reclaimableBytes);
+      const percent = Math.max(0, Math.min(100, Number(data.usedPercent) || 0));
+      $('#dbUsageFill').style.width = `${percent}%`;
+      $('#dbUsageFill').style.background = percent >= 90 ? '#dc2626' : (percent >= 75 ? '#f59e0b' : 'var(--teal)');
+      usageText.textContent = `Đã dùng ${percent.toFixed(2)}% · Còn ${formatStorageSize(data.remainingBytes)} trên tổng ${formatStorageSize(data.capacityBytes)}.`;
+
+      const rows = data.userUsage || [];
+      adminUserStorageMap = new Map(rows.map(row => [Number(row.id), Number(row.bytes) || 0]));
+      if (adminUsersCache.length) renderAdminUsers(adminUsersCache);
+      list.innerHTML = rows.length ? '' : '<div class="empty-note">Chưa có tài khoản nào.</div>';
+      rows.forEach(row => {
+        const card = document.createElement('div');
+        card.className = 'admin-user-card';
+        card.innerHTML = `
+          <div class="admin-user-info">
+            <div class="admin-user-name">@${escapeHtml(row.username)}</div>
+            <div class="admin-user-meta">ID tài khoản: ${Number(row.id)}</div>
+          </div>
+          <b class="mono">${formatStorageSize(row.bytes)}</b>`;
+        list.appendChild(card);
+      });
+    } catch (err) {
+      usageText.textContent = `Không đọc được dung lượng: ${err.message}`;
+      list.innerHTML = '<div class="empty-note">Không tải được dung lượng từng tài khoản.</div>';
+    }
+  }
+
+  async function runAdminDatabaseMaintenance() {
+    if (!confirm(
+      'Chạy dọn và tối ưu database ngay?\n\n' +
+      '• Xóa vĩnh viễn đơn đã bấm xóa quá 7 ngày.\n' +
+      '• Xóa chi tiết SPX của đơn hoàn tất quá 30 ngày.\n' +
+      '• Giữ nguyên đơn đang dùng và báo cáo doanh thu.\n' +
+      '• Website có thể chậm hoặc chờ vài giây trong lúc thực hiện.'
+    )) return;
+    const button = $('#btnDatabaseMaintenance');
+    const status = $('#databaseMaintenanceStatus');
+    button.disabled = true;
+    status.textContent = '⏳ Đang dọn dữ liệu và thu gọn database, vui lòng chờ...';
+    try {
+      const data = await apiFetch('/api/admin/database-maintenance', { method:'POST', body:'{}' });
+      const saved = Math.max(0, Number(data.freedBytes) || ((data.beforeBytes || 0) - (data.afterBytes || 0)));
+      const detail = `Trước: ${formatStorageSize(data.beforeBytes)} → Sau: ${formatStorageSize(data.afterBytes)}`
+        + ` · Đã giải phóng: ${formatStorageSize(saved)}`
+        + ` · Xóa ${data.deletedOrders?.purgedOrders || 0} đơn cũ`
+        + ` · Dọn ${data.shipmentDetails?.cleanedTrackingRows || 0} hành trình SPX.`;
+      status.textContent = `${data.ok ? '✅' : '⚠️'} ${data.message} ${detail}`;
+      await loadAdminStorage();
+    } catch (err) {
+      status.textContent = `❌ Không thể tối ưu database: ${err.message}`;
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  $('#btnRefreshDatabaseStorage').addEventListener('click', loadAdminStorage);
+  $('#btnDatabaseMaintenance').addEventListener('click', runAdminDatabaseMaintenance);
 
   // ----- Nhật ký các lần tài khoản bị chặn tính năng (xem Live / in phiếu)
   // vì chưa có gói hoặc gói đã hết hạn — giúp admin biết ai cần tư vấn mua gói.

@@ -72,7 +72,10 @@ try {
   console.error(`❌ Không tạo được thư mục dữ liệu "${dataDir}":`, err.message);
 }
 
-const db = new Database(path.join(dataDir, 'data.db'));
+const dbPath = path.join(dataDir, 'data.db');
+const DATABASE_CAPACITY_MB = Math.max(1, Number(process.env.DATABASE_CAPACITY_MB) || 500);
+const DATABASE_CAPACITY_BYTES = Math.floor(DATABASE_CAPACITY_MB * 1024 * 1024);
+const db = new Database(dbPath);
 db.exec('PRAGMA journal_mode = WAL');
 
 db.exec(`
@@ -426,6 +429,245 @@ function cleanupInactiveCustomers(now = new Date()) {
   return { removedCustomers, updatedUsers, checkedAt: now.toISOString() };
 }
 
+function runImmediateTransaction(work) {
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const result = work();
+    db.exec('COMMIT');
+    return result;
+  } catch (err) {
+    try { db.exec('ROLLBACK'); } catch (rollbackError) {}
+    throw err;
+  }
+}
+
+function cleanupCompletedShipmentDetails(now = new Date()) {
+  const cutoff = now.getTime() - 30 * 24 * 60 * 60 * 1000;
+  const orders = db.prepare(`SELECT id FROM orders
+    WHERE deleted_at IS NULL
+      AND shipping_status IN ('delivered', 'returned', 'cancelled')
+      AND COALESCE(delivered_at, shipping_updated_at, updated_at, created_at) <= ?`).all(cutoff);
+  if (!orders.length) {
+    return { eligibleOrders: 0, removedEvents: 0, cleanedTrackingRows: 0 };
+  }
+  const deleteEvents = db.prepare('DELETE FROM shipment_events WHERE order_id = ?');
+  const cleanTracking = db.prepare(`UPDATE shipment_tracking
+    SET raw_data = NULL, current_location = NULL, expected_delivery_at = NULL,
+        expected_delivery_text = NULL, last_error = NULL
+    WHERE order_id = ?
+      AND (raw_data IS NOT NULL OR current_location IS NOT NULL OR expected_delivery_at IS NOT NULL
+        OR expected_delivery_text IS NOT NULL OR last_error IS NOT NULL)`);
+  let removedEvents = 0;
+  let cleanedTrackingRows = 0;
+  runImmediateTransaction(() => {
+    for (const order of orders) {
+      removedEvents += deleteEvents.run(order.id).changes;
+      cleanedTrackingRows += cleanTracking.run(order.id).changes;
+    }
+  });
+  if (removedEvents || cleanedTrackingRows) {
+    console.log(`[Storage] Đã dọn chi tiết SPX của ${orders.length} đơn hoàn tất quá 30 ngày.`);
+  }
+  return { eligibleOrders: orders.length, removedEvents, cleanedTrackingRows };
+}
+
+function removePurgedOrderItemsFromCustomers(orderIds) {
+  if (!orderIds.length) return { removedCartItems: 0, updatedUsers: 0 };
+  const idSet = new Set(orderIds);
+  const rows = db.prepare('SELECT user_id, data FROM customer_data').all();
+  let removedCartItems = 0;
+  let updatedUsers = 0;
+  for (const row of rows) {
+    let customersData;
+    try {
+      customersData = JSON.parse(row.data || '{}');
+      if (!customersData || typeof customersData !== 'object' || Array.isArray(customersData)) continue;
+    } catch (err) {
+      continue;
+    }
+    let changed = false;
+    for (const [key, customer] of Object.entries(customersData)) {
+      const original = Array.isArray(customer?.items) ? customer.items : [];
+      const kept = original.filter(item => !item?.orderId || !idSet.has(item.orderId));
+      if (kept.length !== original.length) {
+        removedCartItems += original.length - kept.length;
+        customer.items = kept;
+        changed = true;
+      }
+      if (customer.items.length === 0 && !customer.profile) {
+        delete customersData[key];
+        changed = true;
+      }
+    }
+    if (changed) {
+      db.prepare('UPDATE customer_data SET data = ?, updated_at = ? WHERE user_id = ?')
+        .run(JSON.stringify(customersData), Date.now(), row.user_id);
+      updatedUsers++;
+    }
+  }
+  return { removedCartItems, updatedUsers };
+}
+
+function cleanupSoftDeletedOrders(now = new Date()) {
+  const cutoff = now.getTime() - 7 * 24 * 60 * 60 * 1000;
+  const orders = db.prepare('SELECT id FROM orders WHERE deleted_at IS NOT NULL AND deleted_at <= ?').all(cutoff);
+  const orderIds = orders.map(order => order.id);
+  if (!orderIds.length) {
+    return { purgedOrders: 0, removedEvents: 0, removedTracking: 0, removedCartItems: 0 };
+  }
+  const deleteEvents = db.prepare('DELETE FROM shipment_events WHERE order_id = ?');
+  const deleteTracking = db.prepare('DELETE FROM shipment_tracking WHERE order_id = ?');
+  const deleteAudit = db.prepare(`DELETE FROM audit_logs
+    WHERE entity_type = 'order' AND entity_id = ?`);
+  const deleteOrder = db.prepare('DELETE FROM orders WHERE id = ? AND deleted_at IS NOT NULL');
+  let removedEvents = 0;
+  let removedTracking = 0;
+  let purgedOrders = 0;
+  let customerResult = { removedCartItems: 0, updatedUsers: 0 };
+  runImmediateTransaction(() => {
+    customerResult = removePurgedOrderItemsFromCustomers(orderIds);
+    for (const id of orderIds) {
+      removedEvents += deleteEvents.run(id).changes;
+      removedTracking += deleteTracking.run(id).changes;
+      deleteAudit.run(id);
+      purgedOrders += deleteOrder.run(id).changes;
+    }
+  });
+  console.log(`[Storage] Đã xóa vĩnh viễn ${purgedOrders} đơn đã nằm trong thùng xóa quá 7 ngày.`);
+  return {
+    purgedOrders,
+    removedEvents,
+    removedTracking,
+    removedCartItems: customerResult.removedCartItems
+  };
+}
+
+function databaseStorageBytes() {
+  return [dbPath, `${dbPath}-wal`, `${dbPath}-shm`].reduce((sum, file) => {
+    try { return sum + fs.statSync(file).size; } catch (err) { return sum; }
+  }, 0);
+}
+
+function databaseReclaimableBytes() {
+  const pragmaNumber = name => {
+    try {
+      const row = db.prepare(`PRAGMA ${name}`).get();
+      return Math.max(0, Number(row?.[name] ?? Object.values(row || {})[0]) || 0);
+    } catch (err) {
+      return 0;
+    }
+  };
+  const pageSize = pragmaNumber('page_size') || 4096;
+  const freePages = pragmaNumber('freelist_count');
+  let walBytes = 0;
+  try { walBytes = fs.statSync(`${dbPath}-wal`).size; } catch (err) {}
+  const freePageBytes = freePages * pageSize;
+  return {
+    pageSize,
+    freePages,
+    freePageBytes,
+    walBytes,
+    reclaimableBytes: freePageBytes + walBytes
+  };
+}
+
+// Dung lượng theo tài khoản là số byte nội dung ước tính trong từng hàng dữ
+// liệu. Nó không bao gồm index, trang SQLite và vùng trống nên không cộng lại
+// thành kích thước file vật lý; số liệu này dùng để Admin so sánh tài khoản nào
+// đang lưu nhiều dữ liệu nhất.
+function estimateUserStorageUsage() {
+  const usage = new Map();
+  const addRows = sql => {
+    for (const row of db.prepare(sql).all()) {
+      const userId = Number(row.user_id);
+      if (!Number.isInteger(userId)) continue;
+      usage.set(userId, (usage.get(userId) || 0) + Math.max(0, Number(row.bytes) || 0));
+    }
+  };
+  const blobLength = column => `length(CAST(COALESCE(${column}, '') AS BLOB))`;
+
+  addRows(`SELECT id AS user_id,
+    320 + ${blobLength('username')} + ${blobLength('banned_reason')} + ${blobLength('printer_token')} AS bytes
+    FROM users`);
+  addRows(`SELECT user_id, SUM(180 + ${blobLength('token')} + ${blobLength('device_name')} + ${blobLength('user_agent')}) AS bytes
+    FROM sessions GROUP BY user_id`);
+  for (const table of ['customer_data', 'saved_tiktok_ids', 'live_session_data', 'user_settings']) {
+    addRows(`SELECT user_id, SUM(80 + ${blobLength('data')}) AS bytes FROM ${table} GROUP BY user_id`);
+  }
+  addRows(`SELECT user_id, SUM(220 + ${blobLength('id')} + ${blobLength('code')} + ${blobLength('name')} + ${blobLength('aliases')}) AS bytes
+    FROM products GROUP BY user_id`);
+  addRows(`SELECT user_id, SUM(520
+      + ${blobLength('id')} + ${blobLength('source_comment_id')} + ${blobLength('source_session_id')}
+      + ${blobLength('customer_id')} + ${blobLength('customer_name')} + ${blobLength('product_code')}
+      + ${blobLength('product_name')} + ${blobLength('phone')} + ${blobLength('address')}
+      + ${blobLength('note')} + ${blobLength('last_print_error')} + ${blobLength('shipping_code')}
+    ) AS bytes FROM orders GROUP BY user_id`);
+  addRows(`SELECT user_id, SUM(190 + ${blobLength('order_id')} + ${blobLength('event_type')}
+      + ${blobLength('status')} + ${blobLength('note')} + ${blobLength('location')}) AS bytes
+    FROM shipment_events GROUP BY user_id`);
+  addRows(`SELECT user_id, SUM(280 + ${blobLength('order_id')} + ${blobLength('carrier')}
+      + ${blobLength('tracking_code')} + ${blobLength('current_status')} + ${blobLength('current_location')}
+      + ${blobLength('expected_delivery_text')} + ${blobLength('raw_data')} + ${blobLength('last_error')}) AS bytes
+    FROM shipment_tracking GROUP BY user_id`);
+  addRows(`SELECT user_id, SUM(180 + ${blobLength('action')} + ${blobLength('entity_type')}
+      + ${blobLength('entity_id')} + ${blobLength('detail')}) AS bytes
+    FROM audit_logs GROUP BY user_id`);
+  return usage;
+}
+
+function getAdminStorageInfo() {
+  const usedBytes = databaseStorageBytes();
+  const remainingBytes = Math.max(0, DATABASE_CAPACITY_BYTES - usedBytes);
+  const reclaimable = databaseReclaimableBytes();
+  const usage = estimateUserStorageUsage();
+  const users = db.prepare('SELECT id, username FROM users ORDER BY id ASC').all()
+    .map(user => ({
+      id: user.id,
+      username: user.username,
+      bytes: usage.get(Number(user.id)) || 0
+    }))
+    .sort((a, b) => b.bytes - a.bytes || a.id - b.id);
+  return {
+    capacityBytes: DATABASE_CAPACITY_BYTES,
+    usedBytes,
+    remainingBytes,
+    usedPercent: DATABASE_CAPACITY_BYTES
+      ? Math.min(100, Number(((usedBytes / DATABASE_CAPACITY_BYTES) * 100).toFixed(2)))
+      : 0,
+    ...reclaimable,
+    userUsage: users
+  };
+}
+
+function runDatabaseMaintenance(now = new Date()) {
+  const beforeBytes = databaseStorageBytes();
+  const comments = cleanupExpiredComments(now);
+  const customers = cleanupInactiveCustomers(now);
+  const shipmentDetails = cleanupCompletedShipmentDetails(now);
+  const deletedOrders = cleanupSoftDeletedOrders(now);
+  let vacuumError = null;
+  try {
+    db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    db.exec('VACUUM');
+    db.exec('PRAGMA optimize');
+    db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+  } catch (err) {
+    vacuumError = cleanText(err?.message, 500) || 'Không thể thu gọn database lúc này.';
+    console.warn('[Storage] Không thể VACUUM database:', vacuumError);
+  }
+  const afterBytes = databaseStorageBytes();
+  return {
+    beforeBytes,
+    afterBytes,
+    freedBytes: Math.max(0, beforeBytes - afterBytes),
+    comments,
+    customers,
+    shipmentDetails,
+    deletedOrders,
+    vacuumError
+  };
+}
+
 function generatePrinterToken() {
   return crypto.randomBytes(5).toString('hex').toUpperCase(); // vd: "A1B2C3D4E5" - đủ ngắn để gõ vào firmware
 }
@@ -723,9 +965,36 @@ app.get('/api/me', requireAuth, (req, res) => {
 // ====== API QUẢN TRỊ (ADMIN) ======
 // Tất cả route bên dưới đều yêu cầu đăng nhập VÀ tài khoản đó phải có is_admin = 1.
 
+// Kích thước file là số thực tế trên Volume; dung lượng từng tài khoản là ước
+// tính theo nội dung các hàng để Admin biết tài khoản nào dùng nhiều nhất.
+app.get('/api/admin/storage', requireAuth, requireAdmin, (req, res) => {
+  res.json(getAdminStorageInfo());
+});
+
 // Cho phép admin chạy dọn ngay mà không cần chờ lịch tự động.
 app.post('/api/admin/cleanup-comments', requireAuth, requireAdmin, (req, res) => {
   res.json({ ok: true, ...cleanupExpiredComments(new Date()) });
+});
+
+// Dọn dữ liệu hết hạn rồi thu hồi vùng trống của SQLite. VACUUM có thể làm
+// các yêu cầu khác chờ trong vài giây, vì vậy chỉ admin mới được chủ động chạy.
+app.post('/api/admin/database-maintenance', requireAuth, requireAdmin, (req, res) => {
+  const result = runDatabaseMaintenance(new Date());
+  addAudit(req.userId, 'admin.database_maintenance', 'database', null, {
+    beforeBytes: result.beforeBytes,
+    afterBytes: result.afterBytes,
+    purgedOrders: result.deletedOrders.purgedOrders,
+    cleanedTrackingRows: result.shipmentDetails.cleanedTrackingRows,
+    vacuumError: result.vacuumError
+  });
+  try { db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); } catch (err) {}
+  res.json({
+    ok: !result.vacuumError,
+    ...result,
+    message: result.vacuumError
+      ? `Đã dọn dữ liệu hết hạn nhưng chưa thu gọn được file: ${result.vacuumError}`
+      : 'Đã dọn dữ liệu hết hạn và thu gọn database thành công.'
+  });
 });
 
 // Danh sách toàn bộ tài khoản trong hệ thống (không trả về password_hash/salt).
@@ -2485,9 +2754,13 @@ server.listen(PORT, () => {
   // Dọn ngay khi khởi động, sau đó kiểm tra lại mỗi 6 giờ.
   cleanupExpiredComments(new Date());
   cleanupInactiveCustomers(new Date());
+  cleanupCompletedShipmentDetails(new Date());
+  cleanupSoftDeletedOrders(new Date());
   const retentionTimer = setInterval(() => {
     cleanupExpiredComments(new Date());
     cleanupInactiveCustomers(new Date());
+    cleanupCompletedShipmentDetails(new Date());
+    cleanupSoftDeletedOrders(new Date());
   }, 6 * 60 * 60 * 1000);
   retentionTimer.unref();
   // Mỗi 5 phút chỉ tra lại các mã SPX của đơn chưa giao xong/chưa hoàn xong.
