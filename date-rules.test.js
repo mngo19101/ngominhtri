@@ -8,7 +8,7 @@ const {
   addOneCalendarMonthEndOfDay,
   isCommentExpired,
   addThreeCalendarMonthsEndOfDay,
-} = require('../lib/date-rules');
+} = require('./lib/date-rules');
 
 // Giờ Việt Nam = UTC+7. Để test dễ đọc, dựng thời điểm bằng giờ UTC tương ứng.
 // VD: 25/07/2026 10:00 giờ VN = 25/07/2026 03:00 UTC.

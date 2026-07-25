@@ -461,6 +461,17 @@
     font-size:12px; color:#e6386a; min-height:16px; margin-top:-4px; margin-bottom:10px;
   }
   .auth-hint{ font-size:11.5px; color:var(--muted); text-align:center; margin-top:6px; }
+  .auth-link{
+    background:none; border:none; color:var(--teal); font-size:12px; font-weight:700;
+    padding:8px 0 0; cursor:pointer; text-decoration:underline; text-align:center;
+  }
+  .auth-link:hover{ filter:brightness(.95); }
+  .auth-reset{ display:none; margin-top:14px; padding-top:14px; border-top:1px dashed var(--border); }
+  .auth-reset.open{ display:block; }
+  .auth-reset-title{ font-size:13px; font-weight:800; color:var(--text); text-align:center; margin-bottom:10px; }
+  .auth-reset-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  .auth-reset-actions .btn-mini{ flex:1 1 0; }
+  .auth-note{ font-size:11.5px; color:var(--muted); line-height:1.5; margin-top:8px; }
 
   /* ===== THANH TÀI KHOẢN ===== */
   #accountBar{
@@ -663,9 +674,46 @@
         <label>Nhập lại mật khẩu</label>
         <input id="registerPassword2" type="password" autocomplete="new-password" placeholder="••••••">
       </div>
+      <div class="field">
+        <label>Email khôi phục</label>
+        <input id="registerRecoveryEmail" type="email" autocomplete="email" placeholder="vd: tenban@gmail.com">
+      </div>
       <div class="auth-error" id="registerError"></div>
       <button type="submit" class="btn">Tạo Tài Khoản</button>
     </form>
+
+    <button type="button" class="auth-link" id="btnOpenReset">Quên mật khẩu?</button>
+
+    <div class="auth-reset" id="resetPasswordPanel">
+      <div class="auth-reset-title">Lấy lại mật khẩu</div>
+      <div class="field">
+        <label>Tên đăng nhập</label>
+        <input id="resetUsername" type="text" autocomplete="username" placeholder="vd: shopcuaban">
+      </div>
+      <div class="field">
+        <label>Email khôi phục</label>
+        <input id="resetEmail" type="email" autocomplete="email" placeholder="vd: tenban@gmail.com">
+      </div>
+      <div class="field">
+        <label>Mã xác nhận</label>
+        <input id="resetCode" type="text" inputmode="numeric" maxlength="6" placeholder="6 số">
+      </div>
+      <div class="field">
+        <label>Mật khẩu mới</label>
+        <input id="resetNewPassword" type="password" autocomplete="new-password" placeholder="Tối thiểu 8 ký tự">
+      </div>
+      <div class="field">
+        <label>Nhập lại mật khẩu mới</label>
+        <input id="resetNewPassword2" type="password" autocomplete="new-password" placeholder="••••••">
+      </div>
+      <div class="auth-error" id="resetError"></div>
+      <div class="auth-reset-actions">
+        <button type="button" class="btn-mini" id="btnSendResetCode">Gửi mã</button>
+        <button type="button" class="btn-mini" id="btnConfirmResetPassword">Đổi mật khẩu</button>
+        <button type="button" class="btn-mini" id="btnCloseReset">Đóng</button>
+      </div>
+      <div class="auth-note">Mã được gửi tự động qua email, hiệu lực 10 phút và chỉ dùng một lần.</div>
+    </div>
 
     <div class="auth-hint">Dữ liệu theo tài khoản, dùng được trên mọi thiết bị.</div>
   </div>
@@ -1127,14 +1175,19 @@
 
     <div class="menu-card">
       <h2>Bảo mật & dữ liệu</h2>
+      <div class="menu-row">
+        <span class="k">Email khôi phục</span>
+        <span class="v mono" id="menuRecoveryEmail">-</span>
+      </div>
       <div class="toolbar">
+        <button class="btn-mini" id="btnUpdateRecoveryEmail">📧 Cập nhật email khôi phục</button>
         <button class="btn-mini" id="btnChangePassword">🔑 Đổi mật khẩu</button>
         <button class="btn-mini" id="btnManageSessions">📱 Thiết bị đăng nhập</button>
         <button class="btn-mini" id="btnDownloadBackup">💾 Tải bản sao lưu</button>
         <button class="btn-mini danger-text" id="btnRestoreBackup">↥ Khôi phục sao lưu</button>
         <input type="file" id="backupFileInput" accept="application/json,.json" style="display:none;">
       </div>
-      <div class="menu-hint">Sao lưu gồm đơn, sản phẩm, khách và lịch sử Live.</div>
+      <div class="menu-hint">Email khôi phục được dùng để tự gửi mã đặt lại mật khẩu. Sao lưu gồm đơn, sản phẩm, khách và lịch sử Live.</div>
     </div>
 
     <div class="menu-card">
@@ -1314,6 +1367,7 @@
   let ws = null;
   let wsReconnectTimer = null; // id của setTimeout đang chờ để kết nối lại WS
   let currentUser = null; // tên tài khoản đang đăng nhập
+  let currentRecoveryEmail = '';
   let authToken = null;   // token phiên đăng nhập, lấy từ Bridge Server
   let heartbeatTimer = null;
   let ordersV2 = [];
@@ -1402,8 +1456,14 @@
     $('#appRoot').style.display = 'none';
     $('#authScreen').style.display = 'flex';
     $('#bridgeUrl').readOnly = false;
+    hideResetPanel();
     setAuthTab('login');
     $('#loginError').textContent = message || 'Tài khoản đã bị khóa.';
+  }
+
+  function hideResetPanel() {
+    $('#resetPasswordPanel').classList.remove('open');
+    $('#resetError').textContent = '';
   }
 
   function setAuthTab(which) {
@@ -1414,10 +1474,71 @@
     $('#registerForm').classList.toggle('active', !isLogin);
     $('#loginError').textContent = '';
     $('#registerError').textContent = '';
+    if (!isLogin) hideResetPanel();
   }
 
   $('#authTabLoginBtn').addEventListener('click', () => setAuthTab('login'));
   $('#authTabRegisterBtn').addEventListener('click', () => setAuthTab('register'));
+  $('#btnOpenReset').addEventListener('click', () => {
+    setAuthTab('login');
+    $('#resetPasswordPanel').classList.add('open');
+    $('#resetError').textContent = '';
+    $('#resetUsername').focus();
+  });
+  $('#btnCloseReset').addEventListener('click', hideResetPanel);
+
+  $('#btnSendResetCode').addEventListener('click', async () => {
+    const username = $('#resetUsername').value.trim();
+    const email = $('#resetEmail').value.trim();
+    $('#resetError').textContent = '';
+    if (!username || !email) {
+      $('#resetError').textContent = 'Vui lòng nhập tên đăng nhập và email khôi phục.';
+      return;
+    }
+    try {
+      const data = await apiFetch('/api/password-reset/request', {
+        method: 'POST',
+        body: JSON.stringify({ username, email })
+      });
+      $('#resetError').textContent = data.message || 'Nếu thông tin khớp, mã xác nhận đã được gửi.';
+    } catch (err) {
+      $('#resetError').textContent = err.message;
+    }
+  });
+
+  $('#btnConfirmResetPassword').addEventListener('click', async () => {
+    const username = $('#resetUsername').value.trim();
+    const email = $('#resetEmail').value.trim();
+    const code = $('#resetCode').value.trim();
+    const newPassword = $('#resetNewPassword').value;
+    const newPassword2 = $('#resetNewPassword2').value;
+    $('#resetError').textContent = '';
+    if (!username || !email || !code || !newPassword) {
+      $('#resetError').textContent = 'Vui lòng nhập đủ thông tin để đặt lại mật khẩu.';
+      return;
+    }
+    if (newPassword.length < 8) {
+      $('#resetError').textContent = 'Mật khẩu mới phải có ít nhất 8 ký tự.';
+      return;
+    }
+    if (newPassword !== newPassword2) {
+      $('#resetError').textContent = 'Mật khẩu nhập lại không khớp.';
+      return;
+    }
+    try {
+      const data = await apiFetch('/api/password-reset/confirm', {
+        method: 'POST',
+        body: JSON.stringify({ username, email, code, newPassword })
+      });
+      $('#resetError').textContent = data.message || 'Đã đặt lại mật khẩu thành công.';
+      setTimeout(() => {
+        hideResetPanel();
+        setAuthTab('login');
+      }, 700);
+    } catch (err) {
+      $('#resetError').textContent = err.message;
+    }
+  });
 
   $('#loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -1442,16 +1563,21 @@
     const username = $('#registerUsername').value.trim();
     const password = $('#registerPassword').value;
     const password2 = $('#registerPassword2').value;
+    const recoveryEmail = $('#registerRecoveryEmail').value.trim();
     $('#registerError').textContent = '';
 
     if (!username || !password) { $('#registerError').textContent = 'Vui lòng nhập đủ tên đăng nhập và mật khẩu.'; return; }
     if (password.length < 8) { $('#registerError').textContent = 'Mật khẩu cần tối thiểu 8 ký tự.'; return; }
     if (password !== password2) { $('#registerError').textContent = 'Mật khẩu nhập lại không khớp.'; return; }
+    if (recoveryEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recoveryEmail)) {
+      $('#registerError').textContent = 'Email khôi phục không hợp lệ.';
+      return;
+    }
 
     try {
       const data = await apiFetch('/api/register', {
         method: 'POST',
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username, password, recoveryEmail })
       });
       await loginAs(data.username, data.token);
     } catch (err) {
@@ -1493,11 +1619,14 @@
     $('#bridgeUrl').readOnly = false;
     $('#loginUsername').value = '';
     $('#loginPassword').value = '';
+    $('#registerRecoveryEmail').value = '';
+    hideResetPanel();
     setAuthTab('login');
   });
 
   async function loginAs(username, token) {
     currentUser = username;
+    currentRecoveryEmail = '';
     authToken = token;
     localStorage.setItem(SESSION_KEY, username);
     localStorage.setItem(TOKEN_KEY, token);
@@ -1525,6 +1654,7 @@
 
     authToken = savedToken;
     currentUser = savedUser;
+    currentRecoveryEmail = '';
     try {
       await loadCustomers(); // dùng luôn để vừa kiểm tra token vừa tải dữ liệu
     } catch (err) {
@@ -3307,11 +3437,13 @@ function cartItemAmount(item) {
   }
 
   function renderMenuInfo(data) {
+    currentRecoveryEmail = data.recoveryEmail || '';
     $('#menuUsername').textContent = '@' + data.username;
     $('#menuCreatedAt').textContent = data.createdAt ? new Date(data.createdAt).toLocaleString('vi-VN') : '-';
     $('#menuAdminFlag').textContent = data.isAdmin ? 'Quản trị viên' : 'Người dùng';
     $('#menuPrinterToken').textContent = data.printerToken || '-';
     $('#menuPrinterConnected').textContent = data.printerConnected ? '✅ Đã kết nối' : '⚠️ Chưa có ESP32 nào kết nối bằng mã này';
+    $('#menuRecoveryEmail').textContent = data.recoveryEmail || 'Chưa cài đặt';
 
     const lic = data.license || { type: 'free', label: 'Miễn phí', canPrint: false, isExpired: false, daysLeft: null };
     const pill = $('#menuLicensePill');
@@ -3369,6 +3501,27 @@ function cartItemAmount(item) {
   $('#lockedModalGoMenu').addEventListener('click', () => {
     hideLockedModal();
     switchTab('menu');
+  });
+
+  $('#btnUpdateRecoveryEmail').addEventListener('click', async () => {
+    const nextEmail = prompt('Nhập email khôi phục mới (để trống nếu muốn xoá):', currentRecoveryEmail || '');
+    if (nextEmail === null) return;
+    const recoveryEmail = nextEmail.trim();
+    if (recoveryEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recoveryEmail)) {
+      alert('Email khôi phục không hợp lệ.');
+      return;
+    }
+    try {
+      const data = await apiFetch('/api/account/recovery-email', {
+        method: 'PUT',
+        body: JSON.stringify({ recoveryEmail })
+      });
+      currentRecoveryEmail = data.recoveryEmail || '';
+      alert(currentRecoveryEmail ? 'Đã lưu email khôi phục.' : 'Đã xoá email khôi phục.');
+      await loadMenuInfo();
+    } catch (err) {
+      alert(err.message);
+    }
   });
 
   $('#btnChangePassword').addEventListener('click', async () => {

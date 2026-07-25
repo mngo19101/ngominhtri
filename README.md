@@ -34,7 +34,15 @@ Tùy chọn:
 ```text
 DATABASE_CAPACITY_MB=500
 TIKTOK_SIGN_API_KEY=api_key_cua_eulerstream
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_SECURE=true
+SMTP_USER=your_email@gmail.com
+SMTP_PASS=app_password_or_smtp_password
+SMTP_FROM=your_email@gmail.com
 ```
+
+Chức năng quên mật khẩu chỉ tự động gửi mã khi tài khoản đã có email khôi phục. Người dùng có thể nhập email này lúc đăng ký hoặc cập nhật trong phần Bảo mật & dữ liệu sau khi đăng nhập.
 
 Không đổi `PORT`; Railway tự cấp biến này.
 

@@ -197,6 +197,20 @@ db.exec(`
     updated_at INTEGER NOT NULL,
     FOREIGN KEY (admin_user_id) REFERENCES users(id)
   );
+
+  CREATE TABLE IF NOT EXISTS password_reset_requests (
+    user_id INTEGER PRIMARY KEY,
+    email TEXT NOT NULL,
+    code_hash TEXT NOT NULL,
+    code_salt TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    locked_until INTEGER,
+    expires_at INTEGER NOT NULL,
+    requested_at INTEGER NOT NULL,
+    sent_at INTEGER,
+    consumed_at INTEGER,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+  );
 `);
 
 // ====== MIGRATION: đảm bảo DB cũ (tạo trước khi có tính năng admin) cũng có
@@ -223,6 +237,8 @@ ensureColumn('users', 'last_login_country', 'TEXT');
 ensureColumn('users', 'last_login_geo_ip', 'TEXT');
 ensureColumn('users', 'last_login_geo_at', 'INTEGER');
 ensureColumn('users', 'last_login_geo_source', 'TEXT');
+ensureColumn('users', 'recovery_email', 'TEXT');
+ensureColumn('users', 'recovery_email_verified_at', 'INTEGER');
 
 // ====== CỘT PHỤC VỤ TÍNH NĂNG KEY / GÓI IN PHIẾU ======
 // license_type: 'free' (mặc định, tài khoản mới đăng ký) | '1m' | '3m' | '6m' | '12m' | 'lifetime'
@@ -877,6 +893,154 @@ function hashPassword(password, salt) {
   return crypto.scryptSync(password, salt, 64).toString('hex');
 }
 
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function isValidEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
+}
+
+function encodeMimeHeader(value) {
+  return `=?UTF-8?B?${Buffer.from(String(value || ''), 'utf8').toString('base64')}?=`;
+}
+
+function getRecoveryEmail(user) {
+  return normalizeEmail(user?.recovery_email || '');
+}
+
+async function sendMailViaSmtp({ to, subject, text }) {
+  const host = String(process.env.SMTP_HOST || '').trim();
+  const port = Number(process.env.SMTP_PORT || 587);
+  const secureEnv = String(process.env.SMTP_SECURE || '').trim().toLowerCase();
+  const secure = secureEnv === '1' || secureEnv === 'true' || port === 465;
+  const username = String(process.env.SMTP_USER || '').trim();
+  const password = String(process.env.SMTP_PASS || '');
+  const from = String(process.env.SMTP_FROM || username).trim();
+  if (!host || !from) {
+    throw new Error('Chưa cấu hình SMTP_HOST / SMTP_FROM để gửi email.');
+  }
+
+  const netModule = secure ? require('tls') : require('net');
+  const socket = secure
+    ? netModule.connect({ host, port, servername: host, timeout: 15000 })
+    : netModule.connect({ host, port, timeout: 15000 });
+
+  socket.setEncoding('utf8');
+
+  const waitForLine = () => {
+    let buffer = '';
+    let resolveFn;
+    let rejectFn;
+    const promise = new Promise((resolve, reject) => { resolveFn = resolve; rejectFn = reject; });
+    const onData = (chunk) => {
+      buffer += chunk;
+      let idx;
+      while ((idx = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, idx + 1).replace(/\r?\n$/, '');
+        buffer = buffer.slice(idx + 1);
+        lines.push(line);
+        const m = line.match(/^(\d{3})([ -])(.*)$/);
+        if (m && m[2] === ' ') {
+          socket.off('data', onData);
+          resolveFn({ code: Number(m[1]), lines: lines.slice() });
+          return;
+        }
+      }
+    };
+    const lines = [];
+    socket.on('data', onData);
+    socket.once('error', rejectFn);
+    socket.once('timeout', () => rejectFn(new Error('SMTP connection timeout')));
+    socket.once('end', () => rejectFn(new Error('SMTP connection closed')));
+    return { promise, cleanup: () => { socket.off('data', onData); socket.off('error', rejectFn); } };
+  };
+
+  const write = (data) => new Promise((resolve, reject) => {
+    socket.write(data, (err) => err ? reject(err) : resolve());
+  });
+
+  const readResponse = async () => {
+    let buffer = '';
+    const lines = [];
+    return await new Promise((resolve, reject) => {
+      const onData = (chunk) => {
+        buffer += chunk;
+        let idx;
+        while ((idx = buffer.indexOf('\n')) >= 0) {
+          const line = buffer.slice(0, idx + 1).replace(/\r?\n$/, '');
+          buffer = buffer.slice(idx + 1);
+          lines.push(line);
+          const m = line.match(/^(\d{3})([ -])(.*)$/);
+          if (m && m[2] === ' ') {
+            cleanup();
+            resolve({ code: Number(m[1]), lines: lines.slice() });
+            return;
+          }
+        }
+      };
+      const onError = (err) => { cleanup(); reject(err); };
+      const onTimeout = () => { cleanup(); reject(new Error('SMTP connection timeout')); };
+      const onClose = () => { cleanup(); reject(new Error('SMTP connection closed')); };
+      const cleanup = () => {
+        socket.off('data', onData);
+        socket.off('error', onError);
+        socket.off('timeout', onTimeout);
+        socket.off('end', onClose);
+        socket.off('close', onClose);
+      };
+      socket.on('data', onData);
+      socket.once('error', onError);
+      socket.once('timeout', onTimeout);
+      socket.once('end', onClose);
+      socket.once('close', onClose);
+    });
+  };
+
+  const expect = async (codes, command) => {
+    if (command) await write(command);
+    const response = await readResponse();
+    if (!codes.includes(response.code)) {
+      throw new Error(`SMTP trả về mã ${response.code}`);
+    }
+    return response;
+  };
+
+  try {
+    await expect([220]);
+    await expect([250], `EHLO localhost\r\n`);
+    if (!secure && process.env.SMTP_STARTTLS === '1') {
+      await expect([250], 'STARTTLS\r\n');
+      throw new Error('SMTP_STARTTLS hiện chưa được hỗ trợ trong bản rút gọn này. Hãy bật SMTP_SECURE hoặc dùng cổng 465.');
+    }
+    if (username && password) {
+      await expect([250, 334], 'AUTH LOGIN\r\n');
+      await expect([334], Buffer.from(username, 'utf8').toString('base64') + '\r\n');
+      await expect([235], Buffer.from(password, 'utf8').toString('base64') + '\r\n');
+    }
+    await expect([250], `MAIL FROM:<${from}>\r\n`);
+    await expect([250, 251], `RCPT TO:<${to}>\r\n`);
+    const message = [
+      `From: ${from}`,
+      `To: ${to}`,
+      `Subject: ${encodeMimeHeader(subject)}`,
+      'MIME-Version: 1.0',
+      'Content-Type: text/plain; charset=utf-8',
+      'Content-Transfer-Encoding: 8bit',
+      '',
+      text,
+      ''
+    ].join('\r\n').replace(/\n/g, '\r\n');
+    await expect([354], `DATA\r\n`);
+    await expect([250], `${message}\r\n.\r\n`);
+    try { await expect([221], 'QUIT\r\n'); } catch (_) {}
+    socket.end();
+  } catch (err) {
+    try { socket.destroy(); } catch (_) {}
+    throw err;
+  }
+}
+
 function getClientIp(req) {
   const forwarded = String(req?.headers?.['x-forwarded-for'] || '').split(',')[0].trim();
   const raw = forwarded || String(req?.socket?.remoteAddress || '').trim();
@@ -1021,6 +1185,43 @@ function createSession(userId, req) {
     refreshIpLocation(ipAddress).catch(() => {});
   }
   return token;
+}
+
+function makePasswordResetCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+function hashResetCode(code, salt) {
+  return crypto.scryptSync(`${code}:${salt}`, salt, 32).toString('hex');
+}
+
+function getPasswordResetRequest(userId) {
+  return db.prepare('SELECT * FROM password_reset_requests WHERE user_id = ?').get(userId);
+}
+
+function storePasswordResetRequest(user, email, code, now = Date.now()) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const codeHash = hashResetCode(code, salt);
+  const expiresAt = now + 10 * 60 * 1000;
+  db.prepare(`INSERT INTO password_reset_requests
+    (user_id, email, code_hash, code_salt, attempts, locked_until, expires_at, requested_at, sent_at, consumed_at)
+    VALUES (?, ?, ?, ?, 0, NULL, ?, ?, ?, NULL)
+    ON CONFLICT(user_id) DO UPDATE SET
+      email = excluded.email,
+      code_hash = excluded.code_hash,
+      code_salt = excluded.code_salt,
+      attempts = 0,
+      locked_until = NULL,
+      expires_at = excluded.expires_at,
+      requested_at = excluded.requested_at,
+      sent_at = excluded.sent_at,
+      consumed_at = NULL`)
+    .run(user.id, email, codeHash, salt, expiresAt, now, now);
+  return { expiresAt };
+}
+
+function clearPasswordResetRequest(userId) {
+  db.prepare('DELETE FROM password_reset_requests WHERE user_id = ?').run(userId);
 }
 
 // Tra userId từ token phiên đăng nhập — dùng chung cho cả REST API (middleware
@@ -1197,12 +1398,17 @@ const registerRateLimiter = makeRateLimiter({
 
 // Đăng ký tài khoản mới
 app.post('/api/register', registerRateLimiter, (req, res) => {
-  const { username, password } = req.body || {};
+  const username = String(req.body?.username || '').trim().replace(/^@/, '');
+  const password = String(req.body?.password || '');
+  const recoveryEmail = normalizeEmail(req.body?.recoveryEmail || '');
   if (!username || !password) {
     return res.status(400).json({ error: 'Thiếu username hoặc password.' });
   }
   if (String(password).length < 8) {
     return res.status(400).json({ error: 'Mật khẩu phải có ít nhất 8 ký tự.' });
+  }
+  if (recoveryEmail && !isValidEmail(recoveryEmail)) {
+    return res.status(400).json({ error: 'Email khôi phục không hợp lệ.' });
   }
   const existed = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
   if (existed) {
@@ -1212,12 +1418,101 @@ app.post('/api/register', registerRateLimiter, (req, res) => {
   const passwordHash = hashPassword(password, salt);
   let printerToken;
   do { printerToken = generatePrinterToken(); } while (db.prepare('SELECT id FROM users WHERE printer_token = ?').get(printerToken));
+  const now = Date.now();
   const info = db.prepare(
-    'INSERT INTO users (username, password_hash, salt, created_at, printer_token) VALUES (?, ?, ?, ?, ?)'
-  ).run(username, passwordHash, salt, Date.now(), printerToken);
+    'INSERT INTO users (username, password_hash, salt, created_at, printer_token, recovery_email, recovery_email_verified_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(username, passwordHash, salt, now, printerToken, recoveryEmail || null, recoveryEmail ? now : null);
 
   const token = createSession(info.lastInsertRowid, req);
-  res.json({ token, username });
+  res.json({ token, username, recoveryEmail: recoveryEmail || null });
+});
+
+const passwordResetRequestLimiter = makeRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 3,
+  message: 'Bạn đã yêu cầu lấy lại mật khẩu quá nhiều lần. Vui lòng thử lại sau.',
+});
+
+app.post('/api/password-reset/request', passwordResetRequestLimiter, async (req, res) => {
+  const username = String(req.body?.username || '').trim().replace(/^@/, '');
+  const email = normalizeEmail(req.body?.email || '');
+  if (!username || !email) {
+    return res.status(400).json({ error: 'Vui lòng nhập tên đăng nhập và email khôi phục.' });
+  }
+  const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+  if (!user || normalizeEmail(user.recovery_email) !== email) {
+    // Trả lời chung chung để tránh lộ thông tin tài khoản.
+    return res.json({ ok: true, message: 'Nếu thông tin khớp, mã xác nhận sẽ được gửi về email của bạn.' });
+  }
+
+  const code = makePasswordResetCode();
+  const now = Date.now();
+  storePasswordResetRequest(user, email, code, now);
+
+  const subject = 'Mã đặt lại mật khẩu';
+  const text = [
+    `Xin chào @${user.username},`,
+    '',
+    `Mã xác nhận đặt lại mật khẩu của bạn là: ${code}`,
+    'Mã này có hiệu lực trong 10 phút và chỉ dùng một lần.',
+    'Nếu bạn không yêu cầu, hãy bỏ qua email này.',
+    '',
+    '— Hệ thống hỗ trợ tài khoản'
+  ].join('\n');
+
+  try {
+    await sendMailViaSmtp({ to: email, subject, text });
+    db.prepare('UPDATE password_reset_requests SET sent_at = ? WHERE user_id = ?').run(now, user.id);
+    addAudit(user.id, 'account.password_reset_code_sent', 'user', String(user.id), { email });
+    res.json({ ok: true, message: 'Nếu thông tin khớp, mã xác nhận đã được gửi.' });
+  } catch (err) {
+    console.error('[PasswordReset] Không gửi được email:', err.message);
+    clearPasswordResetRequest(user.id);
+    return res.status(500).json({ error: 'Chưa thể gửi email khôi phục. Hãy kiểm tra cấu hình SMTP trên server.' });
+  }
+});
+
+app.post('/api/password-reset/confirm', async (req, res) => {
+  const username = String(req.body?.username || '').trim().replace(/^@/, '');
+  const email = normalizeEmail(req.body?.email || '');
+  const code = String(req.body?.code || '').trim();
+  const newPassword = String(req.body?.newPassword || '');
+  if (!username || !email || !/^[0-9]{6}$/.test(code) || newPassword.length < 8) {
+    return res.status(400).json({ error: 'Thiếu thông tin hoặc mã không hợp lệ.' });
+  }
+  const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+  if (!user || normalizeEmail(user.recovery_email) !== email) {
+    return res.status(400).json({ error: 'Mã không đúng hoặc đã hết hạn.' });
+  }
+  const row = getPasswordResetRequest(user.id);
+  const now = Date.now();
+  if (!row || row.consumed_at) {
+    return res.status(400).json({ error: 'Mã không đúng hoặc đã hết hạn.' });
+  }
+  if (normalizeEmail(row.email) !== email || row.expires_at < now) {
+    clearPasswordResetRequest(user.id);
+    return res.status(400).json({ error: 'Mã không đúng hoặc đã hết hạn.' });
+  }
+  if (row.locked_until && row.locked_until > now) {
+    return res.status(429).json({ error: `Mã đang tạm khóa. Vui lòng thử lại sau ${Math.ceil((row.locked_until - now) / 1000)} giây.` });
+  }
+
+  const expectedHash = hashResetCode(code, row.code_salt);
+  if (!crypto.timingSafeEqual(Buffer.from(expectedHash), Buffer.from(row.code_hash))) {
+    const attempts = Number(row.attempts || 0) + 1;
+    const lockedUntil = attempts >= 5 ? now + 15 * 60 * 1000 : null;
+    db.prepare(`UPDATE password_reset_requests SET attempts = ?, locked_until = ? WHERE user_id = ?`)
+      .run(attempts, lockedUntil, user.id);
+    return res.status(401).json({ error: attempts >= 5 ? 'Mã sai quá 5 lần. Đã khóa thử 15 phút.' : 'Mã không đúng.' });
+  }
+
+  const salt = crypto.randomBytes(16).toString('hex');
+  db.prepare('UPDATE users SET password_hash = ?, salt = ? WHERE id = ?')
+    .run(hashPassword(newPassword, salt), salt, user.id);
+  const removedSessions = db.prepare('DELETE FROM sessions WHERE user_id = ?').run(user.id).changes;
+  clearPasswordResetRequest(user.id);
+  addAudit(user.id, 'account.password_reset_completed', 'user', String(user.id), { removedSessions, email });
+  res.json({ ok: true, message: 'Đã đặt lại mật khẩu thành công.' });
 });
 
 // Đăng nhập
@@ -1269,7 +1564,8 @@ app.get('/api/me', requireAuth, (req, res) => {
     liveSessionsUsed: user.live_sessions_used || 0,
     freeLiveSessionLimit: FREE_LIVE_SESSION_LIMIT,
     printerToken: user.printer_token,
-    printerConnected: printerSockets.has(user.id)
+    printerConnected: printerSockets.has(user.id),
+    recoveryEmail: user.recovery_email || null
   });
 });
 
@@ -2465,6 +2761,22 @@ app.put('/api/settings', requireAuth, (req, res) => {
     .run(req.userId, data, Date.now());
   addAudit(req.userId, 'settings.updated', 'settings', String(req.userId));
   res.json({ ok: true });
+});
+
+app.get('/api/account/recovery-email', requireAuth, (req, res) => {
+  const user = db.prepare('SELECT recovery_email FROM users WHERE id = ?').get(req.userId);
+  res.json({ recoveryEmail: user?.recovery_email || null });
+});
+
+app.put('/api/account/recovery-email', requireAuth, (req, res) => {
+  const recoveryEmail = normalizeEmail(req.body?.recoveryEmail || '');
+  if (recoveryEmail && !isValidEmail(recoveryEmail)) {
+    return res.status(400).json({ error: 'Email khôi phục không hợp lệ.' });
+  }
+  db.prepare('UPDATE users SET recovery_email = ?, recovery_email_verified_at = ? WHERE id = ?')
+    .run(recoveryEmail || null, recoveryEmail ? Date.now() : null, req.userId);
+  addAudit(req.userId, 'account.recovery_email_updated', 'user', String(req.userId), { recoveryEmail: recoveryEmail || null });
+  res.json({ ok: true, recoveryEmail: recoveryEmail || null });
 });
 
 app.post('/api/account/change-password', requireAuth, (req, res) => {
