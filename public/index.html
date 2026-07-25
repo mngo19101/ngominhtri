@@ -196,6 +196,8 @@
   .duplicate-ip-warning{ display:inline-flex; align-items:center; border-radius:999px; padding:3px 9px;
     color:#8a6500; background:#fff3bd; border:1px solid #efca54; font-size:10.5px; font-weight:800; }
   .presence-detail.duplicate-ip-text{ color:#9a6b00; font-weight:700; }
+  .presence-ip-link{ color:inherit; text-decoration:none; border-bottom:1px dashed currentColor; }
+  .presence-ip-link:hover{ color:var(--teal); }
   .license-select-row{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
   .license-select-row select, .license-select-row input{
     background:rgba(255,255,255,.65); border:1px solid var(--border); color:var(--text);
@@ -233,7 +235,6 @@
     background:rgba(255,255,255,.78); color:var(--text); font-weight:700; cursor:pointer;
   }
   .admin-head-button:hover{ background:var(--teal); border-color:var(--teal); color:#fff; }
-  #adminCloseButton{ justify-self:end; }
   .admin-shell-body{
     flex:1; overflow-y:auto; overscroll-behavior:contain;
     padding:24px max(20px,env(safe-area-inset-right)) calc(28px + env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left));
@@ -931,7 +932,7 @@
         <b id="adminOverlayTitle">Trung tâm quản trị</b>
         <small>Chỉ tài khoản Admin mới truy cập được</small>
       </div>
-      <button class="admin-head-button" id="adminCloseButton" aria-label="Đóng quản trị">✕ Đóng</button>
+      <span aria-hidden="true"></span>
     </div>
     <div class="admin-shell-body">
       <div class="admin-screen active" id="adminScreenHome">
@@ -3430,7 +3431,6 @@ function cartItemAmount(item) {
     button.addEventListener('click', () => showAdminScreen(button.dataset.adminScreen));
   });
   $('#adminBackButton').addEventListener('click', () => showAdminScreen('home'));
-  $('#adminCloseButton').addEventListener('click', () => showAdminScreen('home'));
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && $('#viewAdmin').classList.contains('detail-open')) {
       showAdminScreen('home');
@@ -3489,6 +3489,9 @@ function cartItemAmount(item) {
       const ipLabel = u.ipAddress || 'Chưa ghi nhận IP';
       const lastLoginStr = formatAdminDateTime(u.lastLoginAt);
       const locationLabel = u.ipCity || u.ipRegion || u.ipCountry || (u.ipAddress ? 'Đang xác định...' : 'Chưa xác định');
+      const ipHtml = u.ipAddress
+        ? `<a class="presence-ip-link" href="https://whatismyipaddress.com/ip/${encodeURIComponent(u.ipAddress)}" target="_blank" rel="noopener" title="Mở trên WhatIsMyIPAddress">🌐 ${escapeHtml(ipLabel)}</a>`
+        : `🌐 ${escapeHtml(ipLabel)}`;
       card.innerHTML = `
         <div class="admin-user-info">
           <div class="admin-user-name">
@@ -3500,7 +3503,7 @@ function cartItemAmount(item) {
           <div class="admin-presence-row">
             <span class="presence-pill ${u.isOnline ? 'online' : 'offline'}">${presenceLabel}</span>
             ${u.hasDuplicateIp ? `<span class="duplicate-ip-warning">⚠️ Trùng IP với ${Number(u.ipAccountCount)} tài khoản</span>` : ''}
-            <span class="presence-detail ${u.hasDuplicateIp ? 'duplicate-ip-text' : ''}">🌐 ${escapeHtml(ipLabel)}</span>
+            <span class="presence-detail ${u.hasDuplicateIp ? 'duplicate-ip-text' : ''}">${ipHtml}</span>
             <span class="presence-detail">📍 ${escapeHtml(locationLabel)}</span>
             <span class="presence-detail">🕒 ${escapeHtml(lastLoginStr)}</span>
           </div>

@@ -212,6 +212,7 @@ ensureColumn('users', 'last_login_region', 'TEXT');
 ensureColumn('users', 'last_login_country', 'TEXT');
 ensureColumn('users', 'last_login_geo_ip', 'TEXT');
 ensureColumn('users', 'last_login_geo_at', 'INTEGER');
+ensureColumn('users', 'last_login_geo_source', 'TEXT');
 
 // ====== CỘT PHỤC VỤ TÍNH NĂNG KEY / GÓI IN PHIẾU ======
 // license_type: 'free' (mặc định, tài khoản mới đăng ký) | '1m' | '3m' | '6m' | '12m' | 'lifetime'
@@ -840,22 +841,57 @@ async function refreshIpLocation(ip) {
   if (!ip || !net.isIP(ip)) return null;
   if (ipGeoPending.has(ip)) return ipGeoPending.get(ip);
   const task = (async () => {
-    let location = { city: null, region: null, country: null };
+    let location = { city: null, region: null, country: null, source: null };
     try {
       if (isPrivateIp(ip)) {
-        location = { city: 'Mạng nội bộ', region: null, country: null };
+        location = { city: 'Mạng nội bộ', region: null, country: null, source: 'local' };
       } else {
-        const response = await fetch(
-          `https://ipwho.is/${encodeURIComponent(ip)}?fields=success,city,region,country`,
-          { signal: AbortSignal.timeout(4500) }
-        );
-        const data = await response.json();
-        if (response.ok && data?.success !== false) {
-          location = {
-            city: cleanText(data.city, 100) || null,
-            region: cleanText(data.region, 100) || null,
-            country: cleanText(data.country, 100) || null
+        // WhatIsMyIPAddress không cung cấp API JSON công khai, nhưng có trang
+        // chi tiết ổn định /ip/{IP}. Đọc đúng ba trường hiển thị trên trang.
+        const detailsResponse = await fetch(`https://whatismyipaddress.com/ip/${encodeURIComponent(ip)}`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; TikTokLiveAdmin/1.0)' },
+          signal: AbortSignal.timeout(6000)
+        });
+        if (detailsResponse.ok) {
+          const html = await detailsResponse.text();
+          const text = html
+            .replace(/<script[\s\S]*?<\/script>/gi, '\n')
+            .replace(/<style[\s\S]*?<\/style>/gi, '\n')
+            .replace(/<[^>]+>/g, '\n')
+            .replace(/&nbsp;|&#160;/gi, ' ')
+            .replace(/&amp;/gi, '&')
+            .replace(/&quot;/gi, '"')
+            .replace(/&#39;|&apos;/gi, "'")
+            .split(/\r?\n/)
+            .map(line => line.replace(/\s+/g, ' ').trim())
+            .filter(Boolean)
+            .join('\n');
+          const readField = label => {
+            const match = text.match(new RegExp(`(?:^|\\n)${label}:?\\s*(?:\\n)?([^\\n]+)`, 'i'));
+            return cleanText(match?.[1], 100) || null;
           };
+          location = {
+            city: readField('City'),
+            region: readField('State/Region'),
+            country: readField('Country'),
+            source: 'whatismyipaddress'
+          };
+        }
+        // Dự phòng khi trang HTML thay đổi hoặc chặn yêu cầu từ máy chủ.
+        if (!location.city && !location.region && !location.country) {
+          const fallbackResponse = await fetch(
+            `https://ipwho.is/${encodeURIComponent(ip)}?fields=success,city,region,country`,
+            { signal: AbortSignal.timeout(4500) }
+          );
+          const data = await fallbackResponse.json();
+          if (fallbackResponse.ok && data?.success !== false) {
+            location = {
+              city: cleanText(data.city, 100) || null,
+              region: cleanText(data.region, 100) || null,
+              country: cleanText(data.country, 100) || null,
+              source: 'ipwhois-fallback'
+            };
+          }
         }
       }
     } catch (err) {
@@ -863,9 +899,9 @@ async function refreshIpLocation(ip) {
     }
     db.prepare(`UPDATE users
       SET last_login_city = ?, last_login_region = ?, last_login_country = ?,
-          last_login_geo_ip = ?, last_login_geo_at = ?
+          last_login_geo_ip = ?, last_login_geo_at = ?, last_login_geo_source = ?
       WHERE last_login_ip = ?`)
-      .run(location.city, location.region, location.country, ip, Date.now(), ip);
+      .run(location.city, location.region, location.country, ip, Date.now(), location.source, ip);
     return location;
   })().finally(() => ipGeoPending.delete(ip));
   ipGeoPending.set(ip, task);
@@ -885,12 +921,13 @@ function createSession(userId, req) {
   // IP đăng nhập gần nhất thuộc về tài khoản, không phụ thuộc vòng đời session.
   // Vì vậy đăng xuất hoặc chuyển Offline không làm mất IP này.
   const previous = db.prepare(`SELECT last_login_ip, last_login_city, last_login_region,
-    last_login_country, last_login_geo_ip, last_login_geo_at FROM users WHERE id = ?`).get(userId);
+    last_login_country, last_login_geo_ip, last_login_geo_at, last_login_geo_source
+    FROM users WHERE id = ?`).get(userId);
   const changedIp = previous?.last_login_ip !== ipAddress;
   db.prepare(`UPDATE users
     SET last_login_ip = ?, last_login_at = ?,
         last_login_city = ?, last_login_region = ?, last_login_country = ?,
-        last_login_geo_ip = ?, last_login_geo_at = ?
+        last_login_geo_ip = ?, last_login_geo_at = ?, last_login_geo_source = ?
     WHERE id = ?`)
     .run(
       ipAddress, now,
@@ -899,6 +936,7 @@ function createSession(userId, req) {
       changedIp ? null : previous?.last_login_country,
       changedIp ? null : previous?.last_login_geo_ip,
       changedIp ? null : previous?.last_login_geo_at,
+      changedIp ? null : previous?.last_login_geo_source,
       userId
     );
   if (ipAddress && (changedIp || !previous?.last_login_geo_at)) {
@@ -1139,6 +1177,7 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
     .filter(user => user.last_login_ip && (
       user.last_login_geo_ip !== user.last_login_ip ||
       !user.last_login_geo_at ||
+      !user.last_login_geo_source ||
       now - user.last_login_geo_at > geoRefreshMs
     ))
     .map(user => user.last_login_ip))];
@@ -1177,6 +1216,7 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
         ipCity: u.last_login_city || null,
         ipRegion: u.last_login_region || null,
         ipCountry: u.last_login_country || null,
+        ipGeoSource: u.last_login_geo_source || null,
         deviceName: presence?.device_name || null
       };
     })
