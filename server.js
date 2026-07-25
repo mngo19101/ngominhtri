@@ -1029,10 +1029,72 @@ app.use((req, res, next) => {
   next();
 });
 
+// Một số header bảo mật cơ bản, không cần thêm thư viện ngoài (helmet).
+// Không bật Content-Security-Policy nghiêm ngặt vì giao diện public/index.html
+// là 1 file HTML dùng nhiều <script> nội tuyến (inline) — bật CSP chặt sẽ làm
+// gãy toàn bộ giao diện. Các header dưới đây an toàn để bật mặc định.
+app.use((req, res, next) => {
+  res.header('X-Content-Type-Options', 'nosniff');
+  res.header('X-Frame-Options', 'SAMEORIGIN');
+  res.header('Referrer-Policy', 'no-referrer-when-downgrade');
+  next();
+});
+
+// ====== CHỐNG DÒ MẬT KHẨU (RATE LIMIT) ======
+// Không cần thêm package ngoài (express-rate-limit) — tự đếm số lần gọi theo
+// IP trong bộ nhớ. Đủ dùng cho quy mô 1 service Railway; nếu sau này chạy
+// nhiều instance phía sau load balancer thì nên chuyển sang đếm ở DB/Redis
+// dùng chung, vì bộ nhớ ở đây không chia sẻ được giữa các instance.
+const rateLimitBuckets = new Map(); // key: "loai:ip" -> { count, resetAt }
+
+function makeRateLimiter({ windowMs, max, message }) {
+  return function rateLimiter(req, res, next) {
+    const ip = getClientIp(req) || 'unknown';
+    const key = `${req.path}:${ip}`;
+    const now = Date.now();
+    let bucket = rateLimitBuckets.get(key);
+    if (!bucket || bucket.resetAt <= now) {
+      bucket = { count: 0, resetAt: now + windowMs };
+      rateLimitBuckets.set(key, bucket);
+    }
+    bucket.count += 1;
+    if (bucket.count > max) {
+      const retryAfterSec = Math.ceil((bucket.resetAt - now) / 1000);
+      res.header('Retry-After', String(retryAfterSec));
+      return res.status(429).json({
+        error: message || `Bạn thao tác quá nhanh, vui lòng thử lại sau ${retryAfterSec} giây.`,
+      });
+    }
+    next();
+  };
+}
+
+// Dọn định kỳ các bucket đã hết hạn để không phình bộ nhớ vô hạn theo thời gian.
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, bucket] of rateLimitBuckets) {
+    if (bucket.resetAt <= now) rateLimitBuckets.delete(key);
+  }
+}, 10 * 60 * 1000).unref();
+
+// Đăng nhập: tối đa 8 lần gọi / 15 phút / IP (đủ cho người gõ nhầm mật khẩu
+// vài lần, nhưng chặn được kiểu dò mật khẩu tự động liên tục).
+const loginRateLimiter = makeRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 8,
+  message: 'Bạn đã thử đăng nhập sai quá nhiều lần. Vui lòng thử lại sau ít phút.',
+});
+// Đăng ký: tối đa 5 tài khoản mới / giờ / IP, chặn spam tạo tài khoản hàng loạt.
+const registerRateLimiter = makeRateLimiter({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: 'Bạn đã tạo tài khoản quá nhiều lần trong thời gian ngắn. Vui lòng thử lại sau.',
+});
+
 // ====== API TÀI KHOẢN & DỮ LIỆU KHÁCH HÀNG ======
 
 // Đăng ký tài khoản mới
-app.post('/api/register', (req, res) => {
+app.post('/api/register', registerRateLimiter, (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) {
     return res.status(400).json({ error: 'Thiếu username hoặc password.' });
@@ -1057,7 +1119,7 @@ app.post('/api/register', (req, res) => {
 });
 
 // Đăng nhập
-app.post('/api/login', (req, res) => {
+app.post('/api/login', loginRateLimiter, (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) {
     return res.status(400).json({ error: 'Thiếu username hoặc password.' });
