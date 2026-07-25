@@ -187,6 +187,16 @@ db.exec(`
     created_at INTEGER NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id)
   );
+
+  -- Phiên hỗ trợ tạm thời: Admin có thể xem/làm việc trong tài khoản khách
+  -- mà không cần biết hoặc thay đổi mật khẩu của khách.
+  CREATE TABLE IF NOT EXISTS support_code_security (
+    admin_user_id INTEGER PRIMARY KEY,
+    failed_attempts INTEGER NOT NULL DEFAULT 0,
+    locked_until INTEGER,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (admin_user_id) REFERENCES users(id)
+  );
 `);
 
 // ====== MIGRATION: đảm bảo DB cũ (tạo trước khi có tính năng admin) cũng có
@@ -237,6 +247,8 @@ ensureColumn('sessions', 'device_name', 'TEXT');
 ensureColumn('sessions', 'user_agent', 'TEXT');
 ensureColumn('sessions', 'last_seen_at', 'INTEGER');
 ensureColumn('sessions', 'ip_address', 'TEXT');
+ensureColumn('sessions', 'is_support', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('sessions', 'support_admin_id', 'INTEGER');
 
 // Bản cũ đã có IP trong session nhưng chưa có cột IP cố định trên tài khoản.
 // Backfill một lần để sau nâng cấp Admin thấy ngay IP và giờ đăng nhập gần nhất.
@@ -322,25 +334,9 @@ ensureColumn('shipment_tracking', 'expected_delivery_text', 'TEXT');
 // - Comment ngày 25/07 được giữ đến hết 25/08.
 // - Từ 00:00 ngày 26/08 trở đi mới bị xóa.
 // Đơn hàng/giỏ khách đã chốt KHÔNG bị xóa theo tác vụ này.
-function addOneCalendarMonthEndOfDay(value) {
-  const source = new Date(value);
-  if (!Number.isFinite(source.getTime())) return null;
-  // Railway thường chạy UTC, nên tự quy đổi cố định UTC+7 để ngày xóa luôn
-  // đúng theo ngày Việt Nam, không phụ thuộc timezone của container.
-  const vietnam = new Date(source.getTime() + 7 * 60 * 60 * 1000);
-  const year = vietnam.getUTCFullYear();
-  const month = vietnam.getUTCMonth();
-  const day = vietnam.getUTCDate();
-  const lastDayOfTargetMonth = new Date(Date.UTC(year, month + 2, 0)).getUTCDate();
-  const targetDay = Math.min(day, lastDayOfTargetMonth);
-  // 23:59:59.999 giờ Việt Nam = 16:59:59.999 UTC.
-  return new Date(Date.UTC(year, month + 1, targetDay, 16, 59, 59, 999));
-}
-
-function isCommentExpired(receivedAt, now = new Date()) {
-  const expiry = addOneCalendarMonthEndOfDay(receivedAt);
-  return expiry ? now.getTime() > expiry.getTime() : false;
-}
+// (Hàm tính toán ngày/giờ thuần đã được tách ra lib/date-rules.js để có thể
+// viết unit test độc lập không cần khởi động DB — xem tests/date-rules.test.js)
+const { addOneCalendarMonthEndOfDay, isCommentExpired, addThreeCalendarMonthsEndOfDay } = require('./lib/date-rules');
 
 function cleanupExpiredComments(now = new Date()) {
   const rows = db.prepare('SELECT user_id, data FROM live_session_data').all();
@@ -384,18 +380,6 @@ function cleanupExpiredComments(now = new Date()) {
     console.log('[Retention] Không có comment quá hạn cần xóa.');
   }
   return { removedComments, removedSessions, updatedUsers, checkedAt: now.toISOString() };
-}
-
-function addThreeCalendarMonthsEndOfDay(value) {
-  const source = new Date(value);
-  if (!Number.isFinite(source.getTime())) return null;
-  const vietnam = new Date(source.getTime() + 7 * 60 * 60 * 1000);
-  const year = vietnam.getUTCFullYear();
-  const month = vietnam.getUTCMonth();
-  const day = vietnam.getUTCDate();
-  const lastDayOfTargetMonth = new Date(Date.UTC(year, month + 4, 0)).getUTCDate();
-  const targetDay = Math.min(day, lastDayOfTargetMonth);
-  return new Date(Date.UTC(year, month + 3, targetDay, 16, 59, 59, 999));
 }
 
 function cleanupInactiveCustomers(now = new Date()) {
@@ -746,6 +730,86 @@ function generatePrinterToken() {
 })();
 
 const SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000; // Phiên đăng nhập: 90 ngày
+const SUPPORT_CODE_TTL_MS = 10 * 60 * 1000; // Mã quản trị đổi mỗi 10 phút
+const SUPPORT_SESSION_TTL_MS = 15 * 60 * 1000; // Phiên hỗ trợ tối đa 15 phút
+const SUPPORT_CODE_MAX_ATTEMPTS = 5;
+const SUPPORT_CODE_LOCK_MS = 15 * 60 * 1000;
+const SUPPORT_CODE_SECRET = process.env.SUPPORT_CODE_SECRET || crypto.randomBytes(32).toString('hex');
+
+function getSupportCodeWindow(now = Date.now()) {
+  return Math.floor(now / SUPPORT_CODE_TTL_MS);
+}
+
+function getAdminSupportCode(adminUserId, now = Date.now()) {
+  const window = getSupportCodeWindow(now);
+  const digest = crypto.createHmac('sha256', SUPPORT_CODE_SECRET)
+    .update(`support-code:${adminUserId}:${window}`)
+    .digest('hex');
+  const numeric = Number.parseInt(digest.slice(0, 12), 16) % 100000000;
+  return String(numeric).padStart(8, '0');
+}
+
+function getSupportCodeInfo(adminUserId, now = Date.now()) {
+  const window = getSupportCodeWindow(now);
+  const expiresAt = (window + 1) * SUPPORT_CODE_TTL_MS;
+  return {
+    code: getAdminSupportCode(adminUserId, now),
+    expiresAt,
+    remainingMs: Math.max(0, expiresAt - now)
+  };
+}
+
+function getSupportSecurity(adminUserId) {
+  return db.prepare('SELECT * FROM support_code_security WHERE admin_user_id = ?').get(adminUserId);
+}
+
+function recordSupportCodeFailure(adminUserId, now = Date.now()) {
+  const current = getSupportSecurity(adminUserId);
+  const failedAttempts = Number(current?.failed_attempts || 0) + 1;
+  const lockedUntil = failedAttempts >= SUPPORT_CODE_MAX_ATTEMPTS
+    ? now + SUPPORT_CODE_LOCK_MS
+    : (current?.locked_until || null);
+  db.prepare(`INSERT INTO support_code_security
+    (admin_user_id, failed_attempts, locked_until, updated_at)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(admin_user_id) DO UPDATE SET
+      failed_attempts = excluded.failed_attempts,
+      locked_until = excluded.locked_until,
+      updated_at = excluded.updated_at`)
+    .run(adminUserId, failedAttempts, lockedUntil, now);
+  return { failedAttempts, lockedUntil };
+}
+
+function resetSupportCodeFailures(adminUserId, now = Date.now()) {
+  db.prepare(`INSERT INTO support_code_security
+    (admin_user_id, failed_attempts, locked_until, updated_at)
+    VALUES (?, 0, NULL, ?)
+    ON CONFLICT(admin_user_id) DO UPDATE SET
+      failed_attempts = 0,
+      locked_until = NULL,
+      updated_at = excluded.updated_at`)
+    .run(adminUserId, now);
+}
+
+function createSupportSession(adminUserId, targetUserId, req) {
+  const token = crypto.randomBytes(32).toString('hex');
+  const now = Date.now();
+  const deviceName = 'Admin hỗ trợ tài khoản';
+  const userAgent = String(req?.headers?.['user-agent'] || '').slice(0, 300) || null;
+  const ipAddress = getClientIp(req);
+  db.prepare(`INSERT INTO sessions
+    (token, user_id, created_at, expires_at, device_name, user_agent, last_seen_at, ip_address,
+     is_support, support_admin_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)`)
+    .run(token, targetUserId, now, now + SUPPORT_SESSION_TTL_MS, deviceName, userAgent, now, ipAddress, adminUserId);
+  addAudit(adminUserId, 'admin.support.start', 'user', String(targetUserId), {
+    targetUserId,
+    expiresAt: now + SUPPORT_SESSION_TTL_MS,
+    ipAddress
+  });
+  return { token, expiresAt: now + SUPPORT_SESSION_TTL_MS };
+}
+
 
 // ====== HỆ THỐNG KEY / GÓI IN PHIẾU ======
 // Tài khoản vừa đăng ký (gói "free") chỉ được xem tối đa FREE_LIVE_SESSION_LIMIT
@@ -857,7 +921,16 @@ async function refreshIpLocation(ip) {
           headers: { 'User-Agent': 'Mozilla/5.0 (compatible; TikTokLiveAdmin/1.0)' },
           signal: AbortSignal.timeout(6000)
         });
-        if (detailsResponse.ok) {
+        // Phân biệt rõ "bị chặn/giới hạn tần suất" (403/429/503 — trang biết ta
+        // là bot và đang tạm từ chối) với các lỗi khác (404, 500...). Việc này
+        // giúp cơ chế thử-lại-sau-1-giờ (xem /api/admin/users bên dưới) chỉ áp
+        // dụng đúng cho trường hợp có khả năng phục hồi, tránh dò lại vô ích
+        // với IP mà trang này thực sự không có dữ liệu.
+        if (!detailsResponse.ok) {
+          const likelyBlocked = [403, 429, 503].includes(detailsResponse.status);
+          location.source = likelyBlocked ? 'whatismyipaddress-blocked-v3' : 'whatismyipaddress-unavailable-v3';
+          console.warn(`[Presence] whatismyipaddress.com trả về HTTP ${detailsResponse.status} cho IP ${ip} (${likelyBlocked ? 'có thể đang chặn bot' : 'không rõ nguyên nhân'}).`);
+        } else {
           const html = await detailsResponse.text();
           const text = html
             .replace(/<script[\s\S]*?<\/script>/gi, '\n')
@@ -871,9 +944,17 @@ async function refreshIpLocation(ip) {
             .map(line => line.replace(/\s+/g, ' ').trim())
             .filter(Boolean)
             .join('\n');
+          const knownLabels = ['city', 'state/region', 'country'];
           const readField = label => {
             const match = text.match(new RegExp(`(?:^|\\n)${label}:?\\s*(?:\\n)?([^\\n]+)`, 'i'));
-            return cleanText(match?.[1], 100) || null;
+            const value = cleanText(match?.[1], 100) || null;
+            if (!value) return null;
+            // Nếu cấu trúc trang đổi khác đi, regex có thể vô tình bắt trúng
+            // ngay tên nhãn kế tiếp (vd "City" lại khớp ra chữ "Country") thay
+            // vì giá trị thật. Loại bỏ những kết quả rõ ràng là nhãn, không
+            // phải dữ liệu, để tránh lưu lại thông tin sai.
+            if (knownLabels.includes(value.toLowerCase())) return null;
+            return value;
           };
           const whatIsMyIpLocation = {
             city: readField('City'),
@@ -883,6 +964,11 @@ async function refreshIpLocation(ip) {
           };
           if (whatIsMyIpLocation.city || whatIsMyIpLocation.region || whatIsMyIpLocation.country) {
             location = whatIsMyIpLocation;
+          } else {
+            // Trang trả về 200 nhưng không đọc được trường nào — nhiều khả năng
+            // giao diện trang đã đổi cấu trúc (chứ không hẳn IP không có dữ liệu).
+            // Ghi rõ log để admin biết cần kiểm tra lại, không âm thầm bỏ qua.
+            console.warn(`[Presence] Không đọc được City/State/Country cho IP ${ip} — có thể whatismyipaddress.com đã đổi cấu trúc trang.`);
           }
         }
       }
@@ -939,14 +1025,25 @@ function createSession(userId, req) {
 
 // Tra userId từ token phiên đăng nhập — dùng chung cho cả REST API (middleware
 // requireAuth bên dưới) lẫn WebSocket (nơi không có sẵn header Authorization).
-function getUserIdFromToken(token) {
+function getSessionFromToken(token) {
   if (!token) return null;
   const session = db.prepare('SELECT * FROM sessions WHERE token = ?').get(token);
   if (!session || session.expires_at < Date.now()) {
-    if (session) db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+    if (session) {
+      if (session.is_support && session.support_admin_id) {
+        addAudit(session.support_admin_id, 'admin.support.expire', 'user', String(session.user_id), {
+          supportSessionToken: token.slice(0, 8) + '...'
+        });
+      }
+      db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+    }
     return null;
   }
-  return session.user_id;
+  return session;
+}
+
+function getUserIdFromToken(token) {
+  return getSessionFromToken(token)?.user_id || null;
 }
 
 // Middleware xác thực: đọc header "Authorization: Bearer <token>"
@@ -956,7 +1053,8 @@ function getUserIdFromToken(token) {
 function requireAuth(req, res, next) {
   const authHeader = req.headers['authorization'] || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  const userId = getUserIdFromToken(token);
+  const session = getSessionFromToken(token);
+  const userId = session?.user_id;
   if (!userId) {
     return res.status(401).json({ error: 'Thiếu token đăng nhập hoặc phiên đã hết hạn, vui lòng đăng nhập lại.' });
   }
@@ -975,7 +1073,11 @@ function requireAuth(req, res, next) {
   }
   req.userId = userId;
   req.sessionToken = token;
-  req.isAdmin = !!user.is_admin;
+  req.isSupportSession = !!session.is_support;
+  req.supportAdminId = session.support_admin_id ? Number(session.support_admin_id) : null;
+  // Phiên hỗ trợ luôn hoạt động với quyền của tài khoản khách, không phải
+  // quyền Admin. Admin vẫn giữ token đăng nhập gốc ở trình duyệt để quay lại.
+  req.isAdmin = !req.isSupportSession && !!user.is_admin;
   db.prepare('UPDATE sessions SET last_seen_at = ?, ip_address = ? WHERE token = ?')
     .run(Date.now(), getClientIp(req), token);
   next();
@@ -1029,10 +1131,72 @@ app.use((req, res, next) => {
   next();
 });
 
+// Một số header bảo mật cơ bản, không cần thêm thư viện ngoài (helmet).
+// Không bật Content-Security-Policy nghiêm ngặt vì giao diện public/index.html
+// là 1 file HTML dùng nhiều <script> nội tuyến (inline) — bật CSP chặt sẽ làm
+// gãy toàn bộ giao diện. Các header dưới đây an toàn để bật mặc định.
+app.use((req, res, next) => {
+  res.header('X-Content-Type-Options', 'nosniff');
+  res.header('X-Frame-Options', 'SAMEORIGIN');
+  res.header('Referrer-Policy', 'no-referrer-when-downgrade');
+  next();
+});
+
+// ====== CHỐNG DÒ MẬT KHẨU (RATE LIMIT) ======
+// Không cần thêm package ngoài (express-rate-limit) — tự đếm số lần gọi theo
+// IP trong bộ nhớ. Đủ dùng cho quy mô 1 service Railway; nếu sau này chạy
+// nhiều instance phía sau load balancer thì nên chuyển sang đếm ở DB/Redis
+// dùng chung, vì bộ nhớ ở đây không chia sẻ được giữa các instance.
+const rateLimitBuckets = new Map(); // key: "loai:ip" -> { count, resetAt }
+
+function makeRateLimiter({ windowMs, max, message }) {
+  return function rateLimiter(req, res, next) {
+    const ip = getClientIp(req) || 'unknown';
+    const key = `${req.path}:${ip}`;
+    const now = Date.now();
+    let bucket = rateLimitBuckets.get(key);
+    if (!bucket || bucket.resetAt <= now) {
+      bucket = { count: 0, resetAt: now + windowMs };
+      rateLimitBuckets.set(key, bucket);
+    }
+    bucket.count += 1;
+    if (bucket.count > max) {
+      const retryAfterSec = Math.ceil((bucket.resetAt - now) / 1000);
+      res.header('Retry-After', String(retryAfterSec));
+      return res.status(429).json({
+        error: message || `Bạn thao tác quá nhanh, vui lòng thử lại sau ${retryAfterSec} giây.`,
+      });
+    }
+    next();
+  };
+}
+
+// Dọn định kỳ các bucket đã hết hạn để không phình bộ nhớ vô hạn theo thời gian.
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, bucket] of rateLimitBuckets) {
+    if (bucket.resetAt <= now) rateLimitBuckets.delete(key);
+  }
+}, 10 * 60 * 1000).unref();
+
+// Đăng nhập: tối đa 8 lần gọi / 15 phút / IP (đủ cho người gõ nhầm mật khẩu
+// vài lần, nhưng chặn được kiểu dò mật khẩu tự động liên tục).
+const loginRateLimiter = makeRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 8,
+  message: 'Bạn đã thử đăng nhập sai quá nhiều lần. Vui lòng thử lại sau ít phút.',
+});
+// Đăng ký: tối đa 5 tài khoản mới / giờ / IP, chặn spam tạo tài khoản hàng loạt.
+const registerRateLimiter = makeRateLimiter({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: 'Bạn đã tạo tài khoản quá nhiều lần trong thời gian ngắn. Vui lòng thử lại sau.',
+});
+
 // ====== API TÀI KHOẢN & DỮ LIỆU KHÁCH HÀNG ======
 
 // Đăng ký tài khoản mới
-app.post('/api/register', (req, res) => {
+app.post('/api/register', registerRateLimiter, (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) {
     return res.status(400).json({ error: 'Thiếu username hoặc password.' });
@@ -1057,7 +1221,7 @@ app.post('/api/register', (req, res) => {
 });
 
 // Đăng nhập
-app.post('/api/login', (req, res) => {
+app.post('/api/login', loginRateLimiter, (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) {
     return res.status(400).json({ error: 'Thiếu username hoặc password.' });
@@ -1095,6 +1259,11 @@ app.get('/api/me', requireAuth, (req, res) => {
     id: user.id,
     username: user.username,
     isAdmin: !!user.is_admin,
+    isSupportSession: !!req.isSupportSession,
+    supportAdminId: req.supportAdminId || null,
+    supportExpiresAt: req.isSupportSession
+      ? (db.prepare('SELECT expires_at FROM sessions WHERE token = ?').get(req.sessionToken)?.expires_at || null)
+      : null,
     createdAt: user.created_at,
     license,
     liveSessionsUsed: user.live_sessions_used || 0,
@@ -1102,6 +1271,82 @@ app.get('/api/me', requireAuth, (req, res) => {
     printerToken: user.printer_token,
     printerConnected: printerSockets.has(user.id)
   });
+});
+
+
+// ====== PHIÊN HỖ TRỢ QUẢN TRỊ TẠM THỜI ======
+// Admin lấy mã 8 số riêng của mình (đổi mỗi 10 phút), sau đó nhập mã cùng
+// username khách để mở phiên hỗ trợ tối đa 15 phút.
+app.get('/api/admin/support/code', requireAuth, requireAdmin, (req, res) => {
+  const info = getSupportCodeInfo(req.userId);
+  const security = getSupportSecurity(req.userId);
+  const now = Date.now();
+  const lockedUntil = Number(security?.locked_until || 0);
+  res.json({
+    ...info,
+    lockedUntil: lockedUntil > now ? lockedUntil : null,
+    failedAttempts: Number(security?.failed_attempts || 0)
+  });
+});
+
+app.post('/api/admin/support/start', requireAuth, requireAdmin, (req, res) => {
+  const username = String(req.body?.username || '').trim().replace(/^@/, '');
+  const code = String(req.body?.code || '').trim();
+  if (!username || !/^\d{8}$/.test(code)) {
+    return res.status(400).json({ error: 'Vui lòng nhập username khách và mã hỗ trợ 8 số.' });
+  }
+
+  const now = Date.now();
+  const security = getSupportSecurity(req.userId);
+  const lockedUntil = Number(security?.locked_until || 0);
+  if (lockedUntil > now) {
+    return res.status(429).json({
+      error: `Mã hỗ trợ đang bị khóa thử trong ${Math.ceil((lockedUntil - now) / 1000)} giây.`,
+      lockedUntil
+    });
+  }
+
+  const expectedCode = getAdminSupportCode(req.userId, now);
+  if (!crypto.timingSafeEqual(Buffer.from(code), Buffer.from(expectedCode))) {
+    const result = recordSupportCodeFailure(req.userId, now);
+    const attemptsLeft = Math.max(0, SUPPORT_CODE_MAX_ATTEMPTS - result.failedAttempts);
+    return res.status(401).json({
+      error: attemptsLeft
+        ? `Mã hỗ trợ không đúng. Còn ${attemptsLeft} lần thử trước khi khóa 15 phút.`
+        : 'Mã hỗ trợ sai quá 5 lần. Đã khóa thử mã trong 15 phút.',
+      attemptsLeft,
+      lockedUntil: result.lockedUntil || null
+    });
+  }
+
+  const target = db.prepare('SELECT id, username, is_admin, is_banned FROM users WHERE username = ?').get(username);
+  if (!target) return res.status(404).json({ error: 'Không tìm thấy tài khoản khách hàng.' });
+  if (target.is_admin) return res.status(400).json({ error: 'Không thể mở phiên hỗ trợ vào tài khoản Admin khác.' });
+  if (target.is_banned) return res.status(403).json({ error: 'Tài khoản khách hàng đang bị khóa.' });
+
+  resetSupportCodeFailures(req.userId, now);
+  const support = createSupportSession(req.userId, target.id, req);
+  res.json({
+    ok: true,
+    token: support.token,
+    expiresAt: support.expiresAt,
+    username: target.username,
+    supportAdminId: req.userId
+  });
+});
+
+app.post('/api/support/end', requireAuth, (req, res) => {
+  if (!req.isSupportSession || !req.supportAdminId) {
+    return res.json({ ok: true, alreadyEnded: true });
+  }
+  const targetUserId = req.userId;
+  const adminUserId = req.supportAdminId;
+  db.prepare('DELETE FROM sessions WHERE token = ?').run(req.sessionToken);
+  addAudit(adminUserId, 'admin.support.end', 'user', String(targetUserId), {
+    endedAt: Date.now(),
+    reason: 'manual'
+  });
+  res.json({ ok: true });
 });
 
 // ====== API QUẢN TRỊ (ADMIN) ======
@@ -1169,13 +1414,17 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
     .filter(user => {
       if (!user.last_login_ip) return false;
       const geoAge = now - (Number(user.last_login_geo_at) || 0);
-      const knownSource = ['whatismyipaddress-only-v3', 'whatismyipaddress-unavailable-v3', 'local']
+      const knownSource = ['whatismyipaddress-only-v3', 'whatismyipaddress-unavailable-v3', 'whatismyipaddress-blocked-v3', 'local']
         .includes(user.last_login_geo_source);
+      // "blocked" (403/429/503 — bị chặn tạm thời) và "unavailable" (lỗi khác,
+      // có thể là tạm thời) đều đáng thử lại sau 1 giờ. Nếu trang đã đổi cấu
+      // trúc khiến không đọc được trường nào dù trả về 200, log cảnh báo ở
+      // refreshIpLocation() sẽ giúp phát hiện sớm thay vì lặp lại vô ích.
       return user.last_login_geo_ip !== user.last_login_ip ||
         !user.last_login_geo_at ||
         !knownSource ||
         geoAge > geoRefreshMs ||
-        (user.last_login_geo_source === 'whatismyipaddress-unavailable-v3' &&
+        (['whatismyipaddress-unavailable-v3', 'whatismyipaddress-blocked-v3'].includes(user.last_login_geo_source) &&
           geoAge > 60 * 60 * 1000);
     })
     .map(user => user.last_login_ip))];
@@ -1850,9 +2099,18 @@ app.get('/api/orders', requireAuth, (req, res) => {
     const like = `%${q}%`;
     args.push(like, like, like, like, like);
   }
-  const rows = db.prepare(`SELECT * FROM orders WHERE ${where.join(' AND ')}
-    ORDER BY created_at DESC LIMIT 5000`).all(...args);
-  res.json({ orders: rows.map(publicOrder) });
+  // limit/offset là THAM SỐ TUỲ CHỌN — không truyền thì hành vi giữ nguyên như
+  // trước (tối đa 5000 bản ghi mới nhất), để không phá vỡ giao diện hiện tại.
+  // Cho phép truyền để về sau có thể thêm phân trang thật trên giao diện mà
+  // không cần đổi API lần nữa. limit bị chặn tối đa 5000 để tránh 1 request
+  // đơn lẻ kéo quá nhiều dữ liệu cùng lúc.
+  const limit = Math.min(5000, Math.max(1, intValue(req.query.limit, 5000, 1, 5000)));
+  const offset = Math.max(0, intValue(req.query.offset, 0, 0, Number.MAX_SAFE_INTEGER));
+  const whereSql = where.join(' AND ');
+  const totalCount = db.prepare(`SELECT COUNT(*) AS c FROM orders WHERE ${whereSql}`).get(...args).c;
+  const rows = db.prepare(`SELECT * FROM orders WHERE ${whereSql}
+    ORDER BY created_at DESC LIMIT ? OFFSET ?`).all(...args, limit, offset);
+  res.json({ orders: rows.map(publicOrder), totalCount, limit, offset });
 });
 
 app.post('/api/orders', requireAuth, (req, res) => {
@@ -1955,6 +2213,12 @@ app.delete('/api/orders/:id', requireAuth, (req, res) => {
 // Danh sách vận chuyển dùng chung dữ liệu đơn hàng, nhưng chỉ trả về đơn thuộc
 // tài khoản đang đăng nhập. Đơn chưa đủ SĐT/địa chỉ vẫn xuất hiện ở "Cần xử lý".
 app.get('/api/shipments', requireAuth, (req, res) => {
+  // Cùng cách làm với /api/orders ở trên: limit/offset tuỳ chọn, mặc định giữ
+  // nguyên hành vi cũ (tối đa 5000 bản ghi) để không phá vỡ giao diện hiện tại.
+  const limit = Math.min(5000, Math.max(1, intValue(req.query.limit, 5000, 1, 5000)));
+  const offset = Math.max(0, intValue(req.query.offset, 0, 0, Number.MAX_SAFE_INTEGER));
+  const totalCount = db.prepare(`SELECT COUNT(*) AS c FROM orders WHERE user_id = ? AND deleted_at IS NULL`)
+    .get(req.userId).c;
   const rows = db.prepare(`SELECT o.*, t.carrier AS carrier_name,
       t.tracking_code AS external_tracking_code, t.current_status AS carrier_status,
       t.current_location AS carrier_location, t.expected_delivery_at,
@@ -1963,9 +2227,9 @@ app.get('/api/shipments', requireAuth, (req, res) => {
     FROM orders o
     LEFT JOIN shipment_tracking t ON t.order_id = o.id AND t.user_id = o.user_id
     WHERE o.user_id = ? AND o.deleted_at IS NULL
-    ORDER BY COALESCE(o.shipping_updated_at, o.updated_at) DESC LIMIT 5000`)
-    .all(req.userId);
-  res.json({ shipments: rows.map(publicOrder) });
+    ORDER BY COALESCE(o.shipping_updated_at, o.updated_at) DESC LIMIT ? OFFSET ?`)
+    .all(req.userId, limit, offset);
+  res.json({ shipments: rows.map(publicOrder), totalCount, limit, offset });
 });
 
 app.get('/api/shipments/:id/events', requireAuth, (req, res) => {
@@ -2133,7 +2397,11 @@ app.post('/api/shipments/:id/reconcile', requireAuth, (req, res) => {
 });
 
 app.get('/api/products', requireAuth, (req, res) => {
-  const rows = db.prepare('SELECT * FROM products WHERE user_id = ? ORDER BY active DESC, code ASC').all(req.userId);
+  // Không phân trang ở đây vì trang "Đơn hàng" cần tải đủ toàn bộ danh mục để
+  // đối chiếu alias với nội dung comment realtime. Chỉ thêm 1 giới hạn an toàn
+  // (rất cao, không ảnh hưởng shop thực tế) để phòng trường hợp dữ liệu lỗi
+  // sinh ra hàng trăm nghìn dòng làm 1 request nặng bất thường.
+  const rows = db.prepare('SELECT * FROM products WHERE user_id = ? ORDER BY active DESC, code ASC LIMIT 20000').all(req.userId);
   res.json({ products: rows.map(p => ({
     id: p.id, code: p.code, name: p.name, price: p.price, stock: p.stock,
     aliases: JSON.parse(p.aliases || '[]'), active: !!p.active,
