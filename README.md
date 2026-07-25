@@ -1,4 +1,4 @@
-# TikTok Live Print & Order Manager v2.13.0
+# TikTok Live Print & Order Manager v2.18.0
 
 Bộ mã này chạy trực tiếp trên Railway và phục vụ giao diện tại:
 
@@ -45,7 +45,7 @@ Sau khi upload, chọn **Redeploy**. Server tự tạo/migrate bảng SQLite, kh
 Bridge Server đang chạy tại cổng ...
 ```
 
-## Tính năng v2.13.0
+## Tính năng v2.18.0
 
 - Tab **Vận chuyển** riêng, dùng chung đơn đã chốt.
 - Chỉ nhập mã vận đơn SPX: hệ thống tự tra cứu trạng thái, vị trí hiện tại, hành trình và ngày giao dự kiến, rồi lưu vào đúng đơn.
@@ -72,6 +72,17 @@ Bridge Server đang chạy tại cổng ...
 - Quản trị mở thành một màn hình toàn phần che toàn bộ ứng dụng, có nút đóng để trở về đúng tab trước đó.
 - Trang đầu Quản trị chỉ hiện các lựa chọn **Tài khoản & gói**, **Dung lượng database** và **Nhật ký giới hạn**; nội dung chỉ tải và hiển thị sau khi Admin chọn từng mục.
 - Có nút quay lại danh sách lựa chọn và hỗ trợ phím `Esc` để đóng nhanh trên laptop.
+- Trình duyệt đang đăng nhập gửi tín hiệu hoạt động mỗi 5 phút; quá khoảng 6 phút không có tín hiệu sẽ hiển thị **Offline**.
+- Trong **Quản trị → Tài khoản & gói**, Admin thấy trạng thái **Đang online/Offline**, lần hoạt động gần nhất và địa chỉ IP gần nhất của từng tài khoản.
+- Tín hiệu chỉ cập nhật hàng phiên đăng nhập hiện có, không tạo lịch sử mới nên không làm database tăng liên tục.
+- IP được lưu cố định theo lần đăng nhập gần nhất của tài khoản; chuyển Offline hoặc đăng xuất không làm mất IP.
+- Lần đăng nhập tiếp theo sẽ thay IP cũ bằng IP mới và lưu thêm thời điểm đăng nhập gần nhất cho Admin xem.
+- Nếu từ 2 tài khoản trở lên có cùng IP đăng nhập gần nhất, thẻ tài khoản và dòng IP chuyển màu vàng kèm cảnh báo số tài khoản trùng IP.
+- Cảnh báo IP trùng chỉ giúp Admin chú ý, không tự khóa vì nhiều người dùng chung Wi‑Fi hoặc mạng di động cũng có thể chung IP.
+- Nhãn **Đang online** hiển thị màu xanh lá; nhãn **Offline** hiển thị màu đỏ; cảnh báo IP trùng giữ màu vàng.
+- Tab **Quản trị** mở như các tab bình thường và chỉ hiển thị các ô lựa chọn.
+- Chỉ khi bấm **Tài khoản & gói**, **Dung lượng database/Dọn dữ liệu** hoặc **Nhật ký** thì nội dung chi tiết mới mở toàn màn hình.
+- Đóng, quay lại hoặc bấm `Esc` ở màn chi tiết sẽ trở về trang lựa chọn của tab Quản trị.
 - Đơn chưa giao chỉ cộng vào **Tạm tính**. Chỉ khi vận chuyển chuyển sang **Đã giao** mới ghi nhận **Doanh thu**, theo đúng ngày giao thành công.
 - Đã bỏ tab **Sản phẩm** khỏi thanh điều hướng; dữ liệu sản phẩm cũ vẫn được giữ an toàn trong database.
 - Đã bỏ nút **Hành trình** cũ trong Vận chuyển; chỉ giữ **Xem hành trình SPX**.

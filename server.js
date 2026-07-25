@@ -205,6 +205,8 @@ ensureColumn('users', 'is_admin', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('users', 'is_banned', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('users', 'banned_reason', 'TEXT');
 ensureColumn('users', 'banned_at', 'INTEGER');
+ensureColumn('users', 'last_login_ip', 'TEXT');
+ensureColumn('users', 'last_login_at', 'INTEGER');
 
 // ====== CỘT PHỤC VỤ TÍNH NĂNG KEY / GÓI IN PHIẾU ======
 // license_type: 'free' (mặc định, tài khoản mới đăng ký) | '1m' | '3m' | '6m' | '12m' | 'lifetime'
@@ -228,6 +230,7 @@ ensureColumn('users', 'printer_token', 'TEXT');
 ensureColumn('sessions', 'device_name', 'TEXT');
 ensureColumn('sessions', 'user_agent', 'TEXT');
 ensureColumn('sessions', 'last_seen_at', 'INTEGER');
+ensureColumn('sessions', 'ip_address', 'TEXT');
 
 // ====== QUẢN LÝ VẬN CHUYỂN / PHIẾU LUÂN CHUYỂN NỘI BỘ ======
 // Các cột này nằm ngay trên đơn hàng để mỗi tài khoản chỉ nhìn thấy dữ liệu
@@ -587,9 +590,9 @@ function estimateUserStorageUsage() {
   const blobLength = column => `length(CAST(COALESCE(${column}, '') AS BLOB))`;
 
   addRows(`SELECT id AS user_id,
-    320 + ${blobLength('username')} + ${blobLength('banned_reason')} + ${blobLength('printer_token')} AS bytes
+    320 + ${blobLength('username')} + ${blobLength('banned_reason')} + ${blobLength('printer_token')} + ${blobLength('last_login_ip')} AS bytes
     FROM users`);
-  addRows(`SELECT user_id, SUM(180 + ${blobLength('token')} + ${blobLength('device_name')} + ${blobLength('user_agent')}) AS bytes
+  addRows(`SELECT user_id, SUM(180 + ${blobLength('token')} + ${blobLength('device_name')} + ${blobLength('user_agent')} + ${blobLength('ip_address')}) AS bytes
     FROM sessions GROUP BY user_id`);
   for (const table of ['customer_data', 'saved_tiktok_ids', 'live_session_data', 'user_settings']) {
     addRows(`SELECT user_id, SUM(80 + ${blobLength('data')}) AS bytes FROM ${table} GROUP BY user_id`);
@@ -784,15 +787,26 @@ function hashPassword(password, salt) {
   return crypto.scryptSync(password, salt, 64).toString('hex');
 }
 
+function getClientIp(req) {
+  const forwarded = String(req?.headers?.['x-forwarded-for'] || '').split(',')[0].trim();
+  const raw = forwarded || String(req?.socket?.remoteAddress || '').trim();
+  return raw.replace(/^::ffff:/, '').slice(0, 80) || null;
+}
+
 function createSession(userId, req) {
   const token = crypto.randomBytes(32).toString('hex');
   const now = Date.now();
   const deviceName = String(req?.body?.deviceName || '').trim().slice(0, 80) || null;
   const userAgent = String(req?.headers?.['user-agent'] || '').slice(0, 300) || null;
+  const ipAddress = getClientIp(req);
   db.prepare(`INSERT INTO sessions
-    (token, user_id, created_at, expires_at, device_name, user_agent, last_seen_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)`)
-    .run(token, userId, now, now + SESSION_TTL_MS, deviceName, userAgent, now);
+    (token, user_id, created_at, expires_at, device_name, user_agent, last_seen_at, ip_address)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(token, userId, now, now + SESSION_TTL_MS, deviceName, userAgent, now, ipAddress);
+  // IP đăng nhập gần nhất thuộc về tài khoản, không phụ thuộc vòng đời session.
+  // Vì vậy đăng xuất hoặc chuyển Offline không làm mất IP này.
+  db.prepare('UPDATE users SET last_login_ip = ?, last_login_at = ? WHERE id = ?')
+    .run(ipAddress, now, userId);
   return token;
 }
 
@@ -835,7 +849,8 @@ function requireAuth(req, res, next) {
   req.userId = userId;
   req.sessionToken = token;
   req.isAdmin = !!user.is_admin;
-  db.prepare('UPDATE sessions SET last_seen_at = ? WHERE token = ?').run(Date.now(), token);
+  db.prepare('UPDATE sessions SET last_seen_at = ?, ip_address = ? WHERE token = ?')
+    .run(Date.now(), getClientIp(req), token);
   next();
 }
 
@@ -971,6 +986,12 @@ app.get('/api/admin/storage', requireAuth, requireAdmin, (req, res) => {
   res.json(getAdminStorageInfo());
 });
 
+// Trình duyệt gọi định kỳ mỗi 5 phút. Chỉ cập nhật cùng một hàng phiên đăng
+// nhập, không tạo lịch sử mới nên dung lượng database không tăng theo thời gian.
+app.post('/api/account/heartbeat', requireAuth, (req, res) => {
+  res.json({ ok: true, serverTime: Date.now() });
+});
+
 // Cho phép admin chạy dọn ngay mà không cần chờ lịch tự động.
 app.post('/api/admin/cleanup-comments', requireAuth, requireAdmin, (req, res) => {
   res.json({ ok: true, ...cleanupExpiredComments(new Date()) });
@@ -1002,19 +1023,47 @@ app.get('/api/admin/users', requireAuth, requireAdmin, (req, res) => {
   const rows = db.prepare(
     'SELECT * FROM users ORDER BY id ASC'
   ).all();
+  const latestSessions = new Map();
+  for (const session of db.prepare(`SELECT user_id, last_seen_at, ip_address, device_name
+    FROM sessions ORDER BY last_seen_at DESC`).all()) {
+    if (!latestSessions.has(Number(session.user_id))) {
+      latestSessions.set(Number(session.user_id), session);
+    }
+  }
+  const ipAccountCounts = new Map();
+  for (const user of rows) {
+    const ip = String(user.last_login_ip || latestSessions.get(Number(user.id))?.ip_address || '').trim();
+    if (ip) ipAccountCounts.set(ip, (ipAccountCounts.get(ip) || 0) + 1);
+  }
+  const now = Date.now();
+  const onlineWindowMs = 6 * 60 * 1000;
   res.json({
-    users: rows.map(u => ({
-      id: u.id,
-      username: u.username,
-      createdAt: u.created_at,
-      isAdmin: !!u.is_admin,
-      isBanned: !!u.is_banned,
-      bannedReason: u.banned_reason || null,
-      bannedAt: u.banned_at || null,
-      license: getLicenseInfo(u),
-      liveSessionsUsed: u.live_sessions_used || 0,
-      freeLiveSessionLimit: FREE_LIVE_SESSION_LIMIT
-    }))
+    presenceRefreshMs: 5 * 60 * 1000,
+    users: rows.map(u => {
+      const presence = latestSessions.get(Number(u.id));
+      const lastSeenAt = Number(presence?.last_seen_at) || null;
+      const savedIp = u.last_login_ip || presence?.ip_address || null;
+      const ipAccountCount = savedIp ? (ipAccountCounts.get(savedIp) || 1) : 0;
+      return {
+        id: u.id,
+        username: u.username,
+        createdAt: u.created_at,
+        isAdmin: !!u.is_admin,
+        isBanned: !!u.is_banned,
+        bannedReason: u.banned_reason || null,
+        bannedAt: u.banned_at || null,
+        license: getLicenseInfo(u),
+        liveSessionsUsed: u.live_sessions_used || 0,
+        freeLiveSessionLimit: FREE_LIVE_SESSION_LIMIT,
+        isOnline: !!lastSeenAt && now - lastSeenAt <= onlineWindowMs,
+        lastSeenAt,
+        ipAddress: savedIp,
+        ipAccountCount,
+        hasDuplicateIp: ipAccountCount >= 2,
+        lastLoginAt: u.last_login_at || null,
+        deviceName: presence?.device_name || null
+      };
+    })
   });
 });
 

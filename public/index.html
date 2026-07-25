@@ -186,6 +186,16 @@
   .admin-badge.badge-license-paid{ background:rgba(126,224,213,.25); color:#0f8f7e; border:1px solid rgba(126,224,213,.6); }
   .admin-badge.badge-license-lifetime{ background:rgba(255,209,102,.3); color:#a9740a; border:1px solid rgba(255,209,102,.6); }
   .admin-badge.badge-license-expired{ background:rgba(230,56,106,.15); color:#e6386a; border:1px solid rgba(230,56,106,.4); }
+  .admin-presence-row{ display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin-top:3px; }
+  .presence-pill{ display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:3px 9px; font-size:10.5px; font-weight:800; }
+  .presence-pill::before{ content:''; width:7px; height:7px; border-radius:50%; background:currentColor; }
+  .presence-pill.online{ color:#047857; background:#d1fae5; border:1px solid #a7f3d0; }
+  .presence-pill.offline{ color:#b91c1c; background:#fee2e2; border:1px solid #fecaca; }
+  .presence-detail{ color:var(--muted); font:11px 'JetBrains Mono',monospace; overflow-wrap:anywhere; }
+  .admin-user-card.duplicate-ip-card{ border-color:#f3c34e; background:rgba(255,249,219,.78); }
+  .duplicate-ip-warning{ display:inline-flex; align-items:center; border-radius:999px; padding:3px 9px;
+    color:#8a6500; background:#fff3bd; border:1px solid #efca54; font-size:10.5px; font-weight:800; }
+  .presence-detail.duplicate-ip-text{ color:#9a6b00; font-weight:700; }
   .license-select-row{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
   .license-select-row select, .license-select-row input{
     background:rgba(255,255,255,.65); border:1px solid var(--border); color:var(--text);
@@ -195,14 +205,19 @@
   .trial-license-row input{ width:88px; }
   body.admin-overlay-open{ overflow:hidden; }
   .admin-overlay{
-    position:fixed; inset:0; z-index:1400; display:none;
+    position:relative; display:none; width:100%;
+  }
+  .admin-overlay.open{ display:block!important; }
+  .admin-overlay.detail-open{
+    position:fixed; inset:0; z-index:1400;
     background:
       radial-gradient(circle at 8% 5%, rgba(255,181,213,.75), transparent 34%),
       radial-gradient(circle at 94% 12%, rgba(218,190,255,.68), transparent 32%),
       linear-gradient(145deg,#fff4fa,#fdf5ff 56%,#fff8fb);
   }
-  .admin-overlay.open{ display:block!important; }
-  .admin-shell{ height:100dvh; display:flex; flex-direction:column; overflow:hidden; }
+  .admin-shell{ min-height:0; display:flex; flex-direction:column; overflow:visible; }
+  .admin-overlay.detail-open .admin-shell{ height:100dvh; overflow:hidden; }
+  .admin-overlay:not(.detail-open) .admin-shell-head{ display:none; }
   .admin-shell-head{
     min-height:68px; padding:12px max(18px,env(safe-area-inset-right)) 12px max(18px,env(safe-area-inset-left));
     display:grid; grid-template-columns:110px 1fr 110px; align-items:center; gap:12px;
@@ -223,6 +238,7 @@
     flex:1; overflow-y:auto; overscroll-behavior:contain;
     padding:24px max(20px,env(safe-area-inset-right)) calc(28px + env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left));
   }
+  .admin-overlay:not(.detail-open) .admin-shell-body{ overflow:visible; padding:4px 0 22px; }
   .admin-screen{ display:none; width:min(1000px,100%); margin:0 auto; }
   .admin-screen.active{ display:block; }
   .admin-home-intro{ text-align:center; margin:8px auto 24px; max-width:600px; }
@@ -907,7 +923,7 @@
 
 <!-- TAB: QUẢN TRỊ (chỉ tài khoản admin mới thấy được nội dung, tab cũng bị ẩn
      hoàn toàn với tài khoản thường ở phần JS bên dưới) -->
-<div class="admin-overlay" id="viewAdmin" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="adminOverlayTitle">
+<div class="admin-overlay" id="viewAdmin" style="display:none;" role="region" aria-labelledby="adminOverlayTitle">
   <div class="admin-shell">
     <div class="admin-shell-head">
       <button class="admin-head-button" id="adminBackButton" style="visibility:hidden;">← Lựa chọn</button>
@@ -1254,6 +1270,7 @@
   let wsReconnectTimer = null; // id của setTimeout đang chờ để kết nối lại WS
   let currentUser = null; // tên tài khoản đang đăng nhập
   let authToken = null;   // token phiên đăng nhập, lấy từ Bridge Server
+  let heartbeatTimer = null;
   let ordersV2 = [];
   let productsV2 = [];
   let shipmentsV2 = [];
@@ -1308,9 +1325,30 @@
     return data;
   }
 
+  async function sendAccountHeartbeat() {
+    if (!authToken) return;
+    try {
+      await apiFetch('/api/account/heartbeat', { method:'POST', body:'{}' });
+    } catch (err) {
+      // Mất mạng tạm thời: lần tiếp theo hoặc khi quay lại trang sẽ gửi lại.
+    }
+  }
+
+  function startAccountHeartbeat() {
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    sendAccountHeartbeat();
+    heartbeatTimer = setInterval(sendAccountHeartbeat, 5 * 60 * 1000);
+  }
+
+  function stopAccountHeartbeat() {
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
+
   // Đăng xuất bắt buộc khi phát hiện tài khoản đã bị khóa (báo về từ server).
   function forceLogoutBanned(message) {
     if (ws) { try { ws.close(); } catch (e) {} ws = null; }
+    stopAccountHeartbeat();
     closeAdminOverlay(false);
     currentUser = null;
     authToken = null;
@@ -1378,6 +1416,7 @@
 
   $('#btnLogout').addEventListener('click', async () => {
     if (ws) { try { ws.close(); } catch (e) {} ws = null; }
+    stopAccountHeartbeat();
     closeAdminOverlay(false);
     try { await apiFetch('/api/logout', { method: 'POST' }); } catch (e) {}
     currentUser = null;
@@ -1414,6 +1453,7 @@
     renderSessionBadge();
     await Promise.all([loadOrdersV2(), loadProductsV2(), loadSettingsV2(), loadShippingV2()]);
     await refreshAdminFlag();
+    startAccountHeartbeat();
     initWS();
   }
 
@@ -1446,6 +1486,7 @@
     renderSessionBadge();
     await Promise.all([loadOrdersV2(), loadProductsV2(), loadSettingsV2(), loadShippingV2()]);
     await refreshAdminFlag();
+    startAccountHeartbeat();
     initWS();
     return true;
   }
@@ -3143,12 +3184,8 @@ function cartItemAmount(item) {
   // ===== CHUYỂN TAB =====
   let activeMainTab = 'live';
   function switchTab(tab) {
-    if (tab === 'admin') {
-      openAdminOverlay();
-      return;
-    }
     activeMainTab = tab;
-    closeAdminOverlay(false);
+    if (tab !== 'admin') closeAdminOverlay(false);
     $('#viewLive').style.display = tab === 'live' ? '' : 'none';
     $('#viewCustomers').style.display = tab === 'customers' ? '' : 'none';
     $('#viewSessions').style.display = tab === 'sessions' ? '' : 'none';
@@ -3156,6 +3193,7 @@ function cartItemAmount(item) {
     $('#viewOrders').style.display = tab === 'orders' ? '' : 'none';
     $('#viewShipping').style.display = tab === 'shipping' ? '' : 'none';
     $('#viewMenu').style.display = tab === 'menu' ? '' : 'none';
+    $('#viewAdmin').style.display = tab === 'admin' ? '' : 'none';
     $('#navLive').classList.toggle('active', tab === 'live');
     $('#navCustomers').classList.toggle('active', tab === 'customers');
     $('#navSessions').classList.toggle('active', tab === 'sessions');
@@ -3163,13 +3201,14 @@ function cartItemAmount(item) {
     $('#navOrders').classList.toggle('active', tab === 'orders');
     $('#navShipping').classList.toggle('active', tab === 'shipping');
     $('#navMenu').classList.toggle('active', tab === 'menu');
-    $('#navAdmin').classList.remove('active');
+    $('#navAdmin').classList.toggle('active', tab === 'admin');
     if (tab === 'customers') renderCustomerList();
     if (tab === 'sessions') renderSessionList();
     if (tab === 'report') renderReport($('#reportDate').value || dateKeyLocal());
     if (tab === 'orders') loadOrdersV2();
     if (tab === 'shipping') loadShippingV2();
     if (tab === 'menu') loadMenuInfo();
+    if (tab === 'admin') openAdminOverlay();
   }
 
   $('#navLive').addEventListener('click', () => switchTab('live'));
@@ -3338,6 +3377,12 @@ function cartItemAmount(item) {
     });
     $('#adminOverlayTitle').textContent = selected.title;
     $('#adminBackButton').style.visibility = name === 'home' ? 'hidden' : 'visible';
+    const isDetail = name !== 'home';
+    $('#viewAdmin').classList.toggle('detail-open', isDetail);
+    $('#viewAdmin').setAttribute('role', isDetail ? 'dialog' : 'region');
+    if (isDetail) $('#viewAdmin').setAttribute('aria-modal', 'true');
+    else $('#viewAdmin').removeAttribute('aria-modal');
+    document.body.classList.toggle('admin-overlay-open', isDetail);
     $('.admin-shell-body').scrollTop = 0;
     if (name === 'accounts') {
       loadAdminStorage();
@@ -3352,17 +3397,14 @@ function cartItemAmount(item) {
   function openAdminOverlay() {
     if (!isCurrentUserAdmin) return;
     showAdminScreen('home');
-    $('#viewAdmin').style.display = 'block';
+    $('#viewAdmin').style.display = '';
     $('#viewAdmin').classList.add('open');
-    document.body.classList.add('admin-overlay-open');
-    document.querySelectorAll('.bottom-nav .nav-item').forEach(item => item.classList.remove('active'));
-    $('#navAdmin').classList.add('active');
   }
 
   function closeAdminOverlay(restoreNavigation = true) {
     const overlay = $('#viewAdmin');
     if (!overlay) return;
-    overlay.classList.remove('open');
+    overlay.classList.remove('open', 'detail-open');
     overlay.style.display = 'none';
     document.body.classList.remove('admin-overlay-open');
     $('#navAdmin')?.classList.remove('active');
@@ -3389,10 +3431,10 @@ function cartItemAmount(item) {
     button.addEventListener('click', () => showAdminScreen(button.dataset.adminScreen));
   });
   $('#adminBackButton').addEventListener('click', () => showAdminScreen('home'));
-  $('#adminCloseButton').addEventListener('click', () => closeAdminOverlay(true));
+  $('#adminCloseButton').addEventListener('click', () => showAdminScreen('home'));
   document.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && $('#viewAdmin').classList.contains('open')) {
-      closeAdminOverlay(true);
+    if (event.key === 'Escape' && $('#viewAdmin').classList.contains('detail-open')) {
+      showAdminScreen('home');
     }
   });
 
@@ -3429,7 +3471,7 @@ function cartItemAmount(item) {
     listBox.innerHTML = '';
     filteredUsers.forEach(u => {
       const card = document.createElement('div');
-      card.className = 'admin-user-card';
+      card.className = `admin-user-card${u.hasDuplicateIp ? ' duplicate-ip-card' : ''}`;
       const createdStr = u.createdAt ? new Date(u.createdAt).toLocaleString('vi-VN') : '';
       const lic = u.license || { type: 'free', label: 'Miễn phí', canPrint: false, isExpired: false, daysLeft: null };
       let licBadgeClass = 'badge-license-free';
@@ -3448,6 +3490,15 @@ function cartItemAmount(item) {
       const liveQuotaStr = lic.type === 'free'
         ? ` • Live: ${u.liveSessionsUsed || 0}/${u.freeLiveSessionLimit}`
         : '';
+      const lastSeenStr = u.lastSeenAt
+        ? new Date(u.lastSeenAt).toLocaleString('vi-VN')
+        : 'Chưa ghi nhận';
+      const presenceLabel = u.isOnline ? 'Đang online' : 'Offline';
+      const ipLabel = u.ipAddress || 'Chưa ghi nhận IP';
+      const deviceLabel = u.deviceName ? ` · ${escapeHtml(u.deviceName)}` : '';
+      const lastLoginStr = u.lastLoginAt
+        ? new Date(u.lastLoginAt).toLocaleString('vi-VN')
+        : 'Chưa ghi nhận';
       card.innerHTML = `
         <div class="admin-user-info">
           <div class="admin-user-name">
@@ -3457,6 +3508,13 @@ function cartItemAmount(item) {
             <span class="admin-badge ${licBadgeClass}">${escapeHtml(licBadgeText)}</span>
           </div>
           <div class="admin-user-meta">Tạo lúc: ${createdStr}${liveQuotaStr} • Dữ liệu: ${formatStorageSize(adminUserStorageMap.get(Number(u.id)) || 0)} (ước tính)${u.isBanned && u.bannedReason ? ' • Lý do: ' + escapeHtml(u.bannedReason) : ''}</div>
+          <div class="admin-presence-row">
+            <span class="presence-pill ${u.isOnline ? 'online' : 'offline'}">${presenceLabel}</span>
+            ${u.hasDuplicateIp ? `<span class="duplicate-ip-warning">⚠️ Trùng IP với ${Number(u.ipAccountCount)} tài khoản</span>` : ''}
+            <span class="presence-detail ${u.hasDuplicateIp ? 'duplicate-ip-text' : ''}">IP đăng nhập gần nhất: ${escapeHtml(ipLabel)}${deviceLabel}</span>
+            <span class="presence-detail">Đăng nhập gần nhất: ${escapeHtml(lastLoginStr)}</span>
+            <span class="presence-detail">Hoạt động gần nhất: ${escapeHtml(lastSeenStr)}</span>
+          </div>
           <div class="license-select-row">
             <select class="license-select">
               <option value="free"${lic.type === 'free' ? ' selected' : ''}>Miễn phí (thu hồi gói)</option>
@@ -3633,6 +3691,11 @@ function cartItemAmount(item) {
     loadAdminStorage();
     loadAdminUsers();
   });
+  setInterval(() => {
+    if ($('#viewAdmin').classList.contains('open') && $('#adminScreenAccounts').classList.contains('active')) {
+      loadAdminUsers();
+    }
+  }, 60 * 1000);
   $('#adminUserSearchInput').addEventListener('input', () => renderAdminUsers(adminUsersCache));
 
   function formatStorageSize(bytes) {
@@ -3861,6 +3924,7 @@ function cartItemAmount(item) {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       ensureWsAlive();
+      sendAccountHeartbeat();
     } else {
       // Trang bị ẩn đi (chuyển tab, khóa màn hình...) -> chưa chắc trang sẽ
       // đóng hẳn, nhưng cứ lưu ngay cho chắc, tránh phụ thuộc vào timer 500ms
