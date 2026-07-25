@@ -905,79 +905,30 @@ function encodeMimeHeader(value) {
   return `=?UTF-8?B?${Buffer.from(String(value || ''), 'utf8').toString('base64')}?=`;
 }
 
-function getRecoveryEmail(user) {
-  return normalizeEmail(user?.recovery_email || '');
+function maskEmailForLog(value) {
+  const email = String(value || '').trim();
+  if (!email) return '(missing)';
+  const [local, domain] = email.split('@');
+  if (!domain) return `${email.slice(0, 2)}***`;
+  return `${local.slice(0, 2)}***@${domain}`;
 }
 
 function formatSmtpError(err) {
-  const raw = String(err?.message || err || 'Lỗi SMTP không xác định');
-  const lower = raw.toLowerCase();
-  const hints = [];
-
-  if (lower.includes('535')) {
-    hints.push('Gmail thường trả mã 535 khi sai mật khẩu ứng dụng, chưa bật 2-Step Verification, hoặc app password đã bị thu hồi.');
-  } else if (lower.includes('534')) {
-    hints.push('Gmail có thể chặn đăng nhập và yêu cầu xác minh lại hoặc tạo app password mới.');
-  } else if (lower.includes('certificate') || lower.includes('tls') || lower.includes('ssl')) {
-    hints.push('Kiểm tra lại cổng và chế độ secure: 465 đi với secure=true, 587 đi với secure=false.');
-  } else if (lower.includes('timeout')) {
-    hints.push('Kết nối SMTP bị timeout, hãy kiểm tra mạng của server hoặc cổng SMTP.');
-  } else if (lower.includes('closed')) {
-    hints.push('Kết nối SMTP bị đóng sớm, thường do cổng hoặc secure không khớp.');
-  } else if (lower.includes('from')) {
-    hints.push('Kiểm tra lại SMTP_FROM phải là địa chỉ Gmail hợp lệ.');
-  } else {
-    hints.push('Kiểm tra SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS và xem log Railway để biết mã lỗi thật.');
-  }
-
-  return `${raw}
-${hints.join(' ')}`;
+  if (!err) return 'Không có chi tiết lỗi SMTP.';
+  const parts = [];
+  if (err.message) parts.push(err.message);
+  if (err.code) parts.push(`code=${err.code}`);
+  if (err.responseCode) parts.push(`responseCode=${err.responseCode}`);
+  if (err.command) parts.push(`command=${err.command}`);
+  if (err.response) parts.push(`response=${String(err.response).replace(/\s+/g, ' ').trim()}`);
+  if (err.errno) parts.push(`errno=${err.errno}`);
+  if (err.syscall) parts.push(`syscall=${err.syscall}`);
+  if (err.address) parts.push(`address=${err.address}`);
+  if (err.port) parts.push(`port=${err.port}`);
+  return parts.filter(Boolean).join(' | ') || 'Không có chi tiết lỗi SMTP.';
 }
 
-function maskEmailForLog(email) {
-  const value = String(email || '').trim();
-  if (!value) return '(missing)';
-  const at = value.indexOf('@');
-  if (at <= 1) return '***' + value.slice(at >= 0 ? at : 0);
-  return `${value.slice(0, 2)}***${value.slice(at)}`;
-}
-
-function logSmtpEnvironmentDiagnostics() {
-  const host = String(process.env.SMTP_HOST || '').trim();
-  const portRaw = String(process.env.SMTP_PORT || '').trim();
-  const secureEnv = String(process.env.SMTP_SECURE || '').trim().toLowerCase();
-  const secure = secureEnv === '1' || secureEnv === 'true' || portRaw === '465';
-  const username = String(process.env.SMTP_USER || '').trim();
-  const fromEnv = String(process.env.SMTP_FROM || '').trim();
-  const from = fromEnv || username;
-  const password = String(process.env.SMTP_PASS || '');
-
-  console.log('[SMTP] Cấu hình khởi động:');
-  console.log(`[SMTP] host=${host || '(missing)'} port=${portRaw || '(default 587)'} secure=${secure ? 'true' : 'false'}`);
-  console.log(`[SMTP] user=${maskEmailForLog(username)} from=${maskEmailForLog(from)}${fromEnv ? '' : ' (fallback từ SMTP_USER)'}`);
-  console.log(`[SMTP] pass=${password ? 'đã có' : '(missing)'}`);
-
-  const missing = [];
-  if (!host) missing.push('SMTP_HOST');
-  if (!username) missing.push('SMTP_USER');
-  if (!password) missing.push('SMTP_PASS');
-  if (missing.length) {
-    console.warn(`[SMTP] Thiếu biến môi trường: ${missing.join(', ')}`);
-  }
-  if (!from) {
-    console.warn('[SMTP] Không có SMTP_FROM và cũng chưa có SMTP_USER để làm địa chỉ gửi.');
-  } else if (!isValidEmail(from)) {
-    console.warn('[SMTP] SMTP_FROM không phải email hợp lệ.');
-  }
-  if (portRaw && portRaw === '465' && !secure) {
-    console.warn('[SMTP] Cảnh báo: port 465 nên đi với SMTP_SECURE=true.');
-  }
-  if (portRaw && portRaw === '587' && secureEnv === 'true') {
-    console.warn('[SMTP] Cảnh báo: port 587 thường dùng SMTP_SECURE=false.');
-  }
-}
-
-async function sendMailViaSmtp({ to, subject, text }) {
+function getSmtpConfig() {
   const host = String(process.env.SMTP_HOST || '').trim();
   const port = Number(process.env.SMTP_PORT || 587);
   const secureEnv = String(process.env.SMTP_SECURE || '').trim().toLowerCase();
@@ -985,48 +936,30 @@ async function sendMailViaSmtp({ to, subject, text }) {
   const username = String(process.env.SMTP_USER || '').trim();
   const password = String(process.env.SMTP_PASS || '');
   const from = String(process.env.SMTP_FROM || username).trim();
-  if (!host || !from) {
-    throw new Error('Chưa cấu hình SMTP_HOST / SMTP_FROM để gửi email.');
+  return { host, port, secure, username, password, from };
+}
+
+function getRecoveryEmail(user) {
+  return normalizeEmail(user?.recovery_email || '');
+}
+
+async function sendMailViaSmtp({ to, subject, text }) {
+  const smtp = getSmtpConfig();
+  const missing = [];
+  if (!smtp.host) missing.push('SMTP_HOST');
+  if (!smtp.username) missing.push('SMTP_USER');
+  if (!smtp.password) missing.push('SMTP_PASS');
+  if (!smtp.from) missing.push('SMTP_FROM');
+  if (missing.length) {
+    throw new Error(`Thiếu biến môi trường: ${missing.join(', ')}.`);
   }
 
-  const netModule = secure ? require('tls') : require('net');
-  const socket = secure
-    ? netModule.connect({ host, port, servername: host, timeout: 15000 })
-    : netModule.connect({ host, port, timeout: 15000 });
+  const netModule = smtp.secure ? require('tls') : require('net');
+  const socket = smtp.secure
+    ? netModule.connect({ host: smtp.host, port: smtp.port, servername: smtp.host, timeout: 15000 })
+    : netModule.connect({ host: smtp.host, port: smtp.port, timeout: 15000 });
 
   socket.setEncoding('utf8');
-
-  const waitForLine = () => {
-    let buffer = '';
-    let resolveFn;
-    let rejectFn;
-    const promise = new Promise((resolve, reject) => { resolveFn = resolve; rejectFn = reject; });
-    const onData = (chunk) => {
-      buffer += chunk;
-      let idx;
-      while ((idx = buffer.indexOf('\n')) >= 0) {
-        const line = buffer.slice(0, idx + 1).replace(/\r?\n$/, '');
-        buffer = buffer.slice(idx + 1);
-        lines.push(line);
-        const m = line.match(/^(\d{3})([ -])(.*)$/);
-        if (m && m[2] === ' ') {
-          socket.off('data', onData);
-          resolveFn({ code: Number(m[1]), lines: lines.slice() });
-          return;
-        }
-      }
-    };
-    const lines = [];
-    socket.on('data', onData);
-    socket.once('error', rejectFn);
-    socket.once('timeout', () => rejectFn(new Error('SMTP connection timeout')));
-    socket.once('end', () => rejectFn(new Error('SMTP connection closed')));
-    return { promise, cleanup: () => { socket.off('data', onData); socket.off('error', rejectFn); } };
-  };
-
-  const write = (data) => new Promise((resolve, reject) => {
-    socket.write(data, (err) => err ? reject(err) : resolve());
-  });
 
   const readResponse = async () => {
     let buffer = '';
@@ -1065,31 +998,62 @@ async function sendMailViaSmtp({ to, subject, text }) {
     });
   };
 
+  const write = (data) => new Promise((resolve, reject) => {
+    socket.write(data, (err) => err ? reject(err) : resolve());
+  });
+
   const expect = async (codes, command) => {
     if (command) await write(command);
     const response = await readResponse();
     if (!codes.includes(response.code)) {
-      throw new Error(`SMTP trả về mã ${response.code}`);
+      const smtpError = new Error(`SMTP trả về mã ${response.code}`);
+      smtpError.code = `SMTP_${response.code}`;
+      smtpError.responseCode = response.code;
+      smtpError.response = response.lines.join(' | ');
+      throw smtpError;
     }
     return response;
   };
 
+  const buildError = (err) => {
+    const wrapped = new Error(formatSmtpError(err));
+    wrapped.cause = err;
+    if (err?.code) wrapped.code = err.code;
+    if (err?.responseCode) wrapped.responseCode = err.responseCode;
+    if (err?.command) wrapped.command = err.command;
+    if (err?.response) wrapped.response = err.response;
+    if (err?.errno) wrapped.errno = err.errno;
+    if (err?.syscall) wrapped.syscall = err.syscall;
+    if (err?.address) wrapped.address = err.address;
+    if (err?.port) wrapped.port = err.port;
+    return wrapped;
+  };
+
   try {
+    console.log('[SMTP][send]', {
+      host: smtp.host,
+      port: smtp.port,
+      secure: smtp.secure,
+      user: maskEmailForLog(smtp.username),
+      from: maskEmailForLog(smtp.from),
+      pass: smtp.password ? 'set' : 'missing',
+    });
+
     await expect([220]);
     await expect([250], `EHLO localhost\r\n`);
-    if (!secure && process.env.SMTP_STARTTLS === '1') {
+    if (!smtp.secure && process.env.SMTP_STARTTLS === '1') {
       await expect([250], 'STARTTLS\r\n');
       throw new Error('SMTP_STARTTLS hiện chưa được hỗ trợ trong bản rút gọn này. Hãy bật SMTP_SECURE hoặc dùng cổng 465.');
     }
-    if (username && password) {
+    if (smtp.username && smtp.password) {
       await expect([250, 334], 'AUTH LOGIN\r\n');
-      await expect([334], Buffer.from(username, 'utf8').toString('base64') + '\r\n');
-      await expect([235], Buffer.from(password, 'utf8').toString('base64') + '\r\n');
+      await expect([334], Buffer.from(smtp.username, 'utf8').toString('base64') + '\r\n');
+      await expect([235], Buffer.from(smtp.password, 'utf8').toString('base64') + '\r\n');
     }
-    await expect([250], `MAIL FROM:<${from}>\r\n`);
+    await expect([250], `MAIL FROM:<${smtp.from}>\r\n`);
     await expect([250, 251], `RCPT TO:<${to}>\r\n`);
     const message = [
-      `From: ${from}`,
+      `From: ${smtp.from}`,
       `To: ${to}`,
       `Subject: ${encodeMimeHeader(subject)}`,
       'MIME-Version: 1.0',
@@ -1105,7 +1069,7 @@ async function sendMailViaSmtp({ to, subject, text }) {
     socket.end();
   } catch (err) {
     try { socket.destroy(); } catch (_) {}
-    throw err;
+    throw buildError(err);
   }
 }
 
@@ -1541,42 +1505,6 @@ app.post('/api/password-reset/request', passwordResetRequestLimiter, async (req,
       details: formatSmtpError(err),
     });
   }
-});
-
-app.post('/api/password-reset/verify', async (req, res) => {
-  const username = String(req.body?.username || '').trim().replace(/^@/, '');
-  const email = normalizeEmail(req.body?.email || '');
-  const code = String(req.body?.code || '').trim();
-  if (!username || !email || !/^[0-9]{6}$/.test(code)) {
-    return res.status(400).json({ error: 'Thiếu thông tin hoặc mã không hợp lệ.' });
-  }
-  const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
-  if (!user || normalizeEmail(user.recovery_email) !== email) {
-    return res.status(400).json({ error: 'Mã không đúng hoặc đã hết hạn.' });
-  }
-  const row = getPasswordResetRequest(user.id);
-  const now = Date.now();
-  if (!row || row.consumed_at) {
-    return res.status(400).json({ error: 'Mã không đúng hoặc đã hết hạn.' });
-  }
-  if (normalizeEmail(row.email) !== email || row.expires_at < now) {
-    clearPasswordResetRequest(user.id);
-    return res.status(400).json({ error: 'Mã không đúng hoặc đã hết hạn.' });
-  }
-  if (row.locked_until && row.locked_until > now) {
-    return res.status(429).json({ error: `Mã đang tạm khóa. Vui lòng thử lại sau ${Math.ceil((row.locked_until - now) / 1000)} giây.` });
-  }
-
-  const expectedHash = hashResetCode(code, row.code_salt);
-  if (!crypto.timingSafeEqual(Buffer.from(expectedHash), Buffer.from(row.code_hash))) {
-    const attempts = Number(row.attempts || 0) + 1;
-    const lockedUntil = attempts >= 5 ? now + 15 * 60 * 1000 : null;
-    db.prepare(`UPDATE password_reset_requests SET attempts = ?, locked_until = ? WHERE user_id = ?`)
-      .run(attempts, lockedUntil, user.id);
-    return res.status(401).json({ error: attempts >= 5 ? 'Mã sai quá 5 lần. Đã khóa thử 15 phút.' : 'Mã không đúng.' });
-  }
-
-  res.json({ ok: true, message: 'Mã hợp lệ.' });
 });
 
 app.post('/api/password-reset/confirm', async (req, res) => {
@@ -3640,7 +3568,6 @@ const PORT = process.env.PORT || 8181;
 
 server.listen(PORT, () => {
   console.log(`Bridge Server đang chạy tại cổng ${PORT}`);
-  logSmtpEnvironmentDiagnostics();
   console.log('✅ Sẵn sàng nhận lệnh kết nối TikTok Live!');
   // Dọn ngay khi khởi động, sau đó kiểm tra lại mỗi 6 giờ.
   cleanupExpiredComments(new Date());
