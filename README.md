@@ -1,4 +1,4 @@
-# TikTok Live Print & Order Manager v2.18.0
+# TikTok Live Print & Order Manager v2.19.0
 
 Bộ mã này chạy trực tiếp trên Railway và phục vụ giao diện tại:
 
@@ -45,7 +45,7 @@ Sau khi upload, chọn **Redeploy**. Server tự tạo/migrate bảng SQLite, kh
 Bridge Server đang chạy tại cổng ...
 ```
 
-## Tính năng v2.18.0
+## Tính năng v2.19.0
 
 - Tab **Vận chuyển** riêng, dùng chung đơn đã chốt.
 - Chỉ nhập mã vận đơn SPX: hệ thống tự tra cứu trạng thái, vị trí hiện tại, hành trình và ngày giao dự kiến, rồi lưu vào đúng đơn.
@@ -83,6 +83,9 @@ Bridge Server đang chạy tại cổng ...
 - Tab **Quản trị** mở như các tab bình thường và chỉ hiển thị các ô lựa chọn.
 - Chỉ khi bấm **Tài khoản & gói**, **Dung lượng database/Dọn dữ liệu** hoặc **Nhật ký** thì nội dung chi tiết mới mở toàn màn hình.
 - Đóng, quay lại hoặc bấm `Esc` ở màn chi tiết sẽ trở về trang lựa chọn của tab Quản trị.
+- Thẻ tài khoản Admin được rút gọn, bỏ các dòng tạo lúc, dung lượng ước tính và hoạt động gần nhất khỏi màn quản lý gói.
+- Mỗi thẻ chỉ giữ trạng thái, IP, thành phố gần đúng và thời điểm đăng nhập gần nhất theo dạng `giờ:phút:giây ngày/tháng/năm`.
+- Thành phố được tự tra theo IP khi IP thay đổi và lưu lại để không gọi dịch vụ liên tục; IP nội bộ được ghi là **Mạng nội bộ**.
 - Đơn chưa giao chỉ cộng vào **Tạm tính**. Chỉ khi vận chuyển chuyển sang **Đã giao** mới ghi nhận **Doanh thu**, theo đúng ngày giao thành công.
 - Đã bỏ tab **Sản phẩm** khỏi thanh điều hướng; dữ liệu sản phẩm cũ vẫn được giữ an toàn trong database.
 - Đã bỏ nút **Hành trình** cũ trong Vận chuyển; chỉ giữ **Xem hành trình SPX**.

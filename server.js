@@ -207,6 +207,11 @@ ensureColumn('users', 'banned_reason', 'TEXT');
 ensureColumn('users', 'banned_at', 'INTEGER');
 ensureColumn('users', 'last_login_ip', 'TEXT');
 ensureColumn('users', 'last_login_at', 'INTEGER');
+ensureColumn('users', 'last_login_city', 'TEXT');
+ensureColumn('users', 'last_login_region', 'TEXT');
+ensureColumn('users', 'last_login_country', 'TEXT');
+ensureColumn('users', 'last_login_geo_ip', 'TEXT');
+ensureColumn('users', 'last_login_geo_at', 'INTEGER');
 
 // ====== CỘT PHỤC VỤ TÍNH NĂNG KEY / GÓI IN PHIẾU ======
 // license_type: 'free' (mặc định, tài khoản mới đăng ký) | '1m' | '3m' | '6m' | '12m' | 'lifetime'
@@ -231,6 +236,26 @@ ensureColumn('sessions', 'device_name', 'TEXT');
 ensureColumn('sessions', 'user_agent', 'TEXT');
 ensureColumn('sessions', 'last_seen_at', 'INTEGER');
 ensureColumn('sessions', 'ip_address', 'TEXT');
+
+// Bản cũ đã có IP trong session nhưng chưa có cột IP cố định trên tài khoản.
+// Backfill một lần để sau nâng cấp Admin thấy ngay IP và giờ đăng nhập gần nhất.
+try {
+  db.exec(`UPDATE users
+    SET last_login_ip = (
+          SELECT s.ip_address FROM sessions s
+          WHERE s.user_id = users.id AND s.ip_address IS NOT NULL
+          ORDER BY s.created_at DESC LIMIT 1
+        ),
+        last_login_at = (
+          SELECT s.created_at FROM sessions s
+          WHERE s.user_id = users.id
+          ORDER BY s.created_at DESC LIMIT 1
+        )
+    WHERE last_login_ip IS NULL
+      AND EXISTS (SELECT 1 FROM sessions s WHERE s.user_id = users.id AND s.ip_address IS NOT NULL)`);
+} catch (err) {
+  console.warn('[Presence] Không backfill được IP phiên cũ:', err.message);
+}
 
 // ====== QUẢN LÝ VẬN CHUYỂN / PHIẾU LUÂN CHUYỂN NỘI BỘ ======
 // Các cột này nằm ngay trên đơn hàng để mỗi tài khoản chỉ nhìn thấy dữ liệu
@@ -793,6 +818,60 @@ function getClientIp(req) {
   return raw.replace(/^::ffff:/, '').slice(0, 80) || null;
 }
 
+const ipGeoPending = new Map();
+
+function isPrivateIp(ip) {
+  if (net.isIP(ip) === 4) {
+    const parts = ip.split('.').map(Number);
+    return parts[0] === 10 || parts[0] === 127 || parts[0] === 0 ||
+      (parts[0] === 192 && parts[1] === 168) ||
+      (parts[0] === 169 && parts[1] === 254) ||
+      (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31);
+  }
+  if (net.isIP(ip) === 6) {
+    const value = ip.toLowerCase();
+    return value === '::1' || value.startsWith('fc') || value.startsWith('fd') || value.startsWith('fe8') || value.startsWith('fe9') || value.startsWith('fea') || value.startsWith('feb');
+  }
+  return true;
+}
+
+async function refreshIpLocation(ip) {
+  ip = String(ip || '').trim();
+  if (!ip || !net.isIP(ip)) return null;
+  if (ipGeoPending.has(ip)) return ipGeoPending.get(ip);
+  const task = (async () => {
+    let location = { city: null, region: null, country: null };
+    try {
+      if (isPrivateIp(ip)) {
+        location = { city: 'Mạng nội bộ', region: null, country: null };
+      } else {
+        const response = await fetch(
+          `https://ipwho.is/${encodeURIComponent(ip)}?fields=success,city,region,country`,
+          { signal: AbortSignal.timeout(4500) }
+        );
+        const data = await response.json();
+        if (response.ok && data?.success !== false) {
+          location = {
+            city: cleanText(data.city, 100) || null,
+            region: cleanText(data.region, 100) || null,
+            country: cleanText(data.country, 100) || null
+          };
+        }
+      }
+    } catch (err) {
+      console.warn(`[Presence] Chưa tra được thành phố cho IP ${ip}:`, err.message);
+    }
+    db.prepare(`UPDATE users
+      SET last_login_city = ?, last_login_region = ?, last_login_country = ?,
+          last_login_geo_ip = ?, last_login_geo_at = ?
+      WHERE last_login_ip = ?`)
+      .run(location.city, location.region, location.country, ip, Date.now(), ip);
+    return location;
+  })().finally(() => ipGeoPending.delete(ip));
+  ipGeoPending.set(ip, task);
+  return task;
+}
+
 function createSession(userId, req) {
   const token = crypto.randomBytes(32).toString('hex');
   const now = Date.now();
@@ -805,8 +884,26 @@ function createSession(userId, req) {
     .run(token, userId, now, now + SESSION_TTL_MS, deviceName, userAgent, now, ipAddress);
   // IP đăng nhập gần nhất thuộc về tài khoản, không phụ thuộc vòng đời session.
   // Vì vậy đăng xuất hoặc chuyển Offline không làm mất IP này.
-  db.prepare('UPDATE users SET last_login_ip = ?, last_login_at = ? WHERE id = ?')
-    .run(ipAddress, now, userId);
+  const previous = db.prepare(`SELECT last_login_ip, last_login_city, last_login_region,
+    last_login_country, last_login_geo_ip, last_login_geo_at FROM users WHERE id = ?`).get(userId);
+  const changedIp = previous?.last_login_ip !== ipAddress;
+  db.prepare(`UPDATE users
+    SET last_login_ip = ?, last_login_at = ?,
+        last_login_city = ?, last_login_region = ?, last_login_country = ?,
+        last_login_geo_ip = ?, last_login_geo_at = ?
+    WHERE id = ?`)
+    .run(
+      ipAddress, now,
+      changedIp ? null : previous?.last_login_city,
+      changedIp ? null : previous?.last_login_region,
+      changedIp ? null : previous?.last_login_country,
+      changedIp ? null : previous?.last_login_geo_ip,
+      changedIp ? null : previous?.last_login_geo_at,
+      userId
+    );
+  if (ipAddress && (changedIp || !previous?.last_login_geo_at)) {
+    refreshIpLocation(ipAddress).catch(() => {});
+  }
   return token;
 }
 
@@ -1019,12 +1116,12 @@ app.post('/api/admin/database-maintenance', requireAuth, requireAdmin, (req, res
 });
 
 // Danh sách toàn bộ tài khoản trong hệ thống (không trả về password_hash/salt).
-app.get('/api/admin/users', requireAuth, requireAdmin, (req, res) => {
-  const rows = db.prepare(
+app.get('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
+  let rows = db.prepare(
     'SELECT * FROM users ORDER BY id ASC'
   ).all();
   const latestSessions = new Map();
-  for (const session of db.prepare(`SELECT user_id, last_seen_at, ip_address, device_name
+  for (const session of db.prepare(`SELECT user_id, created_at, last_seen_at, ip_address, device_name
     FROM sessions ORDER BY last_seen_at DESC`).all()) {
     if (!latestSessions.has(Number(session.user_id))) {
       latestSessions.set(Number(session.user_id), session);
@@ -1037,6 +1134,22 @@ app.get('/api/admin/users', requireAuth, requireAdmin, (req, res) => {
   }
   const now = Date.now();
   const onlineWindowMs = 6 * 60 * 1000;
+  const geoRefreshMs = 30 * 24 * 60 * 60 * 1000;
+  const ipsToLookup = [...new Set(rows
+    .filter(user => user.last_login_ip && (
+      user.last_login_geo_ip !== user.last_login_ip ||
+      !user.last_login_geo_at ||
+      now - user.last_login_geo_at > geoRefreshMs
+    ))
+    .map(user => user.last_login_ip))];
+  if (ipsToLookup.length) {
+    try {
+      await Promise.all(ipsToLookup.map(ip => refreshIpLocation(ip)));
+    } catch (err) {
+      console.warn('[Presence] Tra cứu vị trí IP chưa hoàn tất:', err.message);
+    }
+    rows = db.prepare('SELECT * FROM users ORDER BY id ASC').all();
+  }
   res.json({
     presenceRefreshMs: 5 * 60 * 1000,
     users: rows.map(u => {
@@ -1060,7 +1173,10 @@ app.get('/api/admin/users', requireAuth, requireAdmin, (req, res) => {
         ipAddress: savedIp,
         ipAccountCount,
         hasDuplicateIp: ipAccountCount >= 2,
-        lastLoginAt: u.last_login_at || null,
+        lastLoginAt: u.last_login_at || presence?.created_at || null,
+        ipCity: u.last_login_city || null,
+        ipRegion: u.last_login_region || null,
+        ipCountry: u.last_login_country || null,
         deviceName: presence?.device_name || null
       };
     })

@@ -3385,7 +3385,6 @@ function cartItemAmount(item) {
     document.body.classList.toggle('admin-overlay-open', isDetail);
     $('.admin-shell-body').scrollTop = 0;
     if (name === 'accounts') {
-      loadAdminStorage();
       loadAdminUsers();
     } else if (name === 'storage') {
       loadAdminStorage();
@@ -3472,7 +3471,6 @@ function cartItemAmount(item) {
     filteredUsers.forEach(u => {
       const card = document.createElement('div');
       card.className = `admin-user-card${u.hasDuplicateIp ? ' duplicate-ip-card' : ''}`;
-      const createdStr = u.createdAt ? new Date(u.createdAt).toLocaleString('vi-VN') : '';
       const lic = u.license || { type: 'free', label: 'Miễn phí', canPrint: false, isExpired: false, daysLeft: null };
       let licBadgeClass = 'badge-license-free';
       let licBadgeText = lic.label;
@@ -3487,18 +3485,10 @@ function cartItemAmount(item) {
           ? `${lic.label} • ${formatLicenseRemaining(lic.remainingMs).toLowerCase()}`
           : `${lic.label} • còn ${lic.daysLeft} ngày`;
       }
-      const liveQuotaStr = lic.type === 'free'
-        ? ` • Live: ${u.liveSessionsUsed || 0}/${u.freeLiveSessionLimit}`
-        : '';
-      const lastSeenStr = u.lastSeenAt
-        ? new Date(u.lastSeenAt).toLocaleString('vi-VN')
-        : 'Chưa ghi nhận';
       const presenceLabel = u.isOnline ? 'Đang online' : 'Offline';
       const ipLabel = u.ipAddress || 'Chưa ghi nhận IP';
-      const deviceLabel = u.deviceName ? ` · ${escapeHtml(u.deviceName)}` : '';
-      const lastLoginStr = u.lastLoginAt
-        ? new Date(u.lastLoginAt).toLocaleString('vi-VN')
-        : 'Chưa ghi nhận';
+      const lastLoginStr = formatAdminDateTime(u.lastLoginAt);
+      const locationLabel = u.ipCity || u.ipRegion || u.ipCountry || (u.ipAddress ? 'Đang xác định...' : 'Chưa xác định');
       card.innerHTML = `
         <div class="admin-user-info">
           <div class="admin-user-name">
@@ -3507,14 +3497,14 @@ function cartItemAmount(item) {
             ${u.isBanned ? '<span class="admin-badge badge-banned">ĐÃ KHÓA</span>' : ''}
             <span class="admin-badge ${licBadgeClass}">${escapeHtml(licBadgeText)}</span>
           </div>
-          <div class="admin-user-meta">Tạo lúc: ${createdStr}${liveQuotaStr} • Dữ liệu: ${formatStorageSize(adminUserStorageMap.get(Number(u.id)) || 0)} (ước tính)${u.isBanned && u.bannedReason ? ' • Lý do: ' + escapeHtml(u.bannedReason) : ''}</div>
           <div class="admin-presence-row">
             <span class="presence-pill ${u.isOnline ? 'online' : 'offline'}">${presenceLabel}</span>
             ${u.hasDuplicateIp ? `<span class="duplicate-ip-warning">⚠️ Trùng IP với ${Number(u.ipAccountCount)} tài khoản</span>` : ''}
-            <span class="presence-detail ${u.hasDuplicateIp ? 'duplicate-ip-text' : ''}">IP đăng nhập gần nhất: ${escapeHtml(ipLabel)}${deviceLabel}</span>
-            <span class="presence-detail">Đăng nhập gần nhất: ${escapeHtml(lastLoginStr)}</span>
-            <span class="presence-detail">Hoạt động gần nhất: ${escapeHtml(lastSeenStr)}</span>
+            <span class="presence-detail ${u.hasDuplicateIp ? 'duplicate-ip-text' : ''}">🌐 ${escapeHtml(ipLabel)}</span>
+            <span class="presence-detail">📍 ${escapeHtml(locationLabel)}</span>
+            <span class="presence-detail">🕒 ${escapeHtml(lastLoginStr)}</span>
           </div>
+          ${u.isBanned && u.bannedReason ? `<div class="admin-user-meta">Lý do khóa: ${escapeHtml(u.bannedReason)}</div>` : ''}
           <div class="license-select-row">
             <select class="license-select">
               <option value="free"${lic.type === 'free' ? ' selected' : ''}>Miễn phí (thu hồi gói)</option>
@@ -3584,6 +3574,14 @@ function cartItemAmount(item) {
 
       listBox.appendChild(card);
     });
+  }
+
+  function formatAdminDateTime(value) {
+    if (!value) return 'Chưa ghi nhận';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Chưa ghi nhận';
+    const pad = number => String(number).padStart(2, '0');
+    return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())} ${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}`;
   }
 
   const LICENSE_CONFIRM_LABELS = {
