@@ -193,6 +193,66 @@
   }
   .trial-license-row{ margin-top:8px; padding-top:8px; border-top:1px dashed var(--border); }
   .trial-license-row input{ width:88px; }
+  body.admin-overlay-open{ overflow:hidden; }
+  .admin-overlay{
+    position:fixed; inset:0; z-index:1400; display:none;
+    background:
+      radial-gradient(circle at 8% 5%, rgba(255,181,213,.75), transparent 34%),
+      radial-gradient(circle at 94% 12%, rgba(218,190,255,.68), transparent 32%),
+      linear-gradient(145deg,#fff4fa,#fdf5ff 56%,#fff8fb);
+  }
+  .admin-overlay.open{ display:block!important; }
+  .admin-shell{ height:100dvh; display:flex; flex-direction:column; overflow:hidden; }
+  .admin-shell-head{
+    min-height:68px; padding:12px max(18px,env(safe-area-inset-right)) 12px max(18px,env(safe-area-inset-left));
+    display:grid; grid-template-columns:110px 1fr 110px; align-items:center; gap:12px;
+    background:rgba(255,255,255,.78); border-bottom:1px solid var(--border);
+    backdrop-filter:blur(18px) saturate(170%); -webkit-backdrop-filter:blur(18px) saturate(170%);
+    box-shadow:0 8px 26px rgba(180,120,190,.12);
+  }
+  .admin-shell-title{ text-align:center; min-width:0; }
+  .admin-shell-title b{ display:block; font-size:17px; color:var(--text); }
+  .admin-shell-title small{ display:block; margin-top:2px; color:var(--muted); font-size:11.5px; }
+  .admin-head-button{
+    min-height:40px; padding:8px 12px; border:1px solid var(--border); border-radius:11px;
+    background:rgba(255,255,255,.78); color:var(--text); font-weight:700; cursor:pointer;
+  }
+  .admin-head-button:hover{ background:var(--teal); border-color:var(--teal); color:#fff; }
+  #adminCloseButton{ justify-self:end; }
+  .admin-shell-body{
+    flex:1; overflow-y:auto; overscroll-behavior:contain;
+    padding:24px max(20px,env(safe-area-inset-right)) calc(28px + env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left));
+  }
+  .admin-screen{ display:none; width:min(1000px,100%); margin:0 auto; }
+  .admin-screen.active{ display:block; }
+  .admin-home-intro{ text-align:center; margin:8px auto 24px; max-width:600px; }
+  .admin-home-intro .admin-home-icon{ font-size:44px; }
+  .admin-home-intro h2{ margin:8px 0 6px; font-size:20px; color:var(--text); text-transform:none; letter-spacing:0; }
+  .admin-home-intro p{ margin:0; color:var(--muted); font-size:13px; line-height:1.55; }
+  .admin-choice-grid{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+  .admin-choice-card{
+    min-height:170px; padding:22px; text-align:left; cursor:pointer; color:var(--text);
+    border:1px solid var(--border); border-radius:18px; background:rgba(255,255,255,.72);
+    box-shadow:0 12px 34px rgba(180,120,190,.12); transition:transform .18s,box-shadow .18s,border-color .18s;
+  }
+  .admin-choice-card:hover{ transform:translateY(-3px); border-color:var(--teal); box-shadow:0 16px 38px rgba(210,104,156,.19); }
+  .admin-choice-icon{ display:block; font-size:34px; margin-bottom:14px; }
+  .admin-choice-card b{ display:block; font-size:16px; margin-bottom:7px; }
+  .admin-choice-card small{ display:block; color:var(--muted); font-size:12px; line-height:1.55; }
+  .admin-section-title{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:16px; }
+  .admin-section-title h2{ margin:0 0 5px; font-size:18px; color:var(--text); text-transform:none; letter-spacing:0; }
+  .admin-section-title p{ margin:0; color:var(--muted); font-size:12px; line-height:1.5; }
+  @media(max-width:760px){
+    .admin-shell-head{ min-height:62px; grid-template-columns:72px 1fr 72px; padding:9px 10px; gap:7px; }
+    .admin-head-button{ min-height:38px; padding:7px 9px; font-size:11.5px; }
+    .admin-shell-title b{ font-size:14px; }
+    .admin-shell-title small{ display:none; }
+    .admin-shell-body{ padding:16px 12px calc(22px + env(safe-area-inset-bottom)); }
+    .admin-choice-grid{ grid-template-columns:1fr; gap:10px; }
+    .admin-choice-card{ min-height:0; padding:17px; }
+    .admin-choice-icon{ font-size:28px; margin-bottom:8px; }
+    .admin-section-title h2{ font-size:16px; }
+  }
 
   /* ===== TAB: MENU (thông tin tài khoản + hạn dùng) ===== */
   .menu-page{ max-width:560px; margin:0 auto; }
@@ -847,9 +907,46 @@
 
 <!-- TAB: QUẢN TRỊ (chỉ tài khoản admin mới thấy được nội dung, tab cũng bị ẩn
      hoàn toàn với tài khoản thường ở phần JS bên dưới) -->
-<div class="tab-view" id="viewAdmin" style="display:none;">
-  <div class="customers-page">
-    <h2>Quản Trị Tài Khoản</h2>
+<div class="admin-overlay" id="viewAdmin" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="adminOverlayTitle">
+  <div class="admin-shell">
+    <div class="admin-shell-head">
+      <button class="admin-head-button" id="adminBackButton" style="visibility:hidden;">← Lựa chọn</button>
+      <div class="admin-shell-title">
+        <b id="adminOverlayTitle">Trung tâm quản trị</b>
+        <small>Chỉ tài khoản Admin mới truy cập được</small>
+      </div>
+      <button class="admin-head-button" id="adminCloseButton" aria-label="Đóng quản trị">✕ Đóng</button>
+    </div>
+    <div class="admin-shell-body">
+      <div class="admin-screen active" id="adminScreenHome">
+        <div class="admin-home-intro">
+          <div class="admin-home-icon">🛡️</div>
+          <h2>Quản trị hệ thống</h2>
+          <p>Chọn phần cần quản lý. Nội dung chỉ mở khi bạn bấm vào từng lựa chọn.</p>
+        </div>
+        <div class="admin-choice-grid">
+          <button class="admin-choice-card" data-admin-screen="accounts">
+            <span class="admin-choice-icon">👥</span>
+            <b>Tài khoản & gói</b>
+            <small>Tìm khách hàng, cấp gói hoặc trải nghiệm, đổi mật khẩu, khóa và xóa tài khoản.</small>
+          </button>
+          <button class="admin-choice-card" data-admin-screen="storage">
+            <span class="admin-choice-icon">💾</span>
+            <b>Dung lượng database</b>
+            <small>Xem dung lượng còn lại, mức sử dụng của từng tài khoản và chạy dọn dữ liệu.</small>
+          </button>
+          <button class="admin-choice-card" data-admin-screen="logs">
+            <span class="admin-choice-icon">📋</span>
+            <b>Nhật ký giới hạn</b>
+            <small>Xem các lần tài khoản bị chặn xem Live hoặc in phiếu do chưa có gói.</small>
+          </button>
+        </div>
+      </div>
+
+      <div class="admin-screen" id="adminScreenAccounts">
+        <div class="admin-section-title">
+          <div><h2>Quản trị tài khoản</h2><p>Tìm kiếm và thực hiện các thao tác cho từng tài khoản khách hàng.</p></div>
+        </div>
     <div class="cust-summary">
       <span>Tổng số tài khoản: <b id="adminUserCount">0</b></span>
       <button class="btn-print" id="btnRefreshAdmin" style="width:auto;">🔄 Tải lại</button>
@@ -860,8 +957,12 @@
     <div class="menu-hint" id="adminUserSearchResult"></div>
     <div class="auth-error" id="adminError" style="margin-top:10px;"></div>
     <div class="customer-list" id="adminUserList"></div>
+      </div>
 
-    <h2 style="margin-top:22px;">Dung Lượng Database</h2>
+      <div class="admin-screen" id="adminScreenStorage">
+        <div class="admin-section-title">
+          <div><h2>Dung lượng database</h2><p>Theo dõi dung lượng thực tế và phần dữ liệu có thể thu hồi.</p></div>
+        </div>
     <div class="menu-card">
       <div class="shipping-stats">
         <div class="shipping-stat"><small>Giới hạn</small><b id="dbCapacity">500 MB</b></div>
@@ -892,13 +993,19 @@
         <div class="empty-note">Đang tải dung lượng tài khoản...</div>
       </div>
     </div>
+      </div>
 
-    <h2 style="margin-top:22px;">Nhật Ký Chặn Tính Năng</h2>
+      <div class="admin-screen" id="adminScreenLogs">
+        <div class="admin-section-title">
+          <div><h2>Nhật ký giới hạn tính năng</h2><p>Các lần tài khoản không thể xem Live hoặc in phiếu do gói sử dụng.</p></div>
+        </div>
     <div class="cust-summary">
       <span>Các lần tài khoản bị chặn xem Live / in phiếu vì chưa có gói hoặc gói đã hết hạn</span>
       <button class="btn-print" id="btnRefreshLicenseLogs" style="width:auto;">🔄 Tải lại</button>
     </div>
     <div class="customer-list" id="adminLicenseLogList" style="margin-top:12px;"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1204,6 +1311,7 @@
   // Đăng xuất bắt buộc khi phát hiện tài khoản đã bị khóa (báo về từ server).
   function forceLogoutBanned(message) {
     if (ws) { try { ws.close(); } catch (e) {} ws = null; }
+    closeAdminOverlay(false);
     currentUser = null;
     authToken = null;
     localStorage.removeItem(SESSION_KEY);
@@ -1270,6 +1378,7 @@
 
   $('#btnLogout').addEventListener('click', async () => {
     if (ws) { try { ws.close(); } catch (e) {} ws = null; }
+    closeAdminOverlay(false);
     try { await apiFetch('/api/logout', { method: 'POST' }); } catch (e) {}
     currentUser = null;
     authToken = null;
@@ -3032,7 +3141,14 @@ function cartItemAmount(item) {
   // ===== HẾT PHẦN BÁO CÁO =====
 
   // ===== CHUYỂN TAB =====
+  let activeMainTab = 'live';
   function switchTab(tab) {
+    if (tab === 'admin') {
+      openAdminOverlay();
+      return;
+    }
+    activeMainTab = tab;
+    closeAdminOverlay(false);
     $('#viewLive').style.display = tab === 'live' ? '' : 'none';
     $('#viewCustomers').style.display = tab === 'customers' ? '' : 'none';
     $('#viewSessions').style.display = tab === 'sessions' ? '' : 'none';
@@ -3040,7 +3156,6 @@ function cartItemAmount(item) {
     $('#viewOrders').style.display = tab === 'orders' ? '' : 'none';
     $('#viewShipping').style.display = tab === 'shipping' ? '' : 'none';
     $('#viewMenu').style.display = tab === 'menu' ? '' : 'none';
-    $('#viewAdmin').style.display = tab === 'admin' ? '' : 'none';
     $('#navLive').classList.toggle('active', tab === 'live');
     $('#navCustomers').classList.toggle('active', tab === 'customers');
     $('#navSessions').classList.toggle('active', tab === 'sessions');
@@ -3048,14 +3163,13 @@ function cartItemAmount(item) {
     $('#navOrders').classList.toggle('active', tab === 'orders');
     $('#navShipping').classList.toggle('active', tab === 'shipping');
     $('#navMenu').classList.toggle('active', tab === 'menu');
-    $('#navAdmin').classList.toggle('active', tab === 'admin');
+    $('#navAdmin').classList.remove('active');
     if (tab === 'customers') renderCustomerList();
     if (tab === 'sessions') renderSessionList();
     if (tab === 'report') renderReport($('#reportDate').value || dateKeyLocal());
     if (tab === 'orders') loadOrdersV2();
     if (tab === 'shipping') loadShippingV2();
     if (tab === 'menu') loadMenuInfo();
-    if (tab === 'admin') { loadAdminStorage(); loadAdminUsers(); loadLicenseLogs(); }
   }
 
   $('#navLive').addEventListener('click', () => switchTab('live'));
@@ -3210,6 +3324,54 @@ function cartItemAmount(item) {
   let adminUsersCache = [];
   let adminUserStorageMap = new Map();
 
+  const adminScreenConfig = {
+    home: { element: '#adminScreenHome', title: 'Trung tâm quản trị' },
+    accounts: { element: '#adminScreenAccounts', title: 'Tài khoản & gói' },
+    storage: { element: '#adminScreenStorage', title: 'Dung lượng database' },
+    logs: { element: '#adminScreenLogs', title: 'Nhật ký giới hạn' }
+  };
+
+  function showAdminScreen(name = 'home') {
+    const selected = adminScreenConfig[name] || adminScreenConfig.home;
+    Object.values(adminScreenConfig).forEach(config => {
+      $(config.element).classList.toggle('active', config === selected);
+    });
+    $('#adminOverlayTitle').textContent = selected.title;
+    $('#adminBackButton').style.visibility = name === 'home' ? 'hidden' : 'visible';
+    $('.admin-shell-body').scrollTop = 0;
+    if (name === 'accounts') {
+      loadAdminStorage();
+      loadAdminUsers();
+    } else if (name === 'storage') {
+      loadAdminStorage();
+    } else if (name === 'logs') {
+      loadLicenseLogs();
+    }
+  }
+
+  function openAdminOverlay() {
+    if (!isCurrentUserAdmin) return;
+    showAdminScreen('home');
+    $('#viewAdmin').style.display = 'block';
+    $('#viewAdmin').classList.add('open');
+    document.body.classList.add('admin-overlay-open');
+    document.querySelectorAll('.bottom-nav .nav-item').forEach(item => item.classList.remove('active'));
+    $('#navAdmin').classList.add('active');
+  }
+
+  function closeAdminOverlay(restoreNavigation = true) {
+    const overlay = $('#viewAdmin');
+    if (!overlay) return;
+    overlay.classList.remove('open');
+    overlay.style.display = 'none';
+    document.body.classList.remove('admin-overlay-open');
+    $('#navAdmin')?.classList.remove('active');
+    if (restoreNavigation) {
+      const activeButton = document.querySelector(`.bottom-nav .nav-item[data-tab="${activeMainTab}"]`);
+      activeButton?.classList.add('active');
+    }
+  }
+
   // Gọi sau khi đăng nhập/tự đăng nhập thành công để biết tài khoản hiện tại
   // có phải admin không, từ đó hiện/ẩn tab "Quản trị" trên thanh điều hướng.
   async function refreshAdminFlag() {
@@ -3220,7 +3382,19 @@ function cartItemAmount(item) {
       isCurrentUserAdmin = false;
     }
     $('#navAdmin').style.display = isCurrentUserAdmin ? '' : 'none';
+    if (!isCurrentUserAdmin) closeAdminOverlay(true);
   }
+
+  document.querySelectorAll('[data-admin-screen]').forEach(button => {
+    button.addEventListener('click', () => showAdminScreen(button.dataset.adminScreen));
+  });
+  $('#adminBackButton').addEventListener('click', () => showAdminScreen('home'));
+  $('#adminCloseButton').addEventListener('click', () => closeAdminOverlay(true));
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && $('#viewAdmin').classList.contains('open')) {
+      closeAdminOverlay(true);
+    }
+  });
 
   async function loadAdminUsers() {
     const listBox = $('#adminUserList');

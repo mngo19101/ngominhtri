@@ -1,4 +1,4 @@
-# TikTok Live Print & Order Manager v2.12.0
+# TikTok Live Print & Order Manager v2.13.0
 
 Bộ mã này chạy trực tiếp trên Railway và phục vụ giao diện tại:
 
@@ -45,7 +45,7 @@ Sau khi upload, chọn **Redeploy**. Server tự tạo/migrate bảng SQLite, kh
 Bridge Server đang chạy tại cổng ...
 ```
 
-## Tính năng v2.12.0
+## Tính năng v2.13.0
 
 - Tab **Vận chuyển** riêng, dùng chung đơn đã chốt.
 - Chỉ nhập mã vận đơn SPX: hệ thống tự tra cứu trạng thái, vị trí hiện tại, hành trình và ngày giao dự kiến, rồi lưu vào đúng đơn.
@@ -69,6 +69,9 @@ Bridge Server đang chạy tại cổng ...
 - Admin thấy trực tiếp giới hạn database, dung lượng đã dùng thực tế, phần còn trống, phần có thể thu hồi và tỷ lệ đã dùng. Mặc định là 500 MB, có thể đổi bằng `DATABASE_CAPACITY_MB`.
 - Sau khi dọn, hệ thống báo kích thước trước/sau và chính xác số byte đã giải phóng.
 - Mỗi tài khoản hiển thị dung lượng dữ liệu đã lưu (ước tính) trong danh sách quản trị và bảng xếp theo dung lượng.
+- Quản trị mở thành một màn hình toàn phần che toàn bộ ứng dụng, có nút đóng để trở về đúng tab trước đó.
+- Trang đầu Quản trị chỉ hiện các lựa chọn **Tài khoản & gói**, **Dung lượng database** và **Nhật ký giới hạn**; nội dung chỉ tải và hiển thị sau khi Admin chọn từng mục.
+- Có nút quay lại danh sách lựa chọn và hỗ trợ phím `Esc` để đóng nhanh trên laptop.
 - Đơn chưa giao chỉ cộng vào **Tạm tính**. Chỉ khi vận chuyển chuyển sang **Đã giao** mới ghi nhận **Doanh thu**, theo đúng ngày giao thành công.
 - Đã bỏ tab **Sản phẩm** khỏi thanh điều hướng; dữ liệu sản phẩm cũ vẫn được giữ an toàn trong database.
 - Đã bỏ nút **Hành trình** cũ trong Vận chuyển; chỉ giữ **Xem hành trình SPX**.
