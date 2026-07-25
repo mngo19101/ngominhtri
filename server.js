@@ -909,6 +909,31 @@ function getRecoveryEmail(user) {
   return normalizeEmail(user?.recovery_email || '');
 }
 
+function formatSmtpError(err) {
+  const raw = String(err?.message || err || 'Lỗi SMTP không xác định');
+  const lower = raw.toLowerCase();
+  const hints = [];
+
+  if (lower.includes('535')) {
+    hints.push('Gmail thường trả mã 535 khi sai mật khẩu ứng dụng, chưa bật 2-Step Verification, hoặc app password đã bị thu hồi.');
+  } else if (lower.includes('534')) {
+    hints.push('Gmail có thể chặn đăng nhập và yêu cầu xác minh lại hoặc tạo app password mới.');
+  } else if (lower.includes('certificate') || lower.includes('tls') || lower.includes('ssl')) {
+    hints.push('Kiểm tra lại cổng và chế độ secure: 465 đi với secure=true, 587 đi với secure=false.');
+  } else if (lower.includes('timeout')) {
+    hints.push('Kết nối SMTP bị timeout, hãy kiểm tra mạng của server hoặc cổng SMTP.');
+  } else if (lower.includes('closed')) {
+    hints.push('Kết nối SMTP bị đóng sớm, thường do cổng hoặc secure không khớp.');
+  } else if (lower.includes('from')) {
+    hints.push('Kiểm tra lại SMTP_FROM phải là địa chỉ Gmail hợp lệ.');
+  } else {
+    hints.push('Kiểm tra SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS và xem log Railway để biết mã lỗi thật.');
+  }
+
+  return `${raw}
+${hints.join(' ')}`;
+}
+
 async function sendMailViaSmtp({ to, subject, text }) {
   const host = String(process.env.SMTP_HOST || '').trim();
   const port = Number(process.env.SMTP_PORT || 587);
@@ -1466,9 +1491,12 @@ app.post('/api/password-reset/request', passwordResetRequestLimiter, async (req,
     addAudit(user.id, 'account.password_reset_code_sent', 'user', String(user.id), { email });
     res.json({ ok: true, message: 'Nếu thông tin khớp, mã xác nhận đã được gửi.' });
   } catch (err) {
-    console.error('[PasswordReset] Không gửi được email:', err.message);
+    console.error('[PasswordReset] Không gửi được email:', err);
     clearPasswordResetRequest(user.id);
-    return res.status(500).json({ error: 'Chưa thể gửi email khôi phục. Hãy kiểm tra cấu hình SMTP trên server.' });
+    return res.status(500).json({
+      error: 'Chưa thể gửi email khôi phục.',
+      details: formatSmtpError(err),
+    });
   }
 });
 
