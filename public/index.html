@@ -469,6 +469,8 @@
   .auth-reset{ display:none; margin-top:14px; padding-top:14px; border-top:1px dashed var(--border); }
   .auth-reset.open{ display:block; }
   .auth-reset-title{ font-size:13px; font-weight:800; color:var(--text); text-align:center; margin-bottom:10px; }
+  .auth-reset-step{ display:flex; flex-direction:column; gap:10px; }
+  .auth-reset-step-hidden{ display:none; }
   .auth-reset-actions{ display:flex; gap:8px; flex-wrap:wrap; }
   .auth-reset-actions .btn-mini{ flex:1 1 0; }
   .auth-note{ font-size:11.5px; color:var(--muted); line-height:1.5; margin-top:8px; }
@@ -686,32 +688,42 @@
 
     <div class="auth-reset" id="resetPasswordPanel">
       <div class="auth-reset-title">Lấy lại mật khẩu</div>
-      <div class="field">
-        <label>Tên đăng nhập</label>
-        <input id="resetUsername" type="text" autocomplete="username" placeholder="vd: shopcuaban">
+
+      <div class="auth-reset-step">
+        <div class="field">
+          <label>Tên đăng nhập</label>
+          <input id="resetUsername" type="text" autocomplete="username" placeholder="vd: shopcuaban">
+        </div>
+        <div class="field">
+          <label>Email khôi phục</label>
+          <input id="resetEmail" type="email" autocomplete="email" placeholder="vd: tenban@gmail.com">
+        </div>
+        <div class="field">
+          <label>Mã xác nhận</label>
+          <input id="resetCode" type="text" inputmode="numeric" maxlength="6" placeholder="6 số">
+        </div>
+        <div class="auth-reset-actions">
+          <button type="button" class="btn-mini" id="btnSendResetCode">Gửi mã</button>
+          <button type="button" class="btn-mini" id="btnVerifyResetCode">Tiếp tục</button>
+          <button type="button" class="btn-mini" id="btnCloseReset">Đóng</button>
+        </div>
       </div>
-      <div class="field">
-        <label>Email khôi phục</label>
-        <input id="resetEmail" type="email" autocomplete="email" placeholder="vd: tenban@gmail.com">
+
+      <div class="auth-reset-step auth-reset-step-hidden" id="resetPasswordStep">
+        <div class="field">
+          <label>Mật khẩu mới</label>
+          <input id="resetNewPassword" type="password" autocomplete="new-password" placeholder="Tối thiểu 8 ký tự">
+        </div>
+        <div class="field">
+          <label>Nhập lại mật khẩu mới</label>
+          <input id="resetNewPassword2" type="password" autocomplete="new-password" placeholder="••••••">
+        </div>
+        <div class="auth-reset-actions">
+          <button type="button" class="btn-mini" id="btnConfirmResetPassword">Đổi mật khẩu</button>
+        </div>
       </div>
-      <div class="field">
-        <label>Mã xác nhận</label>
-        <input id="resetCode" type="text" inputmode="numeric" maxlength="6" placeholder="6 số">
-      </div>
-      <div class="field">
-        <label>Mật khẩu mới</label>
-        <input id="resetNewPassword" type="password" autocomplete="new-password" placeholder="Tối thiểu 8 ký tự">
-      </div>
-      <div class="field">
-        <label>Nhập lại mật khẩu mới</label>
-        <input id="resetNewPassword2" type="password" autocomplete="new-password" placeholder="••••••">
-      </div>
+
       <div class="auth-error" id="resetError"></div>
-      <div class="auth-reset-actions">
-        <button type="button" class="btn-mini" id="btnSendResetCode">Gửi mã</button>
-        <button type="button" class="btn-mini" id="btnConfirmResetPassword">Đổi mật khẩu</button>
-        <button type="button" class="btn-mini" id="btnCloseReset">Đóng</button>
-      </div>
       <div class="auth-note">Mã được gửi tự động qua email, hiệu lực 10 phút và chỉ dùng một lần.</div>
     </div>
 
@@ -1461,9 +1473,32 @@
     $('#loginError').textContent = message || 'Tài khoản đã bị khóa.';
   }
 
+  const resetState = {
+    verified: false,
+    username: '',
+    email: '',
+    code: ''
+  };
+
+  function setResetPasswordStepVisible(visible) {
+    $('#resetPasswordStep').classList.toggle('auth-reset-step-hidden', !visible);
+  }
+
+  function resetResetFlow() {
+    resetState.verified = false;
+    resetState.username = '';
+    resetState.email = '';
+    resetState.code = '';
+    setResetPasswordStepVisible(false);
+    $('#resetCode').value = '';
+    $('#resetNewPassword').value = '';
+    $('#resetNewPassword2').value = '';
+    $('#resetError').textContent = '';
+  }
+
   function hideResetPanel() {
     $('#resetPasswordPanel').classList.remove('open');
-    $('#resetError').textContent = '';
+    resetResetFlow();
   }
 
   function setAuthTab(which) {
@@ -1482,7 +1517,7 @@
   $('#btnOpenReset').addEventListener('click', () => {
     setAuthTab('login');
     $('#resetPasswordPanel').classList.add('open');
-    $('#resetError').textContent = '';
+    resetResetFlow();
     $('#resetUsername').focus();
   });
   $('#btnCloseReset').addEventListener('click', hideResetPanel);
@@ -1491,6 +1526,8 @@
     const username = $('#resetUsername').value.trim();
     const email = $('#resetEmail').value.trim();
     $('#resetError').textContent = '';
+    resetState.verified = false;
+    setResetPasswordStepVisible(false);
     if (!username || !email) {
       $('#resetError').textContent = 'Vui lòng nhập tên đăng nhập và email khôi phục.';
       return;
@@ -1501,7 +1538,40 @@
         body: JSON.stringify({ username, email })
       });
       $('#resetError').textContent = data.message || 'Nếu thông tin khớp, mã xác nhận đã được gửi.';
+      $('#resetCode').focus();
     } catch (err) {
+      $('#resetError').textContent = err.message;
+    }
+  });
+
+  $('#btnVerifyResetCode').addEventListener('click', async () => {
+    const username = $('#resetUsername').value.trim();
+    const email = $('#resetEmail').value.trim();
+    const code = $('#resetCode').value.trim();
+    $('#resetError').textContent = '';
+    if (!username || !email || !code) {
+      $('#resetError').textContent = 'Vui lòng nhập tên đăng nhập, email và mã xác nhận.';
+      return;
+    }
+    if (!/^[0-9]{6}$/.test(code)) {
+      $('#resetError').textContent = 'Mã xác nhận phải gồm đúng 6 số.';
+      return;
+    }
+    try {
+      await apiFetch('/api/password-reset/verify', {
+        method: 'POST',
+        body: JSON.stringify({ username, email, code })
+      });
+      resetState.verified = true;
+      resetState.username = username;
+      resetState.email = email;
+      resetState.code = code;
+      setResetPasswordStepVisible(true);
+      $('#resetError').textContent = 'Mã hợp lệ. Hãy nhập mật khẩu mới.';
+      $('#resetNewPassword').focus();
+    } catch (err) {
+      resetState.verified = false;
+      setResetPasswordStepVisible(false);
       $('#resetError').textContent = err.message;
     }
   });
@@ -1513,8 +1583,18 @@
     const newPassword = $('#resetNewPassword').value;
     const newPassword2 = $('#resetNewPassword2').value;
     $('#resetError').textContent = '';
+    if (!resetState.verified) {
+      $('#resetError').textContent = 'Hãy xác minh mã trước khi đổi mật khẩu.';
+      return;
+    }
     if (!username || !email || !code || !newPassword) {
       $('#resetError').textContent = 'Vui lòng nhập đủ thông tin để đặt lại mật khẩu.';
+      return;
+    }
+    if (username !== resetState.username || email !== resetState.email || code !== resetState.code) {
+      $('#resetError').textContent = 'Thông tin xác minh đã thay đổi. Vui lòng xác minh lại mã.';
+      setResetPasswordStepVisible(false);
+      resetState.verified = false;
       return;
     }
     if (newPassword.length < 8) {

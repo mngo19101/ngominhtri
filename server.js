@@ -1472,6 +1472,42 @@ app.post('/api/password-reset/request', passwordResetRequestLimiter, async (req,
   }
 });
 
+app.post('/api/password-reset/verify', async (req, res) => {
+  const username = String(req.body?.username || '').trim().replace(/^@/, '');
+  const email = normalizeEmail(req.body?.email || '');
+  const code = String(req.body?.code || '').trim();
+  if (!username || !email || !/^[0-9]{6}$/.test(code)) {
+    return res.status(400).json({ error: 'Thiếu thông tin hoặc mã không hợp lệ.' });
+  }
+  const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+  if (!user || normalizeEmail(user.recovery_email) !== email) {
+    return res.status(400).json({ error: 'Mã không đúng hoặc đã hết hạn.' });
+  }
+  const row = getPasswordResetRequest(user.id);
+  const now = Date.now();
+  if (!row || row.consumed_at) {
+    return res.status(400).json({ error: 'Mã không đúng hoặc đã hết hạn.' });
+  }
+  if (normalizeEmail(row.email) !== email || row.expires_at < now) {
+    clearPasswordResetRequest(user.id);
+    return res.status(400).json({ error: 'Mã không đúng hoặc đã hết hạn.' });
+  }
+  if (row.locked_until && row.locked_until > now) {
+    return res.status(429).json({ error: `Mã đang tạm khóa. Vui lòng thử lại sau ${Math.ceil((row.locked_until - now) / 1000)} giây.` });
+  }
+
+  const expectedHash = hashResetCode(code, row.code_salt);
+  if (!crypto.timingSafeEqual(Buffer.from(expectedHash), Buffer.from(row.code_hash))) {
+    const attempts = Number(row.attempts || 0) + 1;
+    const lockedUntil = attempts >= 5 ? now + 15 * 60 * 1000 : null;
+    db.prepare(`UPDATE password_reset_requests SET attempts = ?, locked_until = ? WHERE user_id = ?`)
+      .run(attempts, lockedUntil, user.id);
+    return res.status(401).json({ error: attempts >= 5 ? 'Mã sai quá 5 lần. Đã khóa thử 15 phút.' : 'Mã không đúng.' });
+  }
+
+  res.json({ ok: true, message: 'Mã hợp lệ.' });
+});
+
 app.post('/api/password-reset/confirm', async (req, res) => {
   const username = String(req.body?.username || '').trim().replace(/^@/, '');
   const email = normalizeEmail(req.body?.email || '');
