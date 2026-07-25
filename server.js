@@ -322,25 +322,9 @@ ensureColumn('shipment_tracking', 'expected_delivery_text', 'TEXT');
 // - Comment ngày 25/07 được giữ đến hết 25/08.
 // - Từ 00:00 ngày 26/08 trở đi mới bị xóa.
 // Đơn hàng/giỏ khách đã chốt KHÔNG bị xóa theo tác vụ này.
-function addOneCalendarMonthEndOfDay(value) {
-  const source = new Date(value);
-  if (!Number.isFinite(source.getTime())) return null;
-  // Railway thường chạy UTC, nên tự quy đổi cố định UTC+7 để ngày xóa luôn
-  // đúng theo ngày Việt Nam, không phụ thuộc timezone của container.
-  const vietnam = new Date(source.getTime() + 7 * 60 * 60 * 1000);
-  const year = vietnam.getUTCFullYear();
-  const month = vietnam.getUTCMonth();
-  const day = vietnam.getUTCDate();
-  const lastDayOfTargetMonth = new Date(Date.UTC(year, month + 2, 0)).getUTCDate();
-  const targetDay = Math.min(day, lastDayOfTargetMonth);
-  // 23:59:59.999 giờ Việt Nam = 16:59:59.999 UTC.
-  return new Date(Date.UTC(year, month + 1, targetDay, 16, 59, 59, 999));
-}
-
-function isCommentExpired(receivedAt, now = new Date()) {
-  const expiry = addOneCalendarMonthEndOfDay(receivedAt);
-  return expiry ? now.getTime() > expiry.getTime() : false;
-}
+// (Hàm tính toán ngày/giờ thuần đã được tách ra lib/date-rules.js để có thể
+// viết unit test độc lập không cần khởi động DB — xem tests/date-rules.test.js)
+const { addOneCalendarMonthEndOfDay, isCommentExpired, addThreeCalendarMonthsEndOfDay } = require('./lib/date-rules');
 
 function cleanupExpiredComments(now = new Date()) {
   const rows = db.prepare('SELECT user_id, data FROM live_session_data').all();
@@ -384,18 +368,6 @@ function cleanupExpiredComments(now = new Date()) {
     console.log('[Retention] Không có comment quá hạn cần xóa.');
   }
   return { removedComments, removedSessions, updatedUsers, checkedAt: now.toISOString() };
-}
-
-function addThreeCalendarMonthsEndOfDay(value) {
-  const source = new Date(value);
-  if (!Number.isFinite(source.getTime())) return null;
-  const vietnam = new Date(source.getTime() + 7 * 60 * 60 * 1000);
-  const year = vietnam.getUTCFullYear();
-  const month = vietnam.getUTCMonth();
-  const day = vietnam.getUTCDate();
-  const lastDayOfTargetMonth = new Date(Date.UTC(year, month + 4, 0)).getUTCDate();
-  const targetDay = Math.min(day, lastDayOfTargetMonth);
-  return new Date(Date.UTC(year, month + 3, targetDay, 16, 59, 59, 999));
 }
 
 function cleanupInactiveCustomers(now = new Date()) {
@@ -857,7 +829,16 @@ async function refreshIpLocation(ip) {
           headers: { 'User-Agent': 'Mozilla/5.0 (compatible; TikTokLiveAdmin/1.0)' },
           signal: AbortSignal.timeout(6000)
         });
-        if (detailsResponse.ok) {
+        // Phân biệt rõ "bị chặn/giới hạn tần suất" (403/429/503 — trang biết ta
+        // là bot và đang tạm từ chối) với các lỗi khác (404, 500...). Việc này
+        // giúp cơ chế thử-lại-sau-1-giờ (xem /api/admin/users bên dưới) chỉ áp
+        // dụng đúng cho trường hợp có khả năng phục hồi, tránh dò lại vô ích
+        // với IP mà trang này thực sự không có dữ liệu.
+        if (!detailsResponse.ok) {
+          const likelyBlocked = [403, 429, 503].includes(detailsResponse.status);
+          location.source = likelyBlocked ? 'whatismyipaddress-blocked-v3' : 'whatismyipaddress-unavailable-v3';
+          console.warn(`[Presence] whatismyipaddress.com trả về HTTP ${detailsResponse.status} cho IP ${ip} (${likelyBlocked ? 'có thể đang chặn bot' : 'không rõ nguyên nhân'}).`);
+        } else {
           const html = await detailsResponse.text();
           const text = html
             .replace(/<script[\s\S]*?<\/script>/gi, '\n')
@@ -871,9 +852,17 @@ async function refreshIpLocation(ip) {
             .map(line => line.replace(/\s+/g, ' ').trim())
             .filter(Boolean)
             .join('\n');
+          const knownLabels = ['city', 'state/region', 'country'];
           const readField = label => {
             const match = text.match(new RegExp(`(?:^|\\n)${label}:?\\s*(?:\\n)?([^\\n]+)`, 'i'));
-            return cleanText(match?.[1], 100) || null;
+            const value = cleanText(match?.[1], 100) || null;
+            if (!value) return null;
+            // Nếu cấu trúc trang đổi khác đi, regex có thể vô tình bắt trúng
+            // ngay tên nhãn kế tiếp (vd "City" lại khớp ra chữ "Country") thay
+            // vì giá trị thật. Loại bỏ những kết quả rõ ràng là nhãn, không
+            // phải dữ liệu, để tránh lưu lại thông tin sai.
+            if (knownLabels.includes(value.toLowerCase())) return null;
+            return value;
           };
           const whatIsMyIpLocation = {
             city: readField('City'),
@@ -883,6 +872,11 @@ async function refreshIpLocation(ip) {
           };
           if (whatIsMyIpLocation.city || whatIsMyIpLocation.region || whatIsMyIpLocation.country) {
             location = whatIsMyIpLocation;
+          } else {
+            // Trang trả về 200 nhưng không đọc được trường nào — nhiều khả năng
+            // giao diện trang đã đổi cấu trúc (chứ không hẳn IP không có dữ liệu).
+            // Ghi rõ log để admin biết cần kiểm tra lại, không âm thầm bỏ qua.
+            console.warn(`[Presence] Không đọc được City/State/Country cho IP ${ip} — có thể whatismyipaddress.com đã đổi cấu trúc trang.`);
           }
         }
       }
@@ -1231,13 +1225,17 @@ app.get('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
     .filter(user => {
       if (!user.last_login_ip) return false;
       const geoAge = now - (Number(user.last_login_geo_at) || 0);
-      const knownSource = ['whatismyipaddress-only-v3', 'whatismyipaddress-unavailable-v3', 'local']
+      const knownSource = ['whatismyipaddress-only-v3', 'whatismyipaddress-unavailable-v3', 'whatismyipaddress-blocked-v3', 'local']
         .includes(user.last_login_geo_source);
+      // "blocked" (403/429/503 — bị chặn tạm thời) và "unavailable" (lỗi khác,
+      // có thể là tạm thời) đều đáng thử lại sau 1 giờ. Nếu trang đã đổi cấu
+      // trúc khiến không đọc được trường nào dù trả về 200, log cảnh báo ở
+      // refreshIpLocation() sẽ giúp phát hiện sớm thay vì lặp lại vô ích.
       return user.last_login_geo_ip !== user.last_login_ip ||
         !user.last_login_geo_at ||
         !knownSource ||
         geoAge > geoRefreshMs ||
-        (user.last_login_geo_source === 'whatismyipaddress-unavailable-v3' &&
+        (['whatismyipaddress-unavailable-v3', 'whatismyipaddress-blocked-v3'].includes(user.last_login_geo_source) &&
           geoAge > 60 * 60 * 1000);
     })
     .map(user => user.last_login_ip))];

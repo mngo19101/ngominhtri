@@ -7,7 +7,8 @@
   },
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node check-html.js public/index.html"
+    "test": "node --test",
+    "check": "node --check server.js && node check-html.js public/index.html && npm test"
   },
   "dependencies": {
     "express": "^4.19.2",
